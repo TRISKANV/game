@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kotlin Survivors</string>
+    <string name="game_title">Kotlin Survivors</string>
+    <string name="game_subtitle">Survive the endless night</string>
+
+    <!-- Menu -->
+    <string name="menu_start_game">Start Game</string>
+    <string name="menu_shop">Shop</string>
+    <string name="menu_achievements">Achievements</string>
+    <string name="menu_settings">Settings</string>
+
+    <!-- HUD -->
+    <string name="hud_hp">HP</string>
+    <string name="hud_xp">XP</string>
+    <string name="hud_level">Level</string>
+    <string name="hud_kills">Kills</string>
+    <string name="hud_coins">Coins</string>
+    <string name="hud_time">Time</string>
+
+    <!-- Pause -->
+    <string name="pause_title">PAUSED</string>
+    <string name="pause_resume">Resume</string>
+    <string name="pause_restart">Restart</string>
+    <string name="pause_main_menu">Main Menu</string>
+
+    <!-- Level Up -->
+    <string name="level_up_title">LEVEL UP!</string>
+    <string name="level_up_choose">Choose an upgrade</string>
+
+    <!-- Game Over -->
+    <string name="game_over_title">GAME OVER</string>
+    <string name="game_over_survived">Survived</string>
+    <string name="game_over_kills">Kills</string>
+    <string name="game_over_level">Level</string>
+    <string name="game_over_play_again">Play Again</string>
+    <string name="game_over_main_menu">Main Menu</string>
+
+    <!-- Shop -->
+    <string name="shop_title">UPGRADE SHOP</string>
+    <string name="shop_buy">Buy</string>
+    <string name="shop_maxed">MAXED</string>
+    <string name="shop_not_enough_coins">Not enough coins</string>
+
+    <!-- Achievements -->
+    <string name="achievements_title">ACHIEVEMENTS</string>
+    <string name="achievements_unlocked">Unlocked</string>
+
+    <!-- Accessibility -->
+    <string name="cd_pause_button">Pause game</string>
+    <string name="cd_back_button">Go back</string>
+    <string name="cd_joystick">Virtual joystick</string>
+</resources>
