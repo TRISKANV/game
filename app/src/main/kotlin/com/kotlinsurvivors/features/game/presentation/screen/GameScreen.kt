@@ -2,6 +2,8 @@ package com.kotlinsurvivors.features.game.presentation.screen
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -21,17 +23,9 @@ import com.kotlinsurvivors.features.game.presentation.viewmodel.GameViewModel
  *
  * Root Composable for the gameplay screen.
  *
- * Crash fixes applied here:
- *  1. Input handling switched from detectDragGestures to raw pointerInput
- *     with awaitEachGesture + awaitFirstDown, so onDragStart/onDrag are
- *     always paired — eliminating onMove() calls without a valid center.
- *  2. The Canvas only renders a snapshot of the scalar HUD values from
- *     GameState (level, HP, etc.) which are safe primitives.  The World
- *     reference is accessed only inside the Canvas lambda which runs on
- *     the UI thread — the engine emits a new GameState reference each
- *     frame via StateFlow so the UI always sees a consistent snapshot.
- *  3. The renderer is keyed on the gameState reference so it only redraws
- *     when the engine emits a new frame (not on every recomposition).
+ * Input handling uses awaitEachGesture + awaitFirstDown (foundation.gestures)
+ * instead of detectDragGestures to guarantee onMove() is never called
+ * without a prior onDown(), which was the cause of the crash.
  */
 @Composable
 fun GameScreen(
@@ -72,9 +66,6 @@ fun GameScreen(
                 .fillMaxSize()
                 .joystickInput(viewModel, viewportWidth)
         ) {
-            // gameState.world is read on the UI thread inside the Canvas
-            // lambda — this is safe because StateFlow guarantees we only
-            // see values that were fully published by the engine thread.
             val world = gameState.world ?: return@Canvas
             renderer.render(
                 drawScope      = this,
@@ -126,44 +117,40 @@ fun GameScreen(
 }
 
 /**
- * Joystick input using low-level pointer tracking instead of
- * detectDragGestures.
+ * Joystick input modifier.
  *
- * detectDragGestures has a subtle issue: it calls onDrag even when the
- * initial DOWN event was consumed by another node (e.g. the right-half
- * pause button area), so onMove() was being called without a valid
- * onDown(), producing a (0,0) center and erratic/crashing behavior.
+ * Uses awaitEachGesture (androidx.compose.foundation.gestures) +
+ * awaitFirstDown to guarantee a complete and ordered gesture sequence:
+ * DOWN → MOVE* → UP. This prevents onMove() from ever being called
+ * without a valid center, which caused the NaN crash in MovementSystem.
  *
- * This implementation:
- *  - Uses awaitEachGesture to get one complete gesture per coroutine.
- *  - Only activates the joystick if the DOWN is in the LEFT half.
- *  - Tracks the exact pointer ID so multi-touch doesn't confuse centers.
- *  - Always calls onUp() in the finally block — no dangling active state.
+ * Only activates the joystick when the touch starts in the left half
+ * of the screen. Tracks the exact pointer ID for multi-touch safety.
+ * Always calls onUp() in the finally block regardless of cancellation.
  */
 private fun Modifier.joystickInput(
-    viewModel     : GameViewModel,
-    viewportWidth : Float
+    viewModel    : GameViewModel,
+    viewportWidth: Float
 ): Modifier = this.pointerInput(Unit) {
     val joystick = viewModel.joystick ?: return@pointerInput
 
     awaitEachGesture {
-        // Wait for the first finger down
+        // Wait for any finger down — requireUnconsumed=false so we
+        // don't block other gesture detectors on the same node.
         val down = awaitFirstDown(requireUnconsumed = false)
 
-        // Only activate joystick on the left half of the screen
+        // Only activate for touches that start on the LEFT half
         if (down.position.x > viewportWidth * 0.5f) return@awaitEachGesture
 
         val pointerId = down.id
         joystick.onDown(down.position.x, down.position.y)
 
         try {
-            // Track this specific pointer until it lifts
             while (true) {
-                val event = awaitPointerEvent()
+                val event  = awaitPointerEvent()
                 val change = event.changes.find { it.id == pointerId } ?: break
 
                 if (!change.pressed) {
-                    // Finger lifted
                     change.consume()
                     break
                 }
@@ -172,7 +159,6 @@ private fun Modifier.joystickInput(
                 change.consume()
             }
         } finally {
-            // Always release — even if gesture is cancelled
             joystick.onUp()
         }
     }
