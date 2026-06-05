@@ -9,12 +9,9 @@ import kotlin.random.Random
 /**
  * ExperienceSystem
  *
- * Processes kill events from CollisionSystem/WeaponSystem:
- *  - Drops experience orbs and coins from dead enemies
- *  - Awards XP to the player and checks for level-up
- *  - Handles pickup collection events (XP gain, coin gain, healing)
- *  - Ticks pickup / particle / damage-number lifetimes using real dt
- *  - Cleans up dead enemy entities
+ * Fix: all map iterations (pickups, particles, damageNumbers) use World
+ * snapshot methods to prevent ConcurrentModificationException when
+ * destroyEntity() is called while iterating.
  */
 class ExperienceSystem {
 
@@ -72,7 +69,7 @@ class ExperienceSystem {
 
         val pid    = world.getPlayerEntity()
         val player = world.players[pid]
-        player?.killCount = (player?.killCount ?: 0) + 1
+        if (player != null) player.killCount++
 
         world.destroyEntity(eid)
         output.add(event)
@@ -97,34 +94,33 @@ class ExperienceSystem {
             PickupType.EXPERIENCE_LARGE -> {
                 player.experience += event.value
                 while (player.experience >= player.experienceToNextLevel) {
-                    player.experience         -= player.experienceToNextLevel
+                    player.experience            -= player.experienceToNextLevel
                     player.level++
-                    player.experienceToNextLevel = xpForLevel(player.level)
+                    player.experienceToNextLevel  = xpForLevel(player.level)
                     output.add(GameEvent.LevelUp(player.level))
-                    if (pt != null) {
-                        EntityFactory.createParticleBurst(world, pt.x, pt.y, ParticleType.LEVEL_UP, 20)
-                    }
+                    if (pt != null) EntityFactory.createParticleBurst(world, pt.x, pt.y, ParticleType.LEVEL_UP, 20)
                 }
             }
-
-            PickupType.COIN    -> player.coins += event.value
-            PickupType.COIN_BAG-> player.coins += event.value
-
+            PickupType.COIN     -> player.coins += event.value
+            PickupType.COIN_BAG -> player.coins += event.value
             PickupType.HEALTH_SMALL -> {
                 health.current = (health.current + event.value).coerceAtMost(health.max)
                 if (pt != null) EntityFactory.createParticleBurst(world, pt.x, pt.y, ParticleType.HEAL, 6)
             }
-
             PickupType.HEALTH_LARGE -> {
                 health.current = (health.current + event.value).coerceAtMost(health.max)
                 if (pt != null) EntityFactory.createParticleBurst(world, pt.x, pt.y, ParticleType.HEAL, 12)
             }
-
-            PickupType.MAGNET -> magnetizeAllPickups(world)
-
+            PickupType.MAGNET -> {
+                // SNAPSHOT — magnetizeAllPickups reads pickups map, no mutation
+                for (pkId in world.getPickupSnapshot()) {
+                    world.pickups[pkId]?.magnetized = true
+                }
+            }
             PickupType.BOMB -> {
                 if (pt != null) {
-                    for (eid in world.getEnemyEntities()) {
+                    // SNAPSHOT — we only mutate component fields, not map structure
+                    for (eid in world.getEnemySnapshot()) {
                         val eh = world.healths[eid] ?: continue
                         eh.current = (eh.current - 50).coerceAtLeast(0)
                         world.renders[eid]?.flashTimer = 0.2f
@@ -138,22 +134,17 @@ class ExperienceSystem {
         output.add(event)
     }
 
-    private fun magnetizeAllPickups(world: World) {
-        for (pkId in world.getPickupEntities()) {
-            world.pickups[pkId]?.magnetized = true
-        }
-    }
-
     // ── XP formula ────────────────────────────────────────────────────────
 
     private fun xpForLevel(level: Int): Int =
         (10 * (1.18.pow(level - 1.0))).toInt().coerceAtLeast(1)
 
-    // ── Lifetime tickers (use real dt) ────────────────────────────────────
+    // ── Lifetime tickers ──────────────────────────────────────────────────
 
     private fun tickPickupLifetimes(world: World, dt: Float) {
         val toDestroy = mutableListOf<Int>()
-        for ((id, pickup) in world.pickups) {
+        // SNAPSHOT — we call destroyEntity at the end, can't iterate live map
+        for ((id, pickup) in world.getPickupMapSnapshot()) {
             pickup.lifetime -= dt
             if (pickup.lifetime <= 0f) toDestroy.add(id)
         }
@@ -162,7 +153,8 @@ class ExperienceSystem {
 
     private fun tickDamageNumbers(world: World, dt: Float) {
         val toDestroy = mutableListOf<Int>()
-        for ((id, dn) in world.damageNumbers) {
+        // SNAPSHOT
+        for ((id, dn) in world.getDamageMapSnapshot()) {
             val t = world.transforms[id] ?: continue
             dn.lifetime -= dt
             t.y         += dn.vy * dt
@@ -173,7 +165,8 @@ class ExperienceSystem {
 
     private fun tickParticles(world: World, dt: Float) {
         val toDestroy = mutableListOf<Int>()
-        for ((id, p) in world.particles) {
+        // SNAPSHOT
+        for ((id, p) in world.getParticleMapSnapshot()) {
             val t = world.transforms[id] ?: continue
             p.lifetime -= dt
             t.x        += p.vx * dt
