@@ -147,8 +147,7 @@ class GameEngine(
             }
         }
 
-        frameEvents.clear()
-        frameEvents.addAll(processed)
+        // processed events consumed above; frameEvents cleared at start of next tick()
     }
 
     private fun emitState() {
@@ -177,7 +176,7 @@ class GameEngine(
             enemyCount       = world.getEnemyEntities().size,
             killCount        = player?.killCount ?: 0,
             world            = world,
-            events           = frameEvents.toList()
+            events           = emptyList() // events consumed in tick(), not needed by renderer
         )
     }
 
