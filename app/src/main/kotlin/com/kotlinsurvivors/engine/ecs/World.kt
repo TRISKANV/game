@@ -6,13 +6,24 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * Central ECS World.
  *
- * Key design rules:
- *  1. All snapshot methods clear and reuse pre-allocated ArrayLists — zero
- *     per-frame allocation on the normal path.
- *  2. Map-entry snapshots use IntArray + parallel component arrays instead
- *     of Pair<Int,T> to completely eliminate object allocation.
- *  3. Live-view accessors (getEnemyEntities etc.) are kept only for the
- *     read-only renderer — never use them in systems that mutate the world.
+ * Snapshot design — THE BUG WE FIXED:
+ *   Previous version returned the SAME ArrayList reference from every
+ *   snapshot call. When getEnemySnapshot() was called 9× per frame across
+ *   MovementSystem, WeaponSystem, CollisionSystem and ExperienceSystem,
+ *   the second caller's .clear() would corrupt the first caller's iteration
+ *   → ConcurrentModificationException or silent data corruption → crash.
+ *
+ * Fix: snapshot methods now COPY into a fresh list each call.
+ *   To avoid per-call allocation we keep ONE write buffer per method
+ *   and copy it into a thread-local read list that callers hold safely.
+ *   Simpler alternative used here: return a new ArrayList copy every call.
+ *   This is one allocation per call (~9 per frame for enemies) but each
+ *   is tiny and short-lived — far less pressure than the previous Pair
+ *   explosion (150k+/sec). Android's GC handles this comfortably.
+ *
+ *   If profiling shows this is still too much, the right fix is to give
+ *   each system its own private buffer field and pass it to World.fillXxx()
+ *   — but that adds coupling. The copy approach is safe and correct first.
  */
 class World {
 
@@ -37,21 +48,6 @@ class World {
     val bosses        = HashMap<Int, BossComponent>(4)
     val playerTags    = HashSet<Int>(2)
     val destroyedTags = HashSet<Int>(128)
-
-    // ── Zero-allocation snapshot buffers ───────────────────────────────────
-    // Each buffer is cleared and refilled in-place every call.
-    // Using plain ArrayList<Int> for ID-only snapshots (no boxing beyond
-    // what HashMap.keys already has).
-
-    private val _enemyIds      = ArrayList<Int>(512)
-    private val _projectileIds = ArrayList<Int>(256)
-    private val _pickupIds     = ArrayList<Int>(256)
-    private val _particleIds   = ArrayList<Int>(512)
-    private val _damageNumIds  = ArrayList<Int>(64)
-    private val _velocityIds   = ArrayList<Int>(1024)
-    private val _transformIds  = ArrayList<Int>(1024)
-    private val _renderIds     = ArrayList<Int>(1024)
-    private val _healthIds     = ArrayList<Int>(512)
 
     // ── Entity lifecycle ────────────────────────────────────────────────────
 
@@ -89,45 +85,27 @@ class World {
     fun getLiveEntityCount(): Int  = liveEntities.size
     fun getPlayerEntity(): Int     = playerTags.firstOrNull() ?: -1
 
-    // ── Snapshot methods (zero Pair allocation) ────────────────────────────
-    // Each method clears the reusable list and adds all current keys.
-    // Systems MUST use these instead of .keys to prevent CME.
+    // ── Safe snapshot methods ──────────────────────────────────────────────
+    // Each call returns an INDEPENDENT copy of the key set.
+    // This prevents the "shared mutable list" bug where a second caller
+    // calling .clear() corrupts the first caller's iteration.
+    //
+    // Cost: one ArrayList allocation per call. With 9 enemy snapshot calls
+    // per frame at 60fps that's ~540 small allocations/sec — acceptable.
+    // The previous Pair bug was 150,000+/sec.
 
-    fun getEnemySnapshot(): List<Int> {
-        _enemyIds.clear(); _enemyIds.addAll(enemies.keys); return _enemyIds
-    }
-    fun getProjectileSnapshot(): List<Int> {
-        _projectileIds.clear(); _projectileIds.addAll(projectiles.keys); return _projectileIds
-    }
-    fun getPickupSnapshot(): List<Int> {
-        _pickupIds.clear(); _pickupIds.addAll(pickups.keys); return _pickupIds
-    }
-    fun getParticleSnapshot(): List<Int> {
-        _particleIds.clear(); _particleIds.addAll(particles.keys); return _particleIds
-    }
-    fun getDamageNumberSnapshot(): List<Int> {
-        _damageNumIds.clear(); _damageNumIds.addAll(damageNumbers.keys); return _damageNumIds
-    }
-    fun getVelocitySnapshot(): List<Int> {
-        _velocityIds.clear(); _velocityIds.addAll(velocities.keys); return _velocityIds
-    }
-    fun getTransformSnapshot(): List<Int> {
-        _transformIds.clear(); _transformIds.addAll(transforms.keys); return _transformIds
-    }
-    fun getRenderSnapshot(): List<Int> {
-        _renderIds.clear(); _renderIds.addAll(renders.keys); return _renderIds
-    }
-    fun getHealthSnapshot(): List<Int> {
-        _healthIds.clear(); _healthIds.addAll(healths.keys); return _healthIds
-    }
-
-    // ── Map-entry iteration helpers (iterate by ID, look up component) ─────
-    // These replace the Pair-allocating getXxxMapSnapshot() methods.
-    // Pattern: for (id in world.getPickupSnapshot()) { val c = world.pickups[id] ?: continue }
-
-    // No Pair snapshots needed anymore — all callers updated to use ID snapshots.
+    fun getEnemySnapshot(): List<Int>        = ArrayList(enemies.keys)
+    fun getProjectileSnapshot(): List<Int>   = ArrayList(projectiles.keys)
+    fun getPickupSnapshot(): List<Int>       = ArrayList(pickups.keys)
+    fun getParticleSnapshot(): List<Int>     = ArrayList(particles.keys)
+    fun getDamageNumberSnapshot(): List<Int> = ArrayList(damageNumbers.keys)
+    fun getVelocitySnapshot(): List<Int>     = ArrayList(velocities.keys)
+    fun getTransformSnapshot(): List<Int>    = ArrayList(transforms.keys)
+    fun getRenderSnapshot(): List<Int>       = ArrayList(renders.keys)
+    fun getHealthSnapshot(): List<Int>       = ArrayList(healths.keys)
 
     // ── Legacy read-only accessors for the renderer only ──────────────────
+    // The renderer never mutates the world so live views are safe there.
     fun getEnemyEntities(): Set<Int>        = enemies.keys
     fun getProjectileEntities(): Set<Int>   = projectiles.keys
     fun getPickupEntities(): Set<Int>       = pickups.keys
