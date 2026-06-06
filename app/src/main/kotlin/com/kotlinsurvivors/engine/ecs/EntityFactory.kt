@@ -179,7 +179,7 @@ object EntityFactory {
         world.pickups[id]    = PickupComponent(
             type  = type,
             value = pickupValue(type),
-            lifetime = if (type == PickupType.MAGNET || type == PickupType.BOMB) 8f else 15f
+            lifetime = 8f  // 8s for all pickups — prevents XP orb accumulation over time
         )
         world.colliders[id]  = ColliderComponent(
             radius = pickupRadius(type),

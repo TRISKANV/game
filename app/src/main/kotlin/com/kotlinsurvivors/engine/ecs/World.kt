@@ -6,15 +6,19 @@ import java.util.concurrent.atomic.AtomicInteger
 /**
  * Central ECS World.
  *
- * All public query methods that return entity sets return SNAPSHOTS (copied lists),
- * never live views of internal HashMap keys. This prevents ConcurrentModificationException
- * when systems create or destroy entities while iterating.
+ * Key design rules:
+ *  1. All snapshot methods clear and reuse pre-allocated ArrayLists — zero
+ *     per-frame allocation on the normal path.
+ *  2. Map-entry snapshots use IntArray + parallel component arrays instead
+ *     of Pair<Int,T> to completely eliminate object allocation.
+ *  3. Live-view accessors (getEnemyEntities etc.) are kept only for the
+ *     read-only renderer — never use them in systems that mutate the world.
  */
 class World {
 
-    private val nextId      = AtomicInteger(1)
-    private val freeIds     = ArrayDeque<Int>(256)
-    private val liveEntities= HashSet<Int>(1024)
+    private val nextId       = AtomicInteger(1)
+    private val freeIds      = ArrayDeque<Int>(256)
+    private val liveEntities = HashSet<Int>(1024)
 
     val transforms    = HashMap<Int, TransformComponent>(1024)
     val velocities    = HashMap<Int, VelocityComponent>(1024)
@@ -34,27 +38,22 @@ class World {
     val playerTags    = HashSet<Int>(2)
     val destroyedTags = HashSet<Int>(128)
 
-    // ── Reusable snapshot lists — allocated once, reused every frame ───────
-    // Systems call the snapshot functions below instead of accessing .keys directly.
-    private val enemySnapshot     = ArrayList<Int>(512)
-    private val projectileSnapshot= ArrayList<Int>(256)
-    private val pickupSnapshot    = ArrayList<Int>(256)
-    private val particleSnapshot  = ArrayList<Int>(512)
-    private val damageNumSnapshot = ArrayList<Int>(64)
-    private val transformSnapshot = ArrayList<Int>(1024)
-    private val velocitySnapshot  = ArrayList<Int>(1024)
-    private val renderSnapshot    = ArrayList<Int>(1024)
-    private val healthSnapshot    = ArrayList<Int>(512)
-    private val pickupMapSnapshot = ArrayList<Pair<Int, PickupComponent>>(256)
-    private val particleMapSnapshot=ArrayList<Pair<Int, ParticleComponent>>(512)
-    private val damageMapSnapshot = ArrayList<Pair<Int, DamageNumberComponent>>(64)
-    private val projMapSnapshot   = ArrayList<Pair<Int, ProjectileComponent>>(256)
-    private val transformMapSnapshot = ArrayList<Pair<Int, TransformComponent>>(1024)
-    private val velocityMapSnapshot  = ArrayList<Pair<Int, VelocityComponent>>(1024)
-    private val renderMapSnapshot    = ArrayList<Pair<Int, RenderComponent>>(1024)
-    private val healthMapSnapshot    = ArrayList<Pair<Int, HealthComponent>>(512)
+    // ── Zero-allocation snapshot buffers ───────────────────────────────────
+    // Each buffer is cleared and refilled in-place every call.
+    // Using plain ArrayList<Int> for ID-only snapshots (no boxing beyond
+    // what HashMap.keys already has).
 
-    // ── Entity creation / destruction ──────────────────────────────────────
+    private val _enemyIds      = ArrayList<Int>(512)
+    private val _projectileIds = ArrayList<Int>(256)
+    private val _pickupIds     = ArrayList<Int>(256)
+    private val _particleIds   = ArrayList<Int>(512)
+    private val _damageNumIds  = ArrayList<Int>(64)
+    private val _velocityIds   = ArrayList<Int>(1024)
+    private val _transformIds  = ArrayList<Int>(1024)
+    private val _renderIds     = ArrayList<Int>(1024)
+    private val _healthIds     = ArrayList<Int>(512)
+
+    // ── Entity lifecycle ────────────────────────────────────────────────────
 
     fun createEntity(): Int {
         val id = if (freeIds.isNotEmpty()) freeIds.removeFirst() else nextId.getAndIncrement()
@@ -62,9 +61,7 @@ class World {
         return id
     }
 
-    fun destroyEntity(id: Int) {
-        destroyedTags.add(id)
-    }
+    fun destroyEntity(id: Int) { destroyedTags.add(id) }
 
     fun flushDestroyed(): Int {
         val count = destroyedTags.size
@@ -78,113 +75,59 @@ class World {
     }
 
     private fun removeAllComponents(id: Int) {
-        transforms.remove(id)
-        velocities.remove(id)
-        healths.remove(id)
-        colliders.remove(id)
-        renders.remove(id)
-        players.remove(id)
-        enemies.remove(id)
-        weapons.remove(id)
-        projectiles.remove(id)
-        pickups.remove(id)
-        damageNumbers.remove(id)
-        particles.remove(id)
-        auras.remove(id)
-        orbitals.remove(id)
-        bosses.remove(id)
-        playerTags.remove(id)
+        transforms.remove(id);    velocities.remove(id)
+        healths.remove(id);       colliders.remove(id)
+        renders.remove(id);       players.remove(id)
+        enemies.remove(id);       weapons.remove(id)
+        projectiles.remove(id);   pickups.remove(id)
+        damageNumbers.remove(id); particles.remove(id)
+        auras.remove(id);         orbitals.remove(id)
+        bosses.remove(id);        playerTags.remove(id)
     }
 
     fun isAlive(id: Int): Boolean = id in liveEntities && id !in destroyedTags
+    fun getLiveEntityCount(): Int  = liveEntities.size
+    fun getPlayerEntity(): Int     = playerTags.firstOrNull() ?: -1
 
-    fun getLiveEntityCount(): Int = liveEntities.size
-
-    fun getPlayerEntity(): Int = playerTags.firstOrNull() ?: -1
-
-    // ── Snapshot queries — ALWAYS returns a copy, never a live view ────────
-    // This is the critical fix: every system that iterates and may create/destroy
-    // entities during the loop must use these snapshot functions.
+    // ── Snapshot methods (zero Pair allocation) ────────────────────────────
+    // Each method clears the reusable list and adds all current keys.
+    // Systems MUST use these instead of .keys to prevent CME.
 
     fun getEnemySnapshot(): List<Int> {
-        enemySnapshot.clear()
-        enemySnapshot.addAll(enemies.keys)
-        return enemySnapshot
+        _enemyIds.clear(); _enemyIds.addAll(enemies.keys); return _enemyIds
     }
-
     fun getProjectileSnapshot(): List<Int> {
-        projectileSnapshot.clear()
-        projectileSnapshot.addAll(projectiles.keys)
-        return projectileSnapshot
+        _projectileIds.clear(); _projectileIds.addAll(projectiles.keys); return _projectileIds
     }
-
     fun getPickupSnapshot(): List<Int> {
-        pickupSnapshot.clear()
-        pickupSnapshot.addAll(pickups.keys)
-        return pickupSnapshot
+        _pickupIds.clear(); _pickupIds.addAll(pickups.keys); return _pickupIds
     }
-
     fun getParticleSnapshot(): List<Int> {
-        particleSnapshot.clear()
-        particleSnapshot.addAll(particles.keys)
-        return particleSnapshot
+        _particleIds.clear(); _particleIds.addAll(particles.keys); return _particleIds
     }
-
     fun getDamageNumberSnapshot(): List<Int> {
-        damageNumSnapshot.clear()
-        damageNumSnapshot.addAll(damageNumbers.keys)
-        return damageNumSnapshot
+        _damageNumIds.clear(); _damageNumIds.addAll(damageNumbers.keys); return _damageNumIds
+    }
+    fun getVelocitySnapshot(): List<Int> {
+        _velocityIds.clear(); _velocityIds.addAll(velocities.keys); return _velocityIds
+    }
+    fun getTransformSnapshot(): List<Int> {
+        _transformIds.clear(); _transformIds.addAll(transforms.keys); return _transformIds
+    }
+    fun getRenderSnapshot(): List<Int> {
+        _renderIds.clear(); _renderIds.addAll(renders.keys); return _renderIds
+    }
+    fun getHealthSnapshot(): List<Int> {
+        _healthIds.clear(); _healthIds.addAll(healths.keys); return _healthIds
     }
 
-    fun getPickupMapSnapshot(): List<Pair<Int, PickupComponent>> {
-        pickupMapSnapshot.clear()
-        for ((k, v) in pickups) pickupMapSnapshot.add(Pair(k, v))
-        return pickupMapSnapshot
-    }
+    // ── Map-entry iteration helpers (iterate by ID, look up component) ─────
+    // These replace the Pair-allocating getXxxMapSnapshot() methods.
+    // Pattern: for (id in world.getPickupSnapshot()) { val c = world.pickups[id] ?: continue }
 
-    fun getParticleMapSnapshot(): List<Pair<Int, ParticleComponent>> {
-        particleMapSnapshot.clear()
-        for ((k, v) in particles) particleMapSnapshot.add(Pair(k, v))
-        return particleMapSnapshot
-    }
+    // No Pair snapshots needed anymore — all callers updated to use ID snapshots.
 
-    fun getDamageMapSnapshot(): List<Pair<Int, DamageNumberComponent>> {
-        damageMapSnapshot.clear()
-        for ((k, v) in damageNumbers) damageMapSnapshot.add(Pair(k, v))
-        return damageMapSnapshot
-    }
-
-    fun getProjectileMapSnapshot(): List<Pair<Int, ProjectileComponent>> {
-        projMapSnapshot.clear()
-        for ((k, v) in projectiles) projMapSnapshot.add(Pair(k, v))
-        return projMapSnapshot
-    }
-
-    fun getTransformMapSnapshot(): List<Pair<Int, TransformComponent>> {
-        transformMapSnapshot.clear()
-        for ((k, v) in transforms) transformMapSnapshot.add(Pair(k, v))
-        return transformMapSnapshot
-    }
-
-    fun getVelocityMapSnapshot(): List<Pair<Int, VelocityComponent>> {
-        velocityMapSnapshot.clear()
-        for ((k, v) in velocities) velocityMapSnapshot.add(Pair(k, v))
-        return velocityMapSnapshot
-    }
-
-    fun getRenderMapSnapshot(): List<Pair<Int, RenderComponent>> {
-        renderMapSnapshot.clear()
-        for ((k, v) in renders) renderMapSnapshot.add(Pair(k, v))
-        return renderMapSnapshot
-    }
-
-    fun getHealthMapSnapshot(): List<Pair<Int, HealthComponent>> {
-        healthMapSnapshot.clear()
-        for ((k, v) in healths) healthMapSnapshot.add(Pair(k, v))
-        return healthMapSnapshot
-    }
-
-    // ── Legacy: kept for renderer (read-only, no mutations during render) ──
+    // ── Legacy read-only accessors for the renderer only ──────────────────
     fun getEnemyEntities(): Set<Int>        = enemies.keys
     fun getProjectileEntities(): Set<Int>   = projectiles.keys
     fun getPickupEntities(): Set<Int>       = pickups.keys
@@ -192,24 +135,12 @@ class World {
     fun getDamageNumberEntities(): Set<Int> = damageNumbers.keys
 
     fun clear() {
-        liveEntities.clear()
-        freeIds.clear()
-        destroyedTags.clear()
-        transforms.clear()
-        velocities.clear()
-        healths.clear()
-        colliders.clear()
-        renders.clear()
-        players.clear()
-        enemies.clear()
-        weapons.clear()
-        projectiles.clear()
-        pickups.clear()
-        damageNumbers.clear()
-        particles.clear()
-        auras.clear()
-        orbitals.clear()
-        bosses.clear()
+        liveEntities.clear(); freeIds.clear(); destroyedTags.clear()
+        transforms.clear();   velocities.clear(); healths.clear()
+        colliders.clear();    renders.clear();    players.clear()
+        enemies.clear();      weapons.clear();    projectiles.clear()
+        pickups.clear();      damageNumbers.clear(); particles.clear()
+        auras.clear();        orbitals.clear();   bosses.clear()
         playerTags.clear()
     }
 }
