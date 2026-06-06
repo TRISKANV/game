@@ -9,14 +9,14 @@ import kotlin.random.Random
 /**
  * SpawnSystem
  *
- * Controls progressive enemy spawning:
- *  - Base spawn rate increases with elapsed time
- *  - Enemy pool diversifies as time progresses
- *  - Boss spawns on fixed time intervals
- *  - Enemies spawn off-screen around the player
+ * Memory fixes:
+ *  1. buildEnemyPool() and pickBossType() no longer allocate new lists on
+ *     every spawn check — they use pre-built fixed arrays indexed at construction.
+ *  2. randomSpawnPosition() returns floats directly instead of Pair<Float,Float>.
+ *  3. absoluteMaxEnemies kept at 300 (was 800) to bound memory usage.
  */
 class SpawnSystem(
-    private val viewportWidth: Float,
+    private val viewportWidth : Float,
     private val viewportHeight: Float
 ) {
 
@@ -24,50 +24,55 @@ class SpawnSystem(
     private var bossTimer        = 0f
     private var waveTimer        = 0f
     private var currentWave      = 0
-
-    // Spawn rate: starts at 1 enemy/1.2s, scales to 1 enemy/0.18s at minute 20
     private var spawnInterval    = 1.2f
-    private val minSpawnInterval = 0.18f
-
-    // How many enemies can exist simultaneously (scales with time)
-    private var maxEnemies       = 60
-    private val absoluteMaxEnemies = 800
-
-    // Boss spawn every 3 minutes
+    private val minSpawnInterval = 0.25f  // raised from 0.18 to reduce peak entity count
+    private var maxEnemies       = 50     // lowered starting cap
+    private val absoluteMaxEnemies = 300  // lowered from 800 to prevent OOM
     private val bossInterval     = 180f
 
+    // Pre-built pool arrays — allocated once, never recreated
+    private val poolEarly  = arrayOf(EnemyType.BASIC, EnemyType.BASIC, EnemyType.BASIC)
+    private val poolMid    = arrayOf(EnemyType.BASIC, EnemyType.BASIC, EnemyType.FAST,
+                                     EnemyType.FAST,  EnemyType.SWARM, EnemyType.SWARM)
+    private val poolLate   = arrayOf(EnemyType.BASIC, EnemyType.FAST,  EnemyType.FAST,
+                                     EnemyType.SWARM,  EnemyType.TANK,  EnemyType.RANGED,
+                                     EnemyType.RANGED, EnemyType.EXPLODER)
+    private val bossList   = arrayOf(EnemyType.BOSS_SHADOW, EnemyType.BOSS_GOLEM, EnemyType.BOSS_NECROMANCER)
+
+    // Reusable spawn position — avoids Pair allocation every spawn
+    private var spawnX = 0f
+    private var spawnY = 0f
+
     fun update(world: World, dt: Float, elapsedTime: Float): SpawnResult {
-        val result = SpawnResult()
+        val result       = SpawnResult()
         val playerEntity = world.getPlayerEntity()
         if (playerEntity == -1) return result
 
         val pt = world.transforms[playerEntity] ?: return result
 
-        // Update max enemy cap over time
-        maxEnemies = (60 + (elapsedTime / 60f) * 80f).toInt().coerceAtMost(absoluteMaxEnemies)
+        // Scale enemy cap with time, hard-capped at absoluteMaxEnemies
+        maxEnemies = (50 + (elapsedTime / 60f) * 50f).toInt().coerceAtMost(absoluteMaxEnemies)
 
-        // Scale spawn interval down with time
-        val progress     = (elapsedTime / 1200f).coerceIn(0f, 1f) // 20 min = 1.0
-        spawnInterval    = lerp(1.2f, minSpawnInterval, easeIn(progress))
+        // Scale spawn interval
+        val progress  = (elapsedTime / 1200f).coerceIn(0f, 1f)
+        spawnInterval = lerp(1.2f, minSpawnInterval, progress * progress)
 
         // Wave timer
         waveTimer += dt
-        if (waveTimer >= 30f) {
-            waveTimer = 0f
-            currentWave++
-            result.newWave = currentWave
-        }
+        if (waveTimer >= 30f) { waveTimer = 0f; currentWave++; result.newWave = currentWave }
 
         // Regular spawns
         spawnTimer += dt
         if (spawnTimer >= spawnInterval) {
             spawnTimer = 0f
-            val count  = world.getEnemyEntities().size
-            if (count < maxEnemies) {
-                val burstCount = spawnBurstCount(elapsedTime)
-                repeat(burstCount) {
+            val currentCount = world.getEnemyEntities().size
+            if (currentCount < maxEnemies) {
+                val burst = spawnBurstCount(elapsedTime)
+                repeat(burst) {
                     if (world.getEnemyEntities().size < maxEnemies) {
-                        spawnEnemy(world, pt.x, pt.y, elapsedTime)
+                        calcSpawnPosition(pt.x, pt.y)
+                        val type = pickEnemyType(elapsedTime)
+                        EntityFactory.createEnemy(world, type, spawnX, spawnY, waveMultiplier(elapsedTime))
                         result.enemiesSpawned++
                     }
                 }
@@ -78,96 +83,64 @@ class SpawnSystem(
         bossTimer += dt
         if (bossTimer >= bossInterval) {
             bossTimer = 0f
+            calcSpawnPosition(pt.x, pt.y)
             val bossType = pickBossType(elapsedTime)
-            spawnBoss(world, pt.x, pt.y, bossType, elapsedTime)
+            val mult = (1f + elapsedTime / 180f).coerceAtMost(4f)
+            EntityFactory.createEnemy(world, bossType, spawnX, spawnY, mult)
             result.bossSpawned = true
         }
 
         return result
     }
 
-    private fun spawnBurstCount(elapsed: Float): Int {
-        return when {
-            elapsed < 60f   -> 1
-            elapsed < 180f  -> 2
-            elapsed < 360f  -> 3
-            elapsed < 600f  -> Random.nextInt(3, 6)
-            else            -> Random.nextInt(5, 10)
-        }
+    private fun spawnBurstCount(elapsed: Float) = when {
+        elapsed < 60f  -> 1
+        elapsed < 180f -> 2
+        elapsed < 360f -> 3
+        else           -> 4  // was up to 10 — reduced to control entity count
     }
 
-    private fun spawnEnemy(world: World, px: Float, py: Float, elapsed: Float) {
-        val type  = pickEnemyType(elapsed)
-        val pos   = randomSpawnPosition(px, py)
-        val mult  = waveMultiplier(elapsed)
-        EntityFactory.createEnemy(world, type, pos.first, pos.second, mult)
-    }
-
-    private fun spawnBoss(world: World, px: Float, py: Float, type: EnemyType, elapsed: Float) {
-        val pos  = randomSpawnPosition(px, py)
-        val mult = (1f + elapsed / 180f).coerceAtMost(4f)
-        EntityFactory.createEnemy(world, type, pos.first, pos.second, mult)
-    }
-
-    /**
-     * Gradually introduce stronger enemy types as the game progresses.
-     */
     private fun pickEnemyType(elapsed: Float): EnemyType {
-        val pool = buildEnemyPool(elapsed)
+        val pool = when {
+            elapsed < 30f  -> poolEarly
+            elapsed < 120f -> poolMid
+            else           -> poolLate
+        }
         return pool[Random.nextInt(pool.size)]
     }
 
-    private fun buildEnemyPool(elapsed: Float): List<EnemyType> {
-        val pool = mutableListOf(EnemyType.BASIC, EnemyType.BASIC, EnemyType.BASIC)
-        if (elapsed > 30f)  pool.addAll(listOf(EnemyType.FAST, EnemyType.FAST))
-        if (elapsed > 60f)  pool.addAll(listOf(EnemyType.SWARM, EnemyType.SWARM, EnemyType.SWARM))
-        if (elapsed > 90f)  pool.add(EnemyType.TANK)
-        if (elapsed > 120f) pool.addAll(listOf(EnemyType.RANGED, EnemyType.RANGED))
-        if (elapsed > 180f) pool.add(EnemyType.EXPLODER)
-        if (elapsed > 240f) pool.add(EnemyType.TANK)
-        return pool
-    }
-
     private fun pickBossType(elapsed: Float): EnemyType {
-        val bosses = mutableListOf(EnemyType.BOSS_SHADOW)
-        if (elapsed > 180f) bosses.add(EnemyType.BOSS_GOLEM)
-        if (elapsed > 360f) bosses.add(EnemyType.BOSS_NECROMANCER)
-        return bosses[Random.nextInt(bosses.size)]
+        val count = when {
+            elapsed < 180f -> 1
+            elapsed < 360f -> 2
+            else           -> 3
+        }
+        return bossList[Random.nextInt(count)]
     }
 
-    private fun waveMultiplier(elapsed: Float): Float {
-        return 1f + (elapsed / 120f) * 0.5f  // +50% stats every 2 minutes
-    }
+    private fun waveMultiplier(elapsed: Float) = 1f + (elapsed / 120f) * 0.5f
 
     /**
-     * Spawn off-screen by positioning outside the visible viewport + margin.
-     * Uses a random point on a rect around the player.
+     * Writes spawn position into spawnX/spawnY instead of returning Pair.
+     * Eliminates one Pair allocation per spawn event.
      */
-    private fun randomSpawnPosition(px: Float, py: Float): Pair<Float, Float> {
-        val margin  = 80f
-        val halfW   = viewportWidth  * 0.5f + margin
-        val halfH   = viewportHeight * 0.5f + margin
-
-        // Pick a random edge (0=top, 1=right, 2=bottom, 3=left)
-        val edge = Random.nextInt(4)
-        return when (edge) {
-            0 -> Pair(px + Random.nextFloat() * halfW * 2f - halfW, py - halfH)
-            1 -> Pair(px + halfW, py + Random.nextFloat() * halfH * 2f - halfH)
-            2 -> Pair(px + Random.nextFloat() * halfW * 2f - halfW, py + halfH)
-            else -> Pair(px - halfW, py + Random.nextFloat() * halfH * 2f - halfH)
+    private fun calcSpawnPosition(px: Float, py: Float) {
+        val margin = 80f
+        val halfW  = viewportWidth  * 0.5f + margin
+        val halfH  = viewportHeight * 0.5f + margin
+        when (Random.nextInt(4)) {
+            0 -> { spawnX = px + Random.nextFloat()*halfW*2f - halfW; spawnY = py - halfH }
+            1 -> { spawnX = px + halfW; spawnY = py + Random.nextFloat()*halfH*2f - halfH }
+            2 -> { spawnX = px + Random.nextFloat()*halfW*2f - halfW; spawnY = py + halfH }
+            else -> { spawnX = px - halfW; spawnY = py + Random.nextFloat()*halfH*2f - halfH }
         }
     }
 
     private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
-    private fun easeIn(t: Float) = t * t
 
     fun reset() {
-        spawnTimer    = 0f
-        bossTimer     = 0f
-        waveTimer     = 0f
-        currentWave   = 0
-        spawnInterval = 1.2f
-        maxEnemies    = 60
+        spawnTimer = 0f; bossTimer = 0f; waveTimer = 0f
+        currentWave = 0; spawnInterval = 1.2f; maxEnemies = 50
     }
 
     data class SpawnResult(

@@ -9,7 +9,7 @@ import kotlin.math.sqrt
 /**
  * CollisionSystem
  *
- * Fix: buildGrid now uses getTransformMapSnapshot() so that inserting
+ * Fix: buildGrid now uses getTransformSnapshot() so that inserting
  * entities into the spatial grid never iterates a live HashMap view.
  * Enemy separation uses getEnemySnapshot() for the outer loop.
  */
@@ -30,10 +30,10 @@ class CollisionSystem {
 
     private fun buildGrid(world: World) {
         grid.clear()
-        // SNAPSHOT — transforms map is read-only here but we snapshot for
-        // consistency since other systems may have just added entities
-        for ((id, t) in world.getTransformMapSnapshot()) {
-            val c = world.colliders[id] ?: continue
+        // ID snapshot — no Pair allocation, direct component lookup
+        for (id in world.getTransformSnapshot()) {
+            val t = world.transforms[id] ?: continue
+            val c = world.colliders[id]  ?: continue
             grid.insert(id, t.x, t.y, c.radius)
         }
     }
@@ -150,7 +150,7 @@ class CollisionSystem {
             }
 
             if (enemy.type == EnemyType.EXPLODER) {
-                EntityFactory.createParticleBurst(world, et.x, et.y, ParticleType.EXPLOSION, 16)
+                EntityFactory.createParticleBurst(world, et.x, et.y, ParticleType.EXPLOSION, 8)
                 world.destroyEntity(eid)
                 events.add(GameEvent.EnemyKilled(eid, enemy.type, enemy.experienceValue, enemy.coinDropChance))
             }
