@@ -39,6 +39,9 @@ class GameRenderer(
     private var cameraX = 0f
     private var cameraY = 0f
 
+    // Pre-allocated to avoid creating a new Path object every frame for every triangle enemy
+    private val trianglePath = Path()
+
     fun render(
         drawScope     : DrawScope,
         world         : World,
@@ -212,15 +215,16 @@ class GameRenderer(
     }
 
     private fun DrawScope.drawTriangle(cx: Float, cy: Float, r: Float, color: Color, rotation: Float) {
-        val path = Path()
+        // Reuse pre-allocated Path — reset and refill instead of allocating new
+        trianglePath.reset()
         for (i in 0..2) {
             val angle = rotation + i * 2f * PI.toFloat() / 3f - PI.toFloat() / 2f
             val px    = cx + cos(angle) * r
             val py    = cy + sin(angle) * r
-            if (i == 0) path.moveTo(px, py) else path.lineTo(px, py)
+            if (i == 0) trianglePath.moveTo(px, py) else trianglePath.lineTo(px, py)
         }
-        path.close()
-        drawPath(path, color)
+        trianglePath.close()
+        drawPath(trianglePath, color)
     }
 
     // ── Orbital weapons ────────────────────────────────────────────────────
