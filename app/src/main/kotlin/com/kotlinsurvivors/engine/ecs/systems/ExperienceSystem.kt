@@ -9,14 +9,22 @@ import kotlin.random.Random
 /**
  * ExperienceSystem
  *
- * Memory fixes:
- *  1. All map iterations use ID snapshots — zero Pair allocation per frame.
- *  2. tickPickupLifetimes / tickParticles / tickDamageNumbers each collect
- *     IDs to destroy into a pre-cleared reusable list, not a new mutableListOf().
+ * Fixes applied:
+ *  1. Level-up loop is bounded to MAX_LEVELS_PER_FRAME (prevents stacking
+ *     many LevelUp events in one frame when collecting mass XP).
+ *     Extra XP beyond the frame cap is carried over correctly.
+ *  2. XP formula capped at level 50 to prevent Double overflow.
+ *  3. toDestroy list reused across tickers (single allocation).
  */
 class ExperienceSystem {
 
-    // Pre-allocated destroy list — reused every tick, avoids mutableListOf() allocation
+    companion object {
+        // Max level-ups to process per frame. Prevents emitting dozens of
+        // LevelUp events in one tick when player collects a magnet + many orbs.
+        // Each LevelUp pauses the game for player choice anyway.
+        const val MAX_LEVELS_PER_FRAME = 1
+    }
+
     private val toDestroy = ArrayList<Int>(128)
 
     fun processEvents(
@@ -71,7 +79,7 @@ class ExperienceSystem {
             EntityFactory.createParticleBurst(world, t.x, t.y, ParticleType.BLOOD, 5)
         }
 
-        val pid = world.getPlayerEntity()
+        val pid    = world.getPlayerEntity()
         val player = world.players[pid]
         if (player != null) player.killCount++
         world.destroyEntity(eid)
@@ -96,29 +104,45 @@ class ExperienceSystem {
             PickupType.EXPERIENCE_MEDIUM,
             PickupType.EXPERIENCE_LARGE -> {
                 player.experience += event.value
-                while (player.experience >= player.experienceToNextLevel) {
+
+                // Bounded level-up loop: emit at most MAX_LEVELS_PER_FRAME LevelUp
+                // events. Surplus XP is retained in player.experience and will
+                // trigger another LevelUp next time a pickup is collected.
+                var levelsThisFrame = 0
+                while (
+                    player.experience >= player.experienceToNextLevel &&
+                    levelsThisFrame < MAX_LEVELS_PER_FRAME
+                ) {
                     player.experience            -= player.experienceToNextLevel
                     player.level++
                     player.experienceToNextLevel  = xpForLevel(player.level)
                     output.add(GameEvent.LevelUp(player.level))
-                    if (pt != null) EntityFactory.createParticleBurst(world, pt.x, pt.y, ParticleType.LEVEL_UP, 10)
+                    levelsThisFrame++
+                    if (pt != null) {
+                        EntityFactory.createParticleBurst(world, pt.x, pt.y, ParticleType.LEVEL_UP, 10)
+                    }
                 }
             }
+
             PickupType.COIN,
             PickupType.COIN_BAG -> player.coins += event.value
+
             PickupType.HEALTH_SMALL -> {
                 health.current = (health.current + event.value).coerceAtMost(health.max)
                 if (pt != null) EntityFactory.createParticleBurst(world, pt.x, pt.y, ParticleType.HEAL, 4)
             }
+
             PickupType.HEALTH_LARGE -> {
                 health.current = (health.current + event.value).coerceAtMost(health.max)
                 if (pt != null) EntityFactory.createParticleBurst(world, pt.x, pt.y, ParticleType.HEAL, 8)
             }
+
             PickupType.MAGNET -> {
                 for (pkId in world.getPickupSnapshot()) {
                     world.pickups[pkId]?.magnetized = true
                 }
             }
+
             PickupType.BOMB -> {
                 if (pt != null) {
                     for (eid in world.getEnemySnapshot()) {
@@ -134,15 +158,20 @@ class ExperienceSystem {
         output.add(event)
     }
 
-    private fun xpForLevel(level: Int): Int =
-        (10 * (1.18.pow(level - 1.0))).toInt().coerceAtLeast(1)
+    // ── XP formula — capped at level 50 to prevent Int/Double overflow ─────
+    private fun xpForLevel(level: Int): Int {
+        val cappedLevel = level.coerceAtMost(50)
+        return (10.0 * (1.18.pow(cappedLevel - 1.0))).toInt().coerceIn(1, 500_000)
+    }
 
-    // ── Lifetime tickers — ID snapshot, reused destroy list ───────────────
+    // ── Lifetime tickers ───────────────────────────────────────────────────
 
     private fun tickPickupLifetimes(world: World, dt: Float) {
         toDestroy.clear()
         for (id in world.getPickupSnapshot()) {
             val pickup = world.pickups[id] ?: continue
+            // Skip pickups already queued for destruction (collected this frame)
+            if (id in world.destroyedTags) continue
             pickup.lifetime -= dt
             if (pickup.lifetime <= 0f) toDestroy.add(id)
         }
@@ -152,6 +181,7 @@ class ExperienceSystem {
     private fun tickDamageNumbers(world: World, dt: Float) {
         toDestroy.clear()
         for (id in world.getDamageNumberSnapshot()) {
+            if (id in world.destroyedTags) continue
             val dn = world.damageNumbers[id] ?: continue
             val t  = world.transforms[id]    ?: continue
             dn.lifetime -= dt
@@ -164,8 +194,9 @@ class ExperienceSystem {
     private fun tickParticles(world: World, dt: Float) {
         toDestroy.clear()
         for (id in world.getParticleSnapshot()) {
-            val p = world.particles[id]   ?: continue
-            val t = world.transforms[id]  ?: continue
+            if (id in world.destroyedTags) continue
+            val p = world.particles[id]  ?: continue
+            val t = world.transforms[id] ?: continue
             p.lifetime -= dt
             t.x        += p.vx * dt
             t.y        += p.vy * dt
