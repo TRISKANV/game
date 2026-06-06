@@ -7,6 +7,10 @@ import com.kotlinsurvivors.engine.ecs.components.WeaponType
 /**
  * Immutable snapshot of the game state emitted by GameEngine each frame.
  * The Compose UI collects this and renders accordingly.
+ *
+ * NOTE: [world] is intentionally excluded from equals/hashCode via custom
+ * implementation to prevent unnecessary Compose recompositions — the World
+ * is a mutable reference whose content changes every frame.
  */
 data class GameState(
     val isRunning        : Boolean = false,
@@ -45,6 +49,42 @@ data class GameState(
         val secs = (elapsedTime % 60).toInt()
         return "%02d:%02d".format(mins, secs)
     }
+
+    /**
+     * Custom equals that excludes [world] from comparison.
+     * Without this, every frame emit causes full Compose recomposition
+     * because the World reference changes even when game state is identical.
+     */
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (other !is GameState) return false
+        return isRunning == other.isRunning &&
+            isPaused == other.isPaused &&
+            isGameOver == other.isGameOver &&
+            isPendingLevelUp == other.isPendingLevelUp &&
+            levelUpOptions == other.levelUpOptions &&
+            elapsedTime == other.elapsedTime &&
+            playerHp == other.playerHp &&
+            playerMaxHp == other.playerMaxHp &&
+            playerLevel == other.playerLevel &&
+            playerXp == other.playerXp &&
+            playerXpToNext == other.playerXpToNext &&
+            playerCoins == other.playerCoins &&
+            enemyCount == other.enemyCount &&
+            killCount == other.killCount
+        // world intentionally excluded
+    }
+
+    override fun hashCode(): Int {
+        var result = isRunning.hashCode()
+        result = 31 * result + isPaused.hashCode()
+        result = 31 * result + isGameOver.hashCode()
+        result = 31 * result + playerHp
+        result = 31 * result + playerLevel
+        result = 31 * result + killCount
+        result = 31 * result + enemyCount
+        return result
+    }
 }
 
 // ── Level-Up upgrade model ──────────────────────────────────────────────────
@@ -57,7 +97,8 @@ data class LevelUpOption(
     val description : String,
     val type        : UpgradeType,
     val weaponType  : WeaponType? = null,
-    val icon        : String = "⭐"
+    val icon        : String = "⭐",
+    val rarity      : com.kotlinsurvivors.engine.UpgradeRarity = com.kotlinsurvivors.engine.UpgradeRarity.COMMON
 )
 
 // ── Persistent progression models ──────────────────────────────────────────
