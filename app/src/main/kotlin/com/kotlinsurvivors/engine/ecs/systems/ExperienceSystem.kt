@@ -71,7 +71,9 @@ class ExperienceSystem {
             EntityFactory.createParticleBurst(world, t.x, t.y, ParticleType.BLOOD, 5)
         }
 
-        world.players[world.getPlayerEntity()]?.killCount++
+        val pid = world.getPlayerEntity()
+        val player = world.players[pid]
+        if (player != null) player.killCount++
         world.destroyEntity(eid)
         output.add(event)
     }
