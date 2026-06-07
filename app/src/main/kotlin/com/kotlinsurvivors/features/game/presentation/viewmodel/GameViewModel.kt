@@ -15,8 +15,8 @@ import javax.inject.Inject
 /**
  * GameViewModel
  *
- * Owns the GameEngine instance and exposes its state to the UI.
- * Survives configuration changes; engine lifecycle is tied to ViewModel scope.
+ * Fix: removed getWorld() — World is now private to GameEngine.
+ * Nothing outside the engine should access World directly.
  */
 @HiltViewModel
 class GameViewModel @Inject constructor(
@@ -60,7 +60,7 @@ class GameViewModel @Inject constructor(
         }
     }
 
-    fun getWorld() = engine?.world
+    // getWorld() removed — World is private to GameEngine (thread-safety fix)
 
     override fun onCleared() {
         super.onCleared()
