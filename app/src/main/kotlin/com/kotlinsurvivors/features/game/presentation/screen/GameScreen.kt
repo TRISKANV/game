@@ -21,11 +21,10 @@ import com.kotlinsurvivors.features.game.presentation.viewmodel.GameViewModel
 /**
  * GameScreen
  *
- * Root Composable for the gameplay screen.
- *
- * Input handling uses awaitEachGesture + awaitFirstDown (foundation.gestures)
- * instead of detectDragGestures to guarantee onMove() is never called
- * without a prior onDown(), which was the cause of the crash.
+ * KEY CHANGE: The Canvas now renders gameState.renderSnapshot instead of
+ * gameState.world. The renderSnapshot is an immutable list of plain value
+ * objects built by the engine thread — the UI thread never touches any
+ * live World HashMap, eliminating the ConcurrentModificationException.
  */
 @Composable
 fun GameScreen(
@@ -66,10 +65,11 @@ fun GameScreen(
                 .fillMaxSize()
                 .joystickInput(viewModel, viewportWidth)
         ) {
-            val world = gameState.world ?: return@Canvas
+            // renderSnapshot is an immutable value built on the engine thread.
+            // Safe to read here on the UI thread — no World reference involved.
             renderer.render(
                 drawScope      = this,
-                world          = world,
+                snapshot       = gameState.renderSnapshot,
                 viewportWidth  = size.width,
                 viewportHeight = size.height,
                 dt             = 0.016f
@@ -78,18 +78,15 @@ fun GameScreen(
 
         // ── HUD ───────────────────────────────────────────────────────────
         if (!gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp) {
-            GameHUD(
-                gameState = gameState,
-                onPause   = { viewModel.pauseGame() }
-            )
+            GameHUD(gameState = gameState, onPause = { viewModel.pauseGame() })
         }
 
-        // ── Virtual Joystick visual ───────────────────────────────────────
+        // ── Virtual Joystick ──────────────────────────────────────────────
         if (!gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp) {
             VirtualJoystickOverlay(viewModel = viewModel)
         }
 
-        // ── Overlays ──────────────────────────────────────────────────────
+        // ── Pause ─────────────────────────────────────────────────────────
         if (gameState.isPaused && !gameState.isGameOver) {
             PauseMenuOverlay(
                 onResume   = { viewModel.resumeGame() },
@@ -98,6 +95,7 @@ fun GameScreen(
             )
         }
 
+        // ── Level-Up ──────────────────────────────────────────────────────
         if (gameState.isPendingLevelUp) {
             LevelUpOverlay(
                 options     = gameState.levelUpOptions,
@@ -106,6 +104,7 @@ fun GameScreen(
             )
         }
 
+        // ── Game Over ─────────────────────────────────────────────────────
         if (gameState.isGameOver) {
             GameOverOverlay(
                 gameState  = gameState,
@@ -116,18 +115,6 @@ fun GameScreen(
     }
 }
 
-/**
- * Joystick input modifier.
- *
- * Uses awaitEachGesture (androidx.compose.foundation.gestures) +
- * awaitFirstDown to guarantee a complete and ordered gesture sequence:
- * DOWN → MOVE* → UP. This prevents onMove() from ever being called
- * without a valid center, which caused the NaN crash in MovementSystem.
- *
- * Only activates the joystick when the touch starts in the left half
- * of the screen. Tracks the exact pointer ID for multi-touch safety.
- * Always calls onUp() in the finally block regardless of cancellation.
- */
 private fun Modifier.joystickInput(
     viewModel    : GameViewModel,
     viewportWidth: Float
@@ -135,11 +122,7 @@ private fun Modifier.joystickInput(
     val joystick = viewModel.joystick ?: return@pointerInput
 
     awaitEachGesture {
-        // Wait for any finger down — requireUnconsumed=false so we
-        // don't block other gesture detectors on the same node.
         val down = awaitFirstDown(requireUnconsumed = false)
-
-        // Only activate for touches that start on the LEFT half
         if (down.position.x > viewportWidth * 0.5f) return@awaitEachGesture
 
         val pointerId = down.id
@@ -149,12 +132,7 @@ private fun Modifier.joystickInput(
             while (true) {
                 val event  = awaitPointerEvent()
                 val change = event.changes.find { it.id == pointerId } ?: break
-
-                if (!change.pressed) {
-                    change.consume()
-                    break
-                }
-
+                if (!change.pressed) { change.consume(); break }
                 joystick.onMove(change.position.x, change.position.y)
                 change.consume()
             }
