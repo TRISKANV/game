@@ -4,6 +4,9 @@ import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.systems.*
 import com.kotlinsurvivors.engine.input.VirtualJoystick
+import com.kotlinsurvivors.engine.rendering.RenderEntity
+import com.kotlinsurvivors.engine.rendering.RenderEntityKind
+import com.kotlinsurvivors.engine.rendering.RenderSnapshot
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
 import com.kotlinsurvivors.features.game.domain.model.UpgradeType
@@ -17,18 +20,18 @@ import kotlin.math.roundToInt
 /**
  * GameEngine
  *
- * CRITICAL FIX — Data race on level-up:
- *   Previously applyLevelUpChoice() was called from the UI thread while the
- *   engine thread was reading world.weapons in generateLevelUpOptions().
- *   This caused ConcurrentModificationException on HashMap when collecting
- *   many XP orbs quickly (mass level-ups).
+ * THE DEFINITIVE FIX for the crash:
  *
- *   Fix: applyLevelUpChoice() now sends the choice through a Channel.
- *   The engine thread reads the channel at the start of tick(), ensuring
- *   world mutation only ever happens on the engine thread.
+ * Previous design: GameState contained `world: World?` — a reference to the
+ * live, mutable World. The UI thread (Compose Canvas) iterated
+ * world.getEnemyEntities() (= enemies.keys, a LIVE KeySet) while the engine
+ * thread called enemies.remove(id) inside flushDestroyed(). This is a
+ * classic ConcurrentModificationException data race.
  *
- * All world state is exclusively owned and mutated by the engine thread.
- * The UI thread only reads the immutable GameState snapshot from StateFlow.
+ * Fix: World is now PRIVATE to the engine. Before emitting GameState,
+ * the engine thread builds a RenderSnapshot — a plain immutable list of
+ * value-type RenderEntity objects. The UI thread only ever renders the
+ * snapshot. No shared mutable state. No races. No crashes.
  */
 class GameEngine(
     private val viewportWidth : Float,
@@ -42,7 +45,8 @@ class GameEngine(
         const val WORLD_HEIGHT   = 4096f
     }
 
-    val world = World()
+    // World is now private — ONLY the engine thread touches it
+    private val world = World()
 
     private val movementSystem   = MovementSystem(WORLD_WIDTH, WORLD_HEIGHT)
     private val collisionSystem  = CollisionSystem()
@@ -61,14 +65,16 @@ class GameEngine(
     private var pendingLevelUp = false
     private val frameEvents    = mutableListOf<GameEvent>()
 
-    // Thread-safe channel: UI thread sends LevelUpOption, engine thread consumes it.
-    // Capacity = 4 to handle rapid consecutive level-ups without blocking.
+    // Thread-safe channel for level-up choices (UI → Engine)
     private val levelUpChannel = Channel<LevelUpOption>(capacity = 4)
+
+    // Reusable snapshot builder list — avoids re-allocating every frame
+    private val snapshotEntities = ArrayList<RenderEntity>(512)
 
     private var engineJob: Job? = null
     private val engineDispatcher = newSingleThreadContext("GameEngine")
 
-    // ── Public API (called from UI thread) ─────────────────────────────────
+    // ── Public API ─────────────────────────────────────────────────────────
 
     fun start(scope: CoroutineScope) {
         if (isRunning) return
@@ -87,13 +93,8 @@ class GameEngine(
                 accumulator += dt
 
                 while (accumulator >= FIXED_DT) {
-                    // Consume any pending level-up choices from the UI thread
-                    // BEFORE ticking — ensures world mutation stays on engine thread
                     drainLevelUpChoices()
-
-                    if (!isPaused && !pendingLevelUp) {
-                        tick(FIXED_DT)
-                    }
+                    if (!isPaused && !pendingLevelUp) tick(FIXED_DT)
                     accumulator -= FIXED_DT
                 }
 
@@ -122,34 +123,22 @@ class GameEngine(
         elapsedTime    = 0f
         isPaused       = false
         pendingLevelUp = false
-        // Drain any stale choices
-        while (levelUpChannel.tryReceive().isSuccess) { /* discard */ }
+        while (levelUpChannel.tryReceive().isSuccess) { /* discard stale choices */ }
         start(scope)
     }
 
-    /**
-     * Called from the UI thread when the player picks a level-up option.
-     * Sends the choice through a Channel — the engine thread applies it
-     * safely at the start of the next tick, preventing data races.
-     */
     fun applyLevelUpChoice(option: LevelUpOption) {
         levelUpChannel.trySend(option)
     }
 
-    // ── Private — engine thread only ────────────────────────────────────────
+    // ── Engine thread only ──────────────────────────────────────────────────
 
-    /**
-     * Drains all pending level-up choices from the channel and applies them.
-     * Called at the start of each tick iteration, on the engine thread.
-     */
     private fun drainLevelUpChoices() {
         var result = levelUpChannel.tryReceive()
         while (result.isSuccess) {
             val option = result.getOrNull() ?: break
             val pid    = world.getPlayerEntity()
-            if (pid != -1) {
-                applyUpgrade(world, pid, option)
-            }
+            if (pid != -1) applyUpgrade(world, pid, option)
             if (pendingLevelUp) pendingLevelUp = false
             result = levelUpChannel.tryReceive()
         }
@@ -173,7 +162,6 @@ class GameEngine(
         spawnSystem.update(world, dt, elapsedTime)
         world.flushDestroyed()
 
-        // Process events — only set pendingLevelUp once even if multiple LevelUp events
         for (event in processed) {
             when (event) {
                 is GameEvent.LevelUp    -> pendingLevelUp = true
@@ -189,8 +177,12 @@ class GameEngine(
         val health = world.healths[pid]
         val pt     = world.transforms[pid]
 
-        // generateLevelUpOptions only called when needed, on engine thread
         val levelUpOptions = if (pendingLevelUp) generateLevelUpOptions(world, pid) else emptyList()
+
+        // Build render snapshot on the ENGINE THREAD.
+        // This converts live World data into plain immutable value objects.
+        // The UI thread will only see these — never the World itself.
+        val snapshot = buildRenderSnapshot(pid, pt?.x ?: 0f, pt?.y ?: 0f)
 
         _gameState.value = GameState(
             isRunning        = isRunning && !isPaused,
@@ -209,21 +201,139 @@ class GameEngine(
             playerY          = pt?.y ?: 0f,
             enemyCount       = world.getEnemyEntities().size,
             killCount        = player?.killCount ?: 0,
-            world            = world,
+            renderSnapshot   = snapshot,
             events           = emptyList()
         )
     }
 
-    // ── Level-up option generation (engine thread only) ────────────────────
+    /**
+     * Converts live World data into an immutable RenderSnapshot.
+     * Called on the ENGINE THREAD — safe to read all World data here.
+     */
+    private fun buildRenderSnapshot(playerId: Int, playerX: Float, playerY: Float): RenderSnapshot {
+        snapshotEntities.clear()
+
+        // Enemies
+        for (eid in world.getEnemySnapshot()) {
+            val t = world.transforms[eid] ?: continue
+            val r = world.renders[eid]    ?: continue
+            val h = world.healths[eid]    ?: continue
+            if (h.isDead) continue
+            val isBoss = world.bosses.containsKey(eid)
+            snapshotEntities.add(RenderEntity(
+                kind          = if (isBoss) RenderEntityKind.BOSS else RenderEntityKind.ENEMY,
+                x             = t.x, y = t.y, rotation = t.rotation,
+                shape         = r.shape,
+                color         = r.color, secondaryColor = r.secondaryColor,
+                width         = r.width, height = r.height,
+                glowRadius    = r.glowRadius, glowColor = r.glowColor,
+                flashTimer    = r.flashTimer, isFlashing = r.flashTimer > 0f,
+                hpPercent     = h.percentage, showHealthBar = h.percentage < 1f
+            ))
+        }
+
+        // Projectiles
+        for (pid in world.getProjectileSnapshot()) {
+            val t    = world.transforms[pid]  ?: continue
+            val r    = world.renders[pid]     ?: continue
+            val proj = world.projectiles[pid] ?: continue
+            snapshotEntities.add(RenderEntity(
+                kind       = RenderEntityKind.PROJECTILE,
+                x          = t.x, y = t.y,
+                color      = r.color, width = r.width, height = r.height,
+                glowRadius = r.glowRadius, glowColor = r.glowColor,
+                isCritical = proj.isCritical
+            ))
+        }
+
+        // Pickups
+        for (pkId in world.getPickupSnapshot()) {
+            val t = world.transforms[pkId] ?: continue
+            val r = world.renders[pkId]    ?: continue
+            snapshotEntities.add(RenderEntity(
+                kind       = RenderEntityKind.PICKUP,
+                x          = t.x, y = t.y,
+                color      = r.color, width = r.width, height = r.height,
+                glowRadius = r.glowRadius, glowColor = r.glowColor
+            ))
+        }
+
+        // Player
+        if (playerId != -1) {
+            val t = world.transforms[playerId]
+            val r = world.renders[playerId]
+            val h = world.healths[playerId]
+            val auras = world.auras[playerId]
+            val orbitals = world.orbitals[playerId]
+
+            if (t != null && r != null && h != null) {
+                snapshotEntities.add(RenderEntity(
+                    kind            = RenderEntityKind.PLAYER,
+                    x               = t.x, y = t.y,
+                    color           = r.color, secondaryColor = r.secondaryColor,
+                    width           = r.width, height = r.height,
+                    glowRadius      = r.glowRadius, glowColor = r.glowColor,
+                    flashTimer      = r.flashTimer, isFlashing = r.flashTimer > 0f,
+                    invincibleTimer = h.invincibleTimer,
+                    hasAura         = auras != null && auras.isNotEmpty(),
+                    auraRadius      = auras?.firstOrNull()?.radius ?: 0f
+                ))
+
+                // Orbitals (relative to player position)
+                orbitals?.forEach { orb ->
+                    snapshotEntities.add(RenderEntity(
+                        kind        = RenderEntityKind.ORBITAL,
+                        x           = t.x, y = t.y,
+                        orbitAngle  = orb.currentAngle,
+                        orbitRadius = orb.orbitRadius,
+                        orbitSize   = orb.size,
+                        color       = 0xFFF9A825
+                    ))
+                }
+            }
+        }
+
+        // Particles
+        for (pId in world.getParticleSnapshot()) {
+            val t = world.transforms[pId] ?: continue
+            val p = world.particles[pId]  ?: continue
+            snapshotEntities.add(RenderEntity(
+                kind        = RenderEntityKind.PARTICLE,
+                x           = t.x, y = t.y,
+                color       = p.color,
+                width       = p.size, height = p.size,
+                lifetime    = p.lifetime, maxLifetime = p.maxLifetime
+            ))
+        }
+
+        // Damage numbers
+        for (dnId in world.getDamageNumberSnapshot()) {
+            val t  = world.transforms[dnId]    ?: continue
+            val dn = world.damageNumbers[dnId] ?: continue
+            snapshotEntities.add(RenderEntity(
+                kind        = RenderEntityKind.DAMAGE_NUMBER,
+                x           = t.x, y = t.y,
+                damageValue = dn.value,
+                isCritical  = dn.isCritical,
+                lifetime    = dn.lifetime, maxLifetime = dn.maxLifetime
+            ))
+        }
+
+        return RenderSnapshot(
+            cameraTargetX = playerX,
+            cameraTargetY = playerY,
+            entities      = ArrayList(snapshotEntities) // copy for immutability
+        )
+    }
+
+    // ── Level-up and upgrades (engine thread only) ─────────────────────────
 
     private fun generateLevelUpOptions(world: World, pid: Int): List<LevelUpOption> {
-        val player  = world.players[pid]  ?: return emptyList()
-        val weapons = world.weapons[pid]  ?: return emptyList()
+        val player     = world.players[pid]  ?: return emptyList()
+        val weapons    = world.weapons[pid]  ?: return emptyList()
         val ownedTypes = weapons.map { it.type }.toSet()
+        val options    = mutableListOf<LevelUpOption>()
 
-        val options = mutableListOf<LevelUpOption>()
-
-        // Weapon upgrades
         for (weapon in weapons) {
             if (weapon.level < 8) {
                 val rarity = when {
@@ -232,34 +342,29 @@ class GameEngine(
                     else              -> UpgradeRarity.COMMON
                 }
                 options.add(LevelUpOption(
-                    id          = "upgrade_${weapon.type.name}",
-                    title       = weaponUpgradeTitle(weapon.type, weapon.level + 1),
+                    id = "upgrade_${weapon.type.name}",
+                    title = weaponUpgradeTitle(weapon.type, weapon.level + 1),
                     description = weaponUpgradeDesc(weapon.level + 1),
-                    type        = UpgradeType.WEAPON_UPGRADE,
-                    weaponType  = weapon.type,
-                    icon        = weaponIcon(weapon.type),
-                    rarity      = rarity
+                    type = UpgradeType.WEAPON_UPGRADE,
+                    weaponType = weapon.type,
+                    icon = weaponIcon(weapon.type),
+                    rarity = rarity
                 ))
             }
         }
 
-        // New weapons
         com.kotlinsurvivors.engine.ecs.components.WeaponType.values()
             .filter { it !in ownedTypes && weapons.size < 6 }
             .take(2)
             .forEach { wt ->
                 options.add(LevelUpOption(
-                    id          = "new_${wt.name}",
-                    title       = "New: ${weaponName(wt)}",
+                    id = "new_${wt.name}", title = "New: ${weaponName(wt)}",
                     description = weaponDescription(wt),
-                    type        = UpgradeType.NEW_WEAPON,
-                    weaponType  = wt,
-                    icon        = weaponIcon(wt),
-                    rarity      = UpgradeRarity.RARE
+                    type = UpgradeType.NEW_WEAPON, weaponType = wt,
+                    icon = weaponIcon(wt), rarity = UpgradeRarity.RARE
                 ))
             }
 
-        // Stat upgrades
         options.addAll(listOf(
             LevelUpOption("stat_hp",       "Vital Boost",   "+30 Max HP",        UpgradeType.STAT, icon = "❤️",  rarity = UpgradeRarity.COMMON),
             LevelUpOption("stat_speed",    "Swift Feet",    "+15% Move Speed",   UpgradeType.STAT, icon = "👟",  rarity = UpgradeRarity.COMMON),
@@ -272,12 +377,10 @@ class GameEngine(
             LevelUpOption("stat_armor",    "Iron Skin",     "+1 Armor",          UpgradeType.STAT, icon = "🛡️",  rarity = UpgradeRarity.COMMON),
         ))
 
-        // Guarantee at least one rare/epic if player is level 5+
         val shuffled = options.shuffled()
         val result   = shuffled.take(3).toMutableList()
         if (player.level >= 5 && result.none { it.rarity.ordinal >= UpgradeRarity.RARE.ordinal }) {
-            val rare = shuffled.firstOrNull { it.rarity.ordinal >= UpgradeRarity.RARE.ordinal }
-            if (rare != null) { result[2] = rare }
+            shuffled.firstOrNull { it.rarity.ordinal >= UpgradeRarity.RARE.ordinal }?.let { result[2] = it }
         }
         return result
     }
@@ -291,11 +394,11 @@ class GameEngine(
             UpgradeType.WEAPON_UPGRADE -> {
                 val weapon = weapons.find { it.type == option.weaponType } ?: return
                 weapon.level++
-                weapon.damage          = (weapon.damage * 1.2f).roundToInt()
-                weapon.cooldown        *= 0.92f
+                weapon.damage = (weapon.damage * 1.2f).roundToInt()
+                weapon.cooldown *= 0.92f
                 if (weapon.level % 3 == 0) weapon.projectileCount++
                 if (weapon.level % 4 == 0) weapon.piercing++
-                weapon.area            *= 1.1f
+                weapon.area *= 1.1f
             }
             UpgradeType.NEW_WEAPON -> {
                 val wt = option.weaponType ?: return
@@ -312,15 +415,15 @@ class GameEngine(
             }
             UpgradeType.STAT -> {
                 when (option.id) {
-                    "stat_hp"       -> { health.current += 30 }
-                    "stat_speed"    -> player.speed                 *= 1.15f
-                    "stat_damage"   -> player.damageMultiplier      *= 1.20f
-                    "stat_area"     -> player.areaMultiplier        *= 1.15f
+                    "stat_hp"       -> health.current += 30
+                    "stat_speed"    -> player.speed *= 1.15f
+                    "stat_damage"   -> player.damageMultiplier *= 1.20f
+                    "stat_area"     -> player.areaMultiplier *= 1.15f
                     "stat_cooldown" -> player.attackSpeedMultiplier *= 1.10f
-                    "stat_regen"    -> player.regenPerSecond        += 1f
+                    "stat_regen"    -> player.regenPerSecond += 1f
                     "stat_magnet"   -> { player.magnetRadius *= 1.5f; player.pickupRadius *= 1.5f }
-                    "stat_crit"     -> player.criticalChance        = (player.criticalChance + 0.10f).coerceAtMost(0.80f)
-                    "stat_armor"    -> player.armor                 += 1
+                    "stat_crit"     -> player.criticalChance = (player.criticalChance + 0.10f).coerceAtMost(0.80f)
+                    "stat_armor"    -> player.armor += 1
                 }
             }
         }
@@ -328,8 +431,8 @@ class GameEngine(
 
     private fun newWeaponComponent(type: com.kotlinsurvivors.engine.ecs.components.WeaponType) =
         com.kotlinsurvivors.engine.ecs.components.WeaponComponent(
-            type            = type,
-            damage          = when (type) {
+            type = type,
+            damage = when (type) {
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> 10
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> 8
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.CROSS        -> 12
@@ -338,9 +441,9 @@ class GameEngine(
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> 20
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> 18
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> 22
-                else                                                               -> 0
+                else -> 0
             },
-            cooldown        = when (type) {
+            cooldown = when (type) {
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> 0.7f
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.CROSS        -> 1.4f
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND   -> 1.2f
@@ -348,22 +451,20 @@ class GameEngine(
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> 1.5f
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> 1.6f
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> 1.3f
-                else                                                               -> 999f
+                else -> 999f
             },
             projectileSpeed = if (type == com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE) 600f else 350f,
             projectileSize  = when (type) {
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.AXE   -> 18f
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE -> 8f
-                else                                                         -> 13f
+                else -> 13f
             },
-            piercing        = when (type) {
+            piercing = when (type) {
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND -> 3
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE     -> 2
-                else                                                             -> 1
+                else -> 1
             }
         )
-
-    // ── Weapon metadata ────────────────────────────────────────────────────
 
     private fun weaponName(type: com.kotlinsurvivors.engine.ecs.components.WeaponType) = when (type) {
         com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "Magic Wand"
@@ -377,7 +478,6 @@ class GameEngine(
         com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "Whip"
         com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "King Bible"
     }
-
     private fun weaponDescription(type: com.kotlinsurvivors.engine.ecs.components.WeaponType) = when (type) {
         com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "Fires a magic bolt at the nearest enemy."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> "Throws a fast knife toward the nearest enemy."
@@ -390,17 +490,13 @@ class GameEngine(
         com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "Lashes enemies in a wide horizontal arc."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "Holy books orbit and destroy nearby enemies."
     }
-
-    private fun weaponUpgradeTitle(type: com.kotlinsurvivors.engine.ecs.components.WeaponType, lvl: Int) =
-        "${weaponName(type)} Lv.$lvl"
-
+    private fun weaponUpgradeTitle(type: com.kotlinsurvivors.engine.ecs.components.WeaponType, lvl: Int) = "${weaponName(type)} Lv.$lvl"
     private fun weaponUpgradeDesc(lvl: Int) = when {
         lvl % 4 == 0 -> "+1 Projectile, +Damage"
         lvl % 3 == 0 -> "+1 Pierce, +Speed"
         lvl % 2 == 0 -> "+Area, -Cooldown"
-        else         -> "+Damage"
+        else -> "+Damage"
     }
-
     private fun weaponIcon(type: com.kotlinsurvivors.engine.ecs.components.WeaponType) = when (type) {
         com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "🪄"
         com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> "🔪"
@@ -415,5 +511,4 @@ class GameEngine(
     }
 }
 
-// Rarity enum used for level-up option coloring
 enum class UpgradeRarity { COMMON, RARE, EPIC, LEGENDARY }
