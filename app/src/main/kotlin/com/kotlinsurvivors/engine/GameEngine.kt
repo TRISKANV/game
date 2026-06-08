@@ -1,12 +1,10 @@
 package com.kotlinsurvivors.engine
 
+import android.util.Log
 import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.systems.*
 import com.kotlinsurvivors.engine.input.VirtualJoystick
-import com.kotlinsurvivors.engine.rendering.RenderEntity
-import com.kotlinsurvivors.engine.rendering.RenderEntityKind
-import com.kotlinsurvivors.engine.rendering.RenderSnapshot
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
 import com.kotlinsurvivors.features.game.domain.model.UpgradeType
@@ -17,22 +15,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlin.math.roundToInt
 
-/**
- * GameEngine
- *
- * THE DEFINITIVE FIX for the crash:
- *
- * Previous design: GameState contained `world: World?` — a reference to the
- * live, mutable World. The UI thread (Compose Canvas) iterated
- * world.getEnemyEntities() (= enemies.keys, a LIVE KeySet) while the engine
- * thread called enemies.remove(id) inside flushDestroyed(). This is a
- * classic ConcurrentModificationException data race.
- *
- * Fix: World is now PRIVATE to the engine. Before emitting GameState,
- * the engine thread builds a RenderSnapshot — a plain immutable list of
- * value-type RenderEntity objects. The UI thread only ever renders the
- * snapshot. No shared mutable state. No races. No crashes.
- */
 class GameEngine(
     private val viewportWidth : Float,
     private val viewportHeight: Float
@@ -43,10 +25,13 @@ class GameEngine(
         const val MAX_FRAME_TIME = 0.05f
         const val WORLD_WIDTH    = 4096f
         const val WORLD_HEIGHT   = 4096f
+
+        // Logging
+        private const val TAG       = "KS_Engine"
+        private const val LOG_EVERY = 180 // log stats every 3 seconds (180 frames at 60fps)
     }
 
-    // World is now private — ONLY the engine thread touches it
-    private val world = World()
+    val world = World()
 
     private val movementSystem   = MovementSystem(WORLD_WIDTH, WORLD_HEIGHT)
     private val collisionSystem  = CollisionSystem()
@@ -64,50 +49,78 @@ class GameEngine(
     private var isRunning      = false
     private var pendingLevelUp = false
     private val frameEvents    = mutableListOf<GameEvent>()
+    private var frameCount     = 0L
 
-    // Thread-safe channel for level-up choices (UI → Engine)
     private val levelUpChannel = Channel<LevelUpOption>(capacity = 4)
-
-    // Reusable snapshot builder list — avoids re-allocating every frame
-    private val snapshotEntities = ArrayList<RenderEntity>(512)
 
     private var engineJob: Job? = null
     private val engineDispatcher = newSingleThreadContext("GameEngine")
 
-    // ── Public API ─────────────────────────────────────────────────────────
+    // ── Public API ──────────────────────────────────────────────────────────
 
     fun start(scope: CoroutineScope) {
         if (isRunning) return
         isRunning = true
         initWorld()
+        Log.d(TAG, "Engine starting. Viewport: ${viewportWidth}x${viewportHeight}")
+
+        // Install global uncaught exception handler to capture any crash
+        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
+        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
+            Log.e(TAG, "═══ UNCAUGHT EXCEPTION on thread '${thread.name}' ═══", throwable)
+            Log.e(TAG, "World state at crash: ${world.getDiagnosticString()}")
+            previousHandler?.uncaughtException(thread, throwable)
+        }
 
         engineJob = scope.launch(engineDispatcher) {
             var lastTime    = System.nanoTime()
             var accumulator = 0f
 
+            Log.d(TAG, "Game loop started on thread: ${Thread.currentThread().name}")
+
             while (isActive && isRunning) {
-                val now   = System.nanoTime()
-                val rawDt = (now - lastTime) / 1_000_000_000f
-                lastTime  = now
-                val dt    = rawDt.coerceAtMost(MAX_FRAME_TIME)
-                accumulator += dt
+                try {
+                    val now   = System.nanoTime()
+                    val rawDt = (now - lastTime) / 1_000_000_000f
+                    lastTime  = now
+                    val dt    = rawDt.coerceAtMost(MAX_FRAME_TIME)
+                    accumulator += dt
 
-                while (accumulator >= FIXED_DT) {
-                    drainLevelUpChoices()
-                    if (!isPaused && !pendingLevelUp) tick(FIXED_DT)
-                    accumulator -= FIXED_DT
+                    while (accumulator >= FIXED_DT) {
+                        drainLevelUpChoices()
+                        if (!isPaused && !pendingLevelUp) {
+                            tick(FIXED_DT)
+                        }
+                        accumulator -= FIXED_DT
+                    }
+
+                    emitState()
+
+                    val elapsed = (System.nanoTime() - now) / 1_000_000L
+                    val sleep   = (1000L / TARGET_FPS) - elapsed
+                    if (sleep > 0L) delay(sleep)
+
+                } catch (e: CancellationException) {
+                    // Normal coroutine cancellation — don't log as error
+                    throw e
+                } catch (e: Exception) {
+                    // Any other exception in the game loop — log full details
+                    Log.e(TAG, "═══ EXCEPTION IN GAME LOOP (frame $frameCount) ═══", e)
+                    Log.e(TAG, "World state: ${world.getDiagnosticString()}")
+                    Log.e(TAG, "elapsedTime=$elapsedTime isPaused=$isPaused pendingLevelUp=$pendingLevelUp")
+                    Log.e(TAG, "frameEvents count=${frameEvents.size}")
+                    frameEvents.forEachIndexed { i, ev -> Log.e(TAG, "  event[$i]: $ev") }
+                    // Re-throw so the coroutine and app crash with the real exception
+                    throw e
                 }
-
-                emitState()
-
-                val elapsed = (System.nanoTime() - now) / 1_000_000L
-                val sleep   = (1000L / TARGET_FPS) - elapsed
-                if (sleep > 0L) delay(sleep)
             }
+
+            Log.d(TAG, "Game loop ended normally.")
         }
     }
 
     fun stop() {
+        Log.d(TAG, "Engine stopping at elapsed=${elapsedTime}s")
         isRunning = false
         engineJob?.cancel()
         engineJob = null
@@ -117,27 +130,31 @@ class GameEngine(
     fun resume() { isPaused = false }
 
     fun restart(scope: CoroutineScope) {
+        Log.d(TAG, "Engine restarting")
         stop()
         world.clear()
         spawnSystem.reset()
         elapsedTime    = 0f
         isPaused       = false
         pendingLevelUp = false
-        while (levelUpChannel.tryReceive().isSuccess) { /* discard stale choices */ }
+        frameCount     = 0L
+        while (levelUpChannel.tryReceive().isSuccess) { /* discard */ }
         start(scope)
     }
 
     fun applyLevelUpChoice(option: LevelUpOption) {
+        Log.d(TAG, "LevelUp choice queued: id=${option.id} type=${option.type}")
         levelUpChannel.trySend(option)
     }
 
-    // ── Engine thread only ──────────────────────────────────────────────────
+    // ── Private — engine thread only ────────────────────────────────────────
 
     private fun drainLevelUpChoices() {
         var result = levelUpChannel.tryReceive()
         while (result.isSuccess) {
             val option = result.getOrNull() ?: break
-            val pid    = world.getPlayerEntity()
+            Log.d(TAG, "Applying level-up choice: ${option.id}")
+            val pid = world.getPlayerEntity()
             if (pid != -1) applyUpgrade(world, pid, option)
             if (pendingLevelUp) pendingLevelUp = false
             result = levelUpChannel.tryReceive()
@@ -147,25 +164,88 @@ class GameEngine(
     private fun initWorld() {
         world.clear()
         EntityFactory.createPlayer(world, WORLD_WIDTH / 2f, WORLD_HEIGHT / 2f)
+        Log.d(TAG, "World initialised. Player entity: ${world.getPlayerEntity()}")
     }
 
     private fun tick(dt: Float) {
+        frameCount++
         elapsedTime += dt
         frameEvents.clear()
 
-        movementSystem.update(world, dt, joystick.getState())
-        weaponSystem.update(world, dt)
-        collisionSystem.update(world, dt, frameEvents)
+        // Periodic stats log every LOG_EVERY frames
+        if (frameCount % LOG_EVERY == 0L) {
+            val pid    = world.getPlayerEntity()
+            val player = world.players[pid]
+            Log.d(TAG, buildString {
+                append("── STATS @ ${elapsedTime.toInt()}s ──")
+                append(" enemies=${world.enemies.size}")
+                append(" projectiles=${world.projectiles.size}")
+                append(" pickups=${world.pickups.size}")
+                append(" particles=${world.particles.size}")
+                append(" dmgNums=${world.damageNumbers.size}")
+                append(" entities=${world.getLiveEntityCount()}")
+                append(" level=${player?.level}")
+                append(" xp=${player?.experience}/${player?.experienceToNextLevel}")
+                append(" kills=${player?.killCount}")
+                append(" pendingLevelUp=$pendingLevelUp")
+            })
+        }
 
-        val processed = experienceSystem.processEvents(world, frameEvents, dt)
+        try {
+            movementSystem.update(world, dt, joystick.getState())
+        } catch (e: Exception) {
+            Log.e(TAG, "CRASH in movementSystem.update (frame $frameCount)", e)
+            Log.e(TAG, world.getDiagnosticString()); throw e
+        }
 
-        spawnSystem.update(world, dt, elapsedTime)
-        world.flushDestroyed()
+        try {
+            weaponSystem.update(world, dt)
+        } catch (e: Exception) {
+            Log.e(TAG, "CRASH in weaponSystem.update (frame $frameCount)", e)
+            Log.e(TAG, world.getDiagnosticString()); throw e
+        }
+
+        try {
+            collisionSystem.update(world, dt, frameEvents)
+        } catch (e: Exception) {
+            Log.e(TAG, "CRASH in collisionSystem.update (frame $frameCount)", e)
+            Log.e(TAG, world.getDiagnosticString()); throw e
+        }
+
+        val processed: List<GameEvent>
+        try {
+            processed = experienceSystem.processEvents(world, frameEvents, dt)
+        } catch (e: Exception) {
+            Log.e(TAG, "CRASH in experienceSystem.processEvents (frame $frameCount)", e)
+            Log.e(TAG, "frameEvents: ${frameEvents.joinToString()}")
+            Log.e(TAG, world.getDiagnosticString()); throw e
+        }
+
+        try {
+            spawnSystem.update(world, dt, elapsedTime)
+        } catch (e: Exception) {
+            Log.e(TAG, "CRASH in spawnSystem.update (frame $frameCount)", e)
+            Log.e(TAG, world.getDiagnosticString()); throw e
+        }
+
+        try {
+            world.flushDestroyed()
+        } catch (e: Exception) {
+            Log.e(TAG, "CRASH in world.flushDestroyed (frame $frameCount)", e)
+            Log.e(TAG, "destroyedTags=${world.destroyedTags.size}: ${world.destroyedTags.take(20)}")
+            Log.e(TAG, world.getDiagnosticString()); throw e
+        }
 
         for (event in processed) {
             when (event) {
-                is GameEvent.LevelUp    -> pendingLevelUp = true
-                is GameEvent.PlayerDied -> isPaused = true
+                is GameEvent.LevelUp -> {
+                    Log.d(TAG, "LEVEL UP → level ${event.newLevel} at ${elapsedTime.toInt()}s")
+                    pendingLevelUp = true
+                }
+                is GameEvent.PlayerDied -> {
+                    Log.d(TAG, "PLAYER DIED at ${elapsedTime.toInt()}s kills=${world.players[world.getPlayerEntity()]?.killCount}")
+                    isPaused = true
+                }
                 else -> {}
             }
         }
@@ -177,12 +257,15 @@ class GameEngine(
         val health = world.healths[pid]
         val pt     = world.transforms[pid]
 
-        val levelUpOptions = if (pendingLevelUp) generateLevelUpOptions(world, pid) else emptyList()
-
-        // Build render snapshot on the ENGINE THREAD.
-        // This converts live World data into plain immutable value objects.
-        // The UI thread will only see these — never the World itself.
-        val snapshot = buildRenderSnapshot(pid, pt?.x ?: 0f, pt?.y ?: 0f)
+        val levelUpOptions = if (pendingLevelUp) {
+            try {
+                generateLevelUpOptions(world, pid)
+            } catch (e: Exception) {
+                Log.e(TAG, "CRASH in generateLevelUpOptions", e)
+                Log.e(TAG, world.getDiagnosticString())
+                throw e
+            }
+        } else emptyList()
 
         _gameState.value = GameState(
             isRunning        = isRunning && !isPaused,
@@ -201,138 +284,18 @@ class GameEngine(
             playerY          = pt?.y ?: 0f,
             enemyCount       = world.getEnemyEntities().size,
             killCount        = player?.killCount ?: 0,
-            renderSnapshot   = snapshot,
+            world            = world,
             events           = emptyList()
         )
     }
 
-    /**
-     * Converts live World data into an immutable RenderSnapshot.
-     * Called on the ENGINE THREAD — safe to read all World data here.
-     */
-    private fun buildRenderSnapshot(playerId: Int, playerX: Float, playerY: Float): RenderSnapshot {
-        snapshotEntities.clear()
-
-        // Enemies
-        for (eid in world.getEnemySnapshot()) {
-            val t = world.transforms[eid] ?: continue
-            val r = world.renders[eid]    ?: continue
-            val h = world.healths[eid]    ?: continue
-            if (h.isDead) continue
-            val isBoss = world.bosses.containsKey(eid)
-            snapshotEntities.add(RenderEntity(
-                kind          = if (isBoss) RenderEntityKind.BOSS else RenderEntityKind.ENEMY,
-                x             = t.x, y = t.y, rotation = t.rotation,
-                shape         = r.shape,
-                color         = r.color, secondaryColor = r.secondaryColor,
-                width         = r.width, height = r.height,
-                glowRadius    = r.glowRadius, glowColor = r.glowColor,
-                flashTimer    = r.flashTimer, isFlashing = r.flashTimer > 0f,
-                hpPercent     = h.percentage, showHealthBar = h.percentage < 1f
-            ))
-        }
-
-        // Projectiles
-        for (pid in world.getProjectileSnapshot()) {
-            val t    = world.transforms[pid]  ?: continue
-            val r    = world.renders[pid]     ?: continue
-            val proj = world.projectiles[pid] ?: continue
-            snapshotEntities.add(RenderEntity(
-                kind       = RenderEntityKind.PROJECTILE,
-                x          = t.x, y = t.y,
-                color      = r.color, width = r.width, height = r.height,
-                glowRadius = r.glowRadius, glowColor = r.glowColor,
-                isCritical = proj.isCritical
-            ))
-        }
-
-        // Pickups
-        for (pkId in world.getPickupSnapshot()) {
-            val t = world.transforms[pkId] ?: continue
-            val r = world.renders[pkId]    ?: continue
-            snapshotEntities.add(RenderEntity(
-                kind       = RenderEntityKind.PICKUP,
-                x          = t.x, y = t.y,
-                color      = r.color, width = r.width, height = r.height,
-                glowRadius = r.glowRadius, glowColor = r.glowColor
-            ))
-        }
-
-        // Player
-        if (playerId != -1) {
-            val t = world.transforms[playerId]
-            val r = world.renders[playerId]
-            val h = world.healths[playerId]
-            val auras = world.auras[playerId]
-            val orbitals = world.orbitals[playerId]
-
-            if (t != null && r != null && h != null) {
-                snapshotEntities.add(RenderEntity(
-                    kind            = RenderEntityKind.PLAYER,
-                    x               = t.x, y = t.y,
-                    color           = r.color, secondaryColor = r.secondaryColor,
-                    width           = r.width, height = r.height,
-                    glowRadius      = r.glowRadius, glowColor = r.glowColor,
-                    flashTimer      = r.flashTimer, isFlashing = r.flashTimer > 0f,
-                    invincibleTimer = h.invincibleTimer,
-                    hasAura         = auras != null && auras.isNotEmpty(),
-                    auraRadius      = auras?.firstOrNull()?.radius ?: 0f
-                ))
-
-                // Orbitals (relative to player position)
-                orbitals?.forEach { orb ->
-                    snapshotEntities.add(RenderEntity(
-                        kind        = RenderEntityKind.ORBITAL,
-                        x           = t.x, y = t.y,
-                        orbitAngle  = orb.currentAngle,
-                        orbitRadius = orb.orbitRadius,
-                        orbitSize   = orb.size,
-                        color       = 0xFFF9A825
-                    ))
-                }
-            }
-        }
-
-        // Particles
-        for (pId in world.getParticleSnapshot()) {
-            val t = world.transforms[pId] ?: continue
-            val p = world.particles[pId]  ?: continue
-            snapshotEntities.add(RenderEntity(
-                kind        = RenderEntityKind.PARTICLE,
-                x           = t.x, y = t.y,
-                color       = p.color,
-                width       = p.size, height = p.size,
-                lifetime    = p.lifetime, maxLifetime = p.maxLifetime
-            ))
-        }
-
-        // Damage numbers
-        for (dnId in world.getDamageNumberSnapshot()) {
-            val t  = world.transforms[dnId]    ?: continue
-            val dn = world.damageNumbers[dnId] ?: continue
-            snapshotEntities.add(RenderEntity(
-                kind        = RenderEntityKind.DAMAGE_NUMBER,
-                x           = t.x, y = t.y,
-                damageValue = dn.value,
-                isCritical  = dn.isCritical,
-                lifetime    = dn.lifetime, maxLifetime = dn.maxLifetime
-            ))
-        }
-
-        return RenderSnapshot(
-            cameraTargetX = playerX,
-            cameraTargetY = playerY,
-            entities      = ArrayList(snapshotEntities) // copy for immutability
-        )
-    }
-
-    // ── Level-up and upgrades (engine thread only) ─────────────────────────
+    // ── Upgrade generation & application — unchanged from original ──────────
 
     private fun generateLevelUpOptions(world: World, pid: Int): List<LevelUpOption> {
-        val player     = world.players[pid]  ?: return emptyList()
-        val weapons    = world.weapons[pid]  ?: return emptyList()
+        val player  = world.players[pid]  ?: return emptyList()
+        val weapons = world.weapons[pid]  ?: return emptyList()
         val ownedTypes = weapons.map { it.type }.toSet()
-        val options    = mutableListOf<LevelUpOption>()
+        val options = mutableListOf<LevelUpOption>()
 
         for (weapon in weapons) {
             if (weapon.level < 8) {
@@ -390,6 +353,8 @@ class GameEngine(
         val health  = world.healths[pid]  ?: return
         val weapons = world.weapons[pid]  ?: return
 
+        Log.d(TAG, "Applying upgrade: ${option.id} (${option.type})")
+
         when (option.type) {
             UpgradeType.WEAPON_UPGRADE -> {
                 val weapon = weapons.find { it.type == option.weaponType } ?: return
@@ -399,6 +364,7 @@ class GameEngine(
                 if (weapon.level % 3 == 0) weapon.projectileCount++
                 if (weapon.level % 4 == 0) weapon.piercing++
                 weapon.area *= 1.1f
+                Log.d(TAG, "Weapon ${weapon.type} upgraded to Lv${weapon.level} dmg=${weapon.damage}")
             }
             UpgradeType.NEW_WEAPON -> {
                 val wt = option.weaponType ?: return
@@ -411,6 +377,7 @@ class GameEngine(
                             EntityFactory.addOrbitalWeapon(world, pid, wt, 3, 120f, 1.8f, 20, 14f)
                         else -> {}
                     }
+                    Log.d(TAG, "New weapon added: $wt. Total weapons: ${weapons.size}")
                 }
             }
             UpgradeType.STAT -> {
