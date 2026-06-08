@@ -1,31 +1,14 @@
 package com.kotlinsurvivors.engine.ecs
 
+import android.util.Log
 import com.kotlinsurvivors.engine.ecs.components.*
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * Central ECS World.
- *
- * Snapshot design — THE BUG WE FIXED:
- *   Previous version returned the SAME ArrayList reference from every
- *   snapshot call. When getEnemySnapshot() was called 9× per frame across
- *   MovementSystem, WeaponSystem, CollisionSystem and ExperienceSystem,
- *   the second caller's .clear() would corrupt the first caller's iteration
- *   → ConcurrentModificationException or silent data corruption → crash.
- *
- * Fix: snapshot methods now COPY into a fresh list each call.
- *   To avoid per-call allocation we keep ONE write buffer per method
- *   and copy it into a thread-local read list that callers hold safely.
- *   Simpler alternative used here: return a new ArrayList copy every call.
- *   This is one allocation per call (~9 per frame for enemies) but each
- *   is tiny and short-lived — far less pressure than the previous Pair
- *   explosion (150k+/sec). Android's GC handles this comfortably.
- *
- *   If profiling shows this is still too much, the right fix is to give
- *   each system its own private buffer field and pass it to World.fillXxx()
- *   — but that adds coupling. The copy approach is safe and correct first.
- */
 class World {
+
+    companion object {
+        private const val TAG = "KS_World"
+    }
 
     private val nextId       = AtomicInteger(1)
     private val freeIds      = ArrayDeque<Int>(256)
@@ -57,10 +40,18 @@ class World {
         return id
     }
 
-    fun destroyEntity(id: Int) { destroyedTags.add(id) }
+    fun destroyEntity(id: Int) {
+        if (id in destroyedTags) {
+            Log.w(TAG, "destroyEntity called twice for id=$id — already in destroyedTags")
+        }
+        destroyedTags.add(id)
+    }
 
     fun flushDestroyed(): Int {
         val count = destroyedTags.size
+        if (count > 200) {
+            Log.w(TAG, "flushDestroyed: unusually large batch — count=$count")
+        }
         for (id in destroyedTags) {
             liveEntities.remove(id)
             freeIds.addLast(id)
@@ -85,14 +76,7 @@ class World {
     fun getLiveEntityCount(): Int  = liveEntities.size
     fun getPlayerEntity(): Int     = playerTags.firstOrNull() ?: -1
 
-    // ── Safe snapshot methods ──────────────────────────────────────────────
-    // Each call returns an INDEPENDENT copy of the key set.
-    // This prevents the "shared mutable list" bug where a second caller
-    // calling .clear() corrupts the first caller's iteration.
-    //
-    // Cost: one ArrayList allocation per call. With 9 enemy snapshot calls
-    // per frame at 60fps that's ~540 small allocations/sec — acceptable.
-    // The previous Pair bug was 150,000+/sec.
+    // ── Snapshot methods — each call returns an independent copy ───────────
 
     fun getEnemySnapshot(): List<Int>        = ArrayList(enemies.keys)
     fun getProjectileSnapshot(): List<Int>   = ArrayList(projectiles.keys)
@@ -104,13 +88,29 @@ class World {
     fun getRenderSnapshot(): List<Int>       = ArrayList(renders.keys)
     fun getHealthSnapshot(): List<Int>       = ArrayList(healths.keys)
 
-    // ── Legacy read-only accessors for the renderer only ──────────────────
-    // The renderer never mutates the world so live views are safe there.
+    // ── Legacy live views for renderer only ────────────────────────────────
     fun getEnemyEntities(): Set<Int>        = enemies.keys
     fun getProjectileEntities(): Set<Int>   = projectiles.keys
     fun getPickupEntities(): Set<Int>       = pickups.keys
     fun getParticleEntities(): Set<Int>     = particles.keys
     fun getDamageNumberEntities(): Set<Int> = damageNumbers.keys
+
+    // ── Diagnostic string — used in crash logs ─────────────────────────────
+    fun getDiagnosticString(): String = buildString {
+        append("World{")
+        append("live=${liveEntities.size}")
+        append(", enemies=${enemies.size}")
+        append(", projectiles=${projectiles.size}")
+        append(", pickups=${pickups.size}")
+        append(", particles=${particles.size}")
+        append(", damageNums=${damageNumbers.size}")
+        append(", transforms=${transforms.size}")
+        append(", velocities=${velocities.size}")
+        append(", destroyedPending=${destroyedTags.size}")
+        append(", freeIds=${freeIds.size}")
+        append(", nextId=${nextId.get()}")
+        append("}")
+    }
 
     fun clear() {
         liveEntities.clear(); freeIds.clear(); destroyedTags.clear()
@@ -120,5 +120,6 @@ class World {
         pickups.clear();      damageNumbers.clear(); particles.clear()
         auras.clear();        orbitals.clear();   bosses.clear()
         playerTags.clear()
+        Log.d(TAG, "World cleared")
     }
 }
