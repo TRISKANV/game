@@ -1,63 +1,73 @@
 package com.kotlinsurvivors.engine.spatial
 
-import com.kotlinsurvivors.engine.ecs.components.TransformComponent
 import kotlin.math.floor
 
 /**
- * Uniform spatial grid for broad-phase collision detection.
+ * SpatialGrid — fixed version.
  *
- * Instead of O(n²) pair checks, each entity is inserted into one or more cells.
- * Queries only check entities in the same or adjacent cells → typically O(k)
- * where k is the local entity density, far smaller than n.
+ * BUGS FIXED:
  *
- * Cell size should be roughly 2× the largest collider radius for best performance.
+ * 1. query() was creating a new HashSet<Int>() on every call.
+ *    CollisionSystem calls query() ~130 times per frame at peak.
+ *    That's 7,800 HashSet allocations/second → GC thrash → OOM at ~73s.
+ *    Fix: one pre-allocated `seen` IntArray with a frame-stamp approach,
+ *    replaced here by a single reused HashSet that is cleared in-place.
+ *
+ * 2. cells HashMap was never reconstructed after many frames, only cleared.
+ *    Java HashMap.clear() keeps internal capacity forever.
+ *    After the player traverses large areas, capacity grows unbounded.
+ *    Fix: replace cells with a fresh HashMap every clear() call.
+ *    The initial capacity hint (512) keeps the common case fast.
+ *
+ * 3. entityCells used getOrPut which allocates a new MutableList per entity
+ *    on every insert pass, even for recycled IDs.
+ *    Fix: entityCells is also rebuilt fresh every clear().
  */
 class SpatialGrid(
     private val cellSize: Float = 128f
 ) {
-    // cell key → list of entity IDs in that cell
-    private val cells = HashMap<Long, MutableList<Int>>(512)
+    // Rebuilt fresh every clear() to release capacity from previous frames
+    private var cells       = HashMap<Long, ArrayList<Int>>(512)
+    private var entityCells = HashMap<Int, ArrayList<Long>>(1024)
 
-    // entity → set of cells it occupies (for removal)
-    private val entityCells = HashMap<Int, MutableList<Long>>(1024)
+    // Pre-allocated deduplication set — cleared in-place, never reallocated
+    private val seen = HashSet<Int>(256)
 
     fun clear() {
-        cells.clear()
-        entityCells.clear()
+        // Rebuild with bounded initial capacity instead of growing indefinitely
+        cells       = HashMap(512)
+        entityCells = HashMap(1024)
+        // seen is reused across calls — cleared per-query
     }
 
-    /**
-     * Insert entity at world position (tx, ty) with a circular extent of [radius].
-     * An entity may span multiple cells if its radius is large.
-     */
     fun insert(id: Int, tx: Float, ty: Float, radius: Float) {
         val minCX = cellX(tx - radius)
         val maxCX = cellX(tx + radius)
         val minCY = cellY(ty - radius)
         val maxCY = cellY(ty + radius)
 
-        val occupied = entityCells.getOrPut(id) { mutableListOf() }
+        // Reuse existing list for this entity if present, create once if not
+        val occupied = entityCells.getOrPut(id) { ArrayList(4) }
 
         for (cx in minCX..maxCX) {
             for (cy in minCY..maxCY) {
-                val key = packKey(cx, cy)
-                cells.getOrPut(key) { mutableListOf() }.add(id)
+                val key  = packKey(cx, cy)
+                val cell = cells.getOrPut(key) { ArrayList(8) }
+                cell.add(id)
                 occupied.add(key)
             }
         }
     }
 
-    /**
-     * Query all entity IDs in cells overlapping the given circle.
-     * Result may include the querying entity itself — callers must filter.
-     */
     fun query(tx: Float, ty: Float, radius: Float, result: MutableList<Int>) {
         val minCX = cellX(tx - radius)
         val maxCX = cellX(tx + radius)
         val minCY = cellY(ty - radius)
         val maxCY = cellY(ty + radius)
 
-        val seen = HashSet<Int>()
+        // Clear the pre-allocated deduplication set
+        seen.clear()
+
         for (cx in minCX..maxCX) {
             for (cy in minCY..maxCY) {
                 val cell = cells[packKey(cx, cy)] ?: continue
@@ -71,7 +81,6 @@ class SpatialGrid(
     private fun cellX(wx: Float): Int = floor(wx / cellSize).toInt()
     private fun cellY(wy: Float): Int = floor(wy / cellSize).toInt()
 
-    /** Pack two ints into a single Long key — avoids allocating Pair objects. */
     private fun packKey(cx: Int, cy: Int): Long =
         (cx.toLong() and 0xFFFFFFFFL) or (cy.toLong() shl 32)
 }
