@@ -210,12 +210,19 @@ private fun LevelUpCard(option: LevelUpOption, onClick: () -> Unit, modifier: Mo
     val rColor = rarityColor(option.rarity)
     val rLabel = rarityLabel(option.rarity)
 
-    // Legendary gets a shimmer border
+    // Legendary gets an animated gold border
+    val legendaryPulse by rememberInfiniteTransition(label = "legendaryPulse").animateFloat(
+        initialValue  = 0.7f,
+        targetValue   = 1f,
+        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
+        label         = "legendaryAlpha"
+    )
     val borderBrush = if (option.rarity == UpgradeRarity.LEGENDARY) {
-        val shimmer by rememberInfiniteTransition(label = "shimmer").animateFloat(
-            0f, 1f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "s"
-        )
-        Brush.sweepGradient(listOf(Color(0xFFFFD740), Color(0xFFFF8C00), Color(0xFFFFD740)))
+        Brush.sweepGradient(listOf(
+            Color(0xFFFFD740).copy(alpha = legendaryPulse),
+            Color(0xFFFF8C00),
+            Color(0xFFFFD740).copy(alpha = legendaryPulse)
+        ))
     } else null
 
     Card(
