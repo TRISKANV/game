@@ -13,6 +13,9 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.kotlinsurvivors.engine.rendering.RenderEntity
+import com.kotlinsurvivors.engine.rendering.RenderEntityKind
+import com.kotlinsurvivors.engine.rendering.RenderSnapshot
 import kotlin.math.roundToInt
 
 class GameEngine(
@@ -50,6 +53,7 @@ class GameEngine(
     private var pendingLevelUp = false
     private val frameEvents    = mutableListOf<GameEvent>()
     private var frameCount     = 0L
+    private var cachedLevelUpOptions: List<LevelUpOption> = emptyList()
 
     private val levelUpChannel = Channel<LevelUpOption>(capacity = 4)
 
@@ -137,7 +141,8 @@ class GameEngine(
         elapsedTime    = 0f
         isPaused       = false
         pendingLevelUp = false
-        frameCount     = 0L
+        frameCount           = 0L
+        cachedLevelUpOptions = emptyList()
         while (levelUpChannel.tryReceive().isSuccess) { /* discard */ }
         start(scope)
     }
@@ -156,7 +161,8 @@ class GameEngine(
             Log.d(TAG, "Applying level-up choice: ${option.id}")
             val pid = world.getPlayerEntity()
             if (pid != -1) applyUpgrade(world, pid, option)
-            if (pendingLevelUp) pendingLevelUp = false
+            pendingLevelUp       = false
+            cachedLevelUpOptions = emptyList()
             result = levelUpChannel.tryReceive()
         }
     }
@@ -240,7 +246,17 @@ class GameEngine(
             when (event) {
                 is GameEvent.LevelUp -> {
                     Log.d(TAG, "LEVEL UP → level ${event.newLevel} at ${elapsedTime.toInt()}s")
-                    pendingLevelUp = true
+                    if (!pendingLevelUp) {
+                        // Generate options ONCE on the engine thread and cache them.
+                        // emitState() will reuse the cache — no regeneration per frame.
+                        val pid = world.getPlayerEntity()
+                        cachedLevelUpOptions = try {
+                            generateLevelUpOptions(world, pid)
+                        } catch (e: Exception) {
+                            Log.e(TAG, "CRASH generateLevelUpOptions", e); throw e
+                        }
+                        pendingLevelUp = true
+                    }
                 }
                 is GameEvent.PlayerDied -> {
                     Log.d(TAG, "PLAYER DIED at ${elapsedTime.toInt()}s kills=${world.players[world.getPlayerEntity()]?.killCount}")
@@ -257,22 +273,16 @@ class GameEngine(
         val health = world.healths[pid]
         val pt     = world.transforms[pid]
 
-        val levelUpOptions = if (pendingLevelUp) {
-            try {
-                generateLevelUpOptions(world, pid)
-            } catch (e: Exception) {
-                Log.e(TAG, "CRASH in generateLevelUpOptions", e)
-                Log.e(TAG, world.getDiagnosticString())
-                throw e
-            }
-        } else emptyList()
+        // Build immutable render snapshot on engine thread.
+        // UI thread only reads this — never touches the live World.
+        val snapshot = buildRenderSnapshot(pid, pt?.x ?: 0f, pt?.y ?: 0f)
 
         _gameState.value = GameState(
             isRunning        = isRunning && !isPaused,
             isPaused         = isPaused,
             isGameOver       = health?.isDead ?: false,
             isPendingLevelUp = pendingLevelUp,
-            levelUpOptions   = levelUpOptions,
+            levelUpOptions   = cachedLevelUpOptions,  // reuse cached, never regenerate per frame
             elapsedTime      = elapsedTime,
             playerHp         = health?.current ?: 0,
             playerMaxHp      = health?.max ?: 100,
@@ -284,8 +294,102 @@ class GameEngine(
             playerY          = pt?.y ?: 0f,
             enemyCount       = world.getEnemyEntities().size,
             killCount        = player?.killCount ?: 0,
-            world            = world,
+            renderSnapshot   = snapshot,
             events           = emptyList()
+        )
+    }
+
+    private val snapshotEntities = ArrayList<RenderEntity>(512)
+
+    private fun buildRenderSnapshot(playerId: Int, playerX: Float, playerY: Float): RenderSnapshot {
+        snapshotEntities.clear()
+
+        for (eid in world.getEnemySnapshot()) {
+            val t = world.transforms[eid] ?: continue
+            val r = world.renders[eid]    ?: continue
+            val h = world.healths[eid]    ?: continue
+            if (h.isDead) continue
+            snapshotEntities.add(RenderEntity(
+                kind = if (world.bosses.containsKey(eid)) RenderEntityKind.BOSS else RenderEntityKind.ENEMY,
+                x = t.x, y = t.y, rotation = t.rotation,
+                shape = r.shape, color = r.color, secondaryColor = r.secondaryColor,
+                width = r.width, height = r.height, glowRadius = r.glowRadius, glowColor = r.glowColor,
+                flashTimer = r.flashTimer, isFlashing = r.flashTimer > 0f,
+                hpPercent = h.percentage, showHealthBar = h.percentage < 1f
+            ))
+        }
+
+        for (pid in world.getProjectileSnapshot()) {
+            val t    = world.transforms[pid]  ?: continue
+            val r    = world.renders[pid]     ?: continue
+            val proj = world.projectiles[pid] ?: continue
+            snapshotEntities.add(RenderEntity(
+                kind = RenderEntityKind.PROJECTILE,
+                x = t.x, y = t.y, color = r.color, width = r.width, height = r.height,
+                glowRadius = r.glowRadius, glowColor = r.glowColor, isCritical = proj.isCritical
+            ))
+        }
+
+        for (pkId in world.getPickupSnapshot()) {
+            val t = world.transforms[pkId] ?: continue
+            val r = world.renders[pkId]    ?: continue
+            snapshotEntities.add(RenderEntity(
+                kind = RenderEntityKind.PICKUP,
+                x = t.x, y = t.y, color = r.color, width = r.width, height = r.height,
+                glowRadius = r.glowRadius, glowColor = r.glowColor
+            ))
+        }
+
+        if (playerId != -1) {
+            val t        = world.transforms[playerId]
+            val r        = world.renders[playerId]
+            val h        = world.healths[playerId]
+            val auras    = world.auras[playerId]
+            val orbitals = world.orbitals[playerId]
+            if (t != null && r != null && h != null) {
+                snapshotEntities.add(RenderEntity(
+                    kind = RenderEntityKind.PLAYER,
+                    x = t.x, y = t.y, color = r.color, secondaryColor = r.secondaryColor,
+                    width = r.width, height = r.height, glowRadius = r.glowRadius, glowColor = r.glowColor,
+                    flashTimer = r.flashTimer, isFlashing = r.flashTimer > 0f,
+                    invincibleTimer = h.invincibleTimer,
+                    hasAura = auras != null && auras.isNotEmpty(),
+                    auraRadius = auras?.firstOrNull()?.radius ?: 0f
+                ))
+                orbitals?.forEach { orb ->
+                    snapshotEntities.add(RenderEntity(
+                        kind = RenderEntityKind.ORBITAL,
+                        x = t.x, y = t.y, orbitAngle = orb.currentAngle,
+                        orbitRadius = orb.orbitRadius, orbitSize = orb.size, color = 0xFFF9A825
+                    ))
+                }
+            }
+        }
+
+        for (pId in world.getParticleSnapshot()) {
+            val t = world.transforms[pId] ?: continue
+            val p = world.particles[pId]  ?: continue
+            snapshotEntities.add(RenderEntity(
+                kind = RenderEntityKind.PARTICLE, x = t.x, y = t.y,
+                color = p.color, width = p.size, height = p.size,
+                lifetime = p.lifetime, maxLifetime = p.maxLifetime
+            ))
+        }
+
+        for (dnId in world.getDamageNumberSnapshot()) {
+            val t  = world.transforms[dnId]    ?: continue
+            val dn = world.damageNumbers[dnId] ?: continue
+            snapshotEntities.add(RenderEntity(
+                kind = RenderEntityKind.DAMAGE_NUMBER, x = t.x, y = t.y,
+                damageValue = dn.value, isCritical = dn.isCritical,
+                lifetime = dn.lifetime, maxLifetime = dn.maxLifetime
+            ))
+        }
+
+        return RenderSnapshot(
+            cameraTargetX = playerX,
+            cameraTargetY = playerY,
+            entities      = ArrayList(snapshotEntities)
         )
     }
 
