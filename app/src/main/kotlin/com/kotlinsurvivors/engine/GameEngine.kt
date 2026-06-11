@@ -13,8 +13,8 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import com.kotlinsurvivors.engine.rendering.RenderEntity
-import com.kotlinsurvivors.engine.rendering.RenderEntityKind
+import com.kotlinsurvivors.engine.rendering.RenderBuffer
+import com.kotlinsurvivors.engine.rendering.RenderKind
 import com.kotlinsurvivors.engine.rendering.RenderSnapshot
 import kotlin.math.roundToInt
 
@@ -275,7 +275,7 @@ class GameEngine(
 
         // Build immutable render snapshot on engine thread.
         // UI thread only reads this — never touches the live World.
-        val snapshot = buildRenderSnapshot(pid, pt?.x ?: 0f, pt?.y ?: 0f)
+        buildRenderSnapshot(pid, pt?.x ?: 0f, pt?.y ?: 0f)
 
         _gameState.value = GameState(
             isRunning        = isRunning && !isPaused,
@@ -294,50 +294,60 @@ class GameEngine(
             playerY          = pt?.y ?: 0f,
             enemyCount       = world.getEnemyEntities().size,
             killCount        = player?.killCount ?: 0,
-            renderSnapshot   = snapshot,
+            renderSnapshot   = RenderSnapshot(renderBuffer),
             events           = emptyList()
         )
     }
 
-    private val snapshotEntities = ArrayList<RenderEntity>(512)
+    private val renderBuffer = RenderBuffer()
 
-    private fun buildRenderSnapshot(playerId: Int, playerX: Float, playerY: Float): RenderSnapshot {
-        snapshotEntities.clear()
+    private fun buildRenderSnapshot(playerId: Int, playerX: Float, playerY: Float) {
+        renderBuffer.reset()
+        renderBuffer.cameraTargetX = playerX
+        renderBuffer.cameraTargetY = playerY
 
         for (eid in world.getEnemySnapshot()) {
             val t = world.transforms[eid] ?: continue
             val r = world.renders[eid]    ?: continue
             val h = world.healths[eid]    ?: continue
             if (h.isDead) continue
-            snapshotEntities.add(RenderEntity(
-                kind = if (world.bosses.containsKey(eid)) RenderEntityKind.BOSS else RenderEntityKind.ENEMY,
-                x = t.x, y = t.y, rotation = t.rotation,
-                shape = r.shape, color = r.color, secondaryColor = r.secondaryColor,
-                width = r.width, height = r.height, glowRadius = r.glowRadius, glowColor = r.glowColor,
-                flashTimer = r.flashTimer, isFlashing = r.flashTimer > 0f,
-                hpPercent = h.percentage, showHealthBar = h.percentage < 1f
-            ))
+            val isBoss = world.bosses.containsKey(eid)
+            var f = 0
+            if (r.flashTimer > 0f) f = f or RenderBuffer.FLAG_FLASHING
+            if (h.percentage < 1f) f = f or RenderBuffer.FLAG_SHOW_HP_BAR
+            if (isBoss)            f = f or RenderBuffer.FLAG_IS_BOSS
+            renderBuffer.write(
+                kindOrdinal  = if (isBoss) RenderKind.BOSS else RenderKind.ENEMY,
+                ex = t.x, ey = t.y, eRotation = t.rotation,
+                eShape = r.shape, eColor = r.color, eSecColor = r.secondaryColor,
+                eWidth = r.width, eHeight = r.height,
+                eGlowRadius = r.glowRadius, eGlowColor = r.glowColor,
+                eFlashTimer = r.flashTimer, eHpPercent = h.percentage, eFlags = f
+            )
         }
 
         for (pid in world.getProjectileSnapshot()) {
             val t    = world.transforms[pid]  ?: continue
             val r    = world.renders[pid]     ?: continue
             val proj = world.projectiles[pid] ?: continue
-            snapshotEntities.add(RenderEntity(
-                kind = RenderEntityKind.PROJECTILE,
-                x = t.x, y = t.y, color = r.color, width = r.width, height = r.height,
-                glowRadius = r.glowRadius, glowColor = r.glowColor, isCritical = proj.isCritical
-            ))
+            val f    = if (proj.isCritical) RenderBuffer.FLAG_IS_CRITICAL else 0
+            renderBuffer.write(
+                kindOrdinal = RenderKind.PROJECTILE,
+                ex = t.x, ey = t.y,
+                eColor = r.color, eWidth = r.width, eHeight = r.height,
+                eGlowRadius = r.glowRadius, eGlowColor = r.glowColor, eFlags = f
+            )
         }
 
         for (pkId in world.getPickupSnapshot()) {
             val t = world.transforms[pkId] ?: continue
             val r = world.renders[pkId]    ?: continue
-            snapshotEntities.add(RenderEntity(
-                kind = RenderEntityKind.PICKUP,
-                x = t.x, y = t.y, color = r.color, width = r.width, height = r.height,
-                glowRadius = r.glowRadius, glowColor = r.glowColor
-            ))
+            renderBuffer.write(
+                kindOrdinal = RenderKind.PICKUP,
+                ex = t.x, ey = t.y,
+                eColor = r.color, eWidth = r.width, eHeight = r.height,
+                eGlowRadius = r.glowRadius, eGlowColor = r.glowColor
+            )
         }
 
         if (playerId != -1) {
@@ -347,21 +357,26 @@ class GameEngine(
             val auras    = world.auras[playerId]
             val orbitals = world.orbitals[playerId]
             if (t != null && r != null && h != null) {
-                snapshotEntities.add(RenderEntity(
-                    kind = RenderEntityKind.PLAYER,
-                    x = t.x, y = t.y, color = r.color, secondaryColor = r.secondaryColor,
-                    width = r.width, height = r.height, glowRadius = r.glowRadius, glowColor = r.glowColor,
-                    flashTimer = r.flashTimer, isFlashing = r.flashTimer > 0f,
-                    invincibleTimer = h.invincibleTimer,
-                    hasAura = auras != null && auras.isNotEmpty(),
-                    auraRadius = auras?.firstOrNull()?.radius ?: 0f
-                ))
+                var f = 0
+                if (r.flashTimer > 0f)                   f = f or RenderBuffer.FLAG_FLASHING
+                if (auras != null && auras.isNotEmpty()) f = f or RenderBuffer.FLAG_HAS_AURA
+                renderBuffer.write(
+                    kindOrdinal  = RenderKind.PLAYER,
+                    ex = t.x, ey = t.y,
+                    eColor = r.color, eSecColor = r.secondaryColor,
+                    eWidth = r.width, eHeight = r.height,
+                    eGlowRadius = r.glowRadius, eGlowColor = r.glowColor,
+                    eFlashTimer = r.flashTimer, eFlags = f,
+                    eInvincTimer = h.invincibleTimer,
+                    eAuraRadius  = auras?.firstOrNull()?.radius ?: 0f
+                )
                 orbitals?.forEach { orb ->
-                    snapshotEntities.add(RenderEntity(
-                        kind = RenderEntityKind.ORBITAL,
-                        x = t.x, y = t.y, orbitAngle = orb.currentAngle,
-                        orbitRadius = orb.orbitRadius, orbitSize = orb.size, color = 0xFFF9A825
-                    ))
+                    renderBuffer.write(
+                        kindOrdinal  = RenderKind.ORBITAL,
+                        ex = t.x, ey = t.y, eColor = 0xFFF9A825L,
+                        eOrbitAngle = orb.currentAngle,
+                        eOrbitRadius = orb.orbitRadius, eOrbitSize = orb.size
+                    )
                 }
             }
         }
@@ -369,28 +384,25 @@ class GameEngine(
         for (pId in world.getParticleSnapshot()) {
             val t = world.transforms[pId] ?: continue
             val p = world.particles[pId]  ?: continue
-            snapshotEntities.add(RenderEntity(
-                kind = RenderEntityKind.PARTICLE, x = t.x, y = t.y,
-                color = p.color, width = p.size, height = p.size,
-                lifetime = p.lifetime, maxLifetime = p.maxLifetime
-            ))
+            renderBuffer.write(
+                kindOrdinal = RenderKind.PARTICLE,
+                ex = t.x, ey = t.y, eColor = p.color,
+                eWidth = p.size, eHeight = p.size,
+                eLifetime = p.lifetime, eMaxLifetime = p.maxLifetime
+            )
         }
 
         for (dnId in world.getDamageNumberSnapshot()) {
             val t  = world.transforms[dnId]    ?: continue
             val dn = world.damageNumbers[dnId] ?: continue
-            snapshotEntities.add(RenderEntity(
-                kind = RenderEntityKind.DAMAGE_NUMBER, x = t.x, y = t.y,
-                damageValue = dn.value, isCritical = dn.isCritical,
-                lifetime = dn.lifetime, maxLifetime = dn.maxLifetime
-            ))
+            val f  = if (dn.isCritical) RenderBuffer.FLAG_IS_CRITICAL else 0
+            renderBuffer.write(
+                kindOrdinal  = RenderKind.DAMAGE_NUMBER,
+                ex = t.x, ey = t.y,
+                eLifetime = dn.lifetime, eMaxLifetime = dn.maxLifetime,
+                eDamageValue = dn.value, eFlags = f
+            )
         }
-
-        return RenderSnapshot(
-            cameraTargetX = playerX,
-            cameraTargetY = playerY,
-            entities      = ArrayList(snapshotEntities)
-        )
     }
 
     // ── Upgrade generation & application — unchanged from original ──────────
