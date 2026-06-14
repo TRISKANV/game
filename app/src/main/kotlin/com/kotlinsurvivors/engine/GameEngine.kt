@@ -1,6 +1,7 @@
 package com.kotlinsurvivors.engine
 
 import android.util.Log
+import com.kotlinsurvivors.core.crash.CrashLogger
 import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.systems.*
@@ -71,8 +72,7 @@ class GameEngine(
         // Install global uncaught exception handler to capture any crash
         val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            Log.e(TAG, "═══ UNCAUGHT EXCEPTION on thread '${thread.name}' ═══", throwable)
-            Log.e(TAG, "World state at crash: ${world.getDiagnosticString()}")
+            CrashLogger.logCrash("UNCAUGHT on ${thread.name}", throwable)
             previousHandler?.uncaughtException(thread, throwable)
         }
 
@@ -125,6 +125,9 @@ class GameEngine(
 
     fun stop() {
         Log.d(TAG, "Engine stopping at elapsed=${elapsedTime}s")
+        CrashLogger.log("Engine stopping at ${elapsedTime}s")
+        CrashLogger.flush()
+        CrashLogger.attachWorld(null)
         isRunning = false
         engineJob?.cancel()
         engineJob = null
@@ -170,6 +173,8 @@ class GameEngine(
     private fun initWorld() {
         world.clear()
         EntityFactory.createPlayer(world, WORLD_WIDTH / 2f, WORLD_HEIGHT / 2f)
+        CrashLogger.attachWorld(world)
+        CrashLogger.log("Engine init: viewport=${viewportWidth}x${viewportHeight}")
         Log.d(TAG, "World initialised. Player entity: ${world.getPlayerEntity()}")
     }
 
@@ -182,19 +187,16 @@ class GameEngine(
         if (frameCount % LOG_EVERY == 0L) {
             val pid    = world.getPlayerEntity()
             val player = world.players[pid]
-            Log.d(TAG, buildString {
-                append("── STATS @ ${elapsedTime.toInt()}s ──")
-                append(" enemies=${world.enemies.size}")
-                append(" projectiles=${world.projectiles.size}")
-                append(" pickups=${world.pickups.size}")
-                append(" particles=${world.particles.size}")
-                append(" dmgNums=${world.damageNumbers.size}")
-                append(" entities=${world.getLiveEntityCount()}")
-                append(" level=${player?.level}")
-                append(" xp=${player?.experience}/${player?.experienceToNextLevel}")
-                append(" kills=${player?.killCount}")
-                append(" pendingLevelUp=$pendingLevelUp")
-            })
+            CrashLogger.logStats(
+                elapsedTime = elapsedTime,
+                frameCount  = frameCount,
+                level       = player?.level ?: 0,
+                xp          = player?.experience ?: 0,
+                xpNext      = player?.experienceToNextLevel ?: 0,
+                kills       = player?.killCount ?: 0
+            )
+            // Flush to disk every 30 seconds (10 × 3s LOG_EVERY intervals)
+            if (frameCount % (LOG_EVERY * 10) == 0L) CrashLogger.flush()
         }
 
         try {
@@ -253,7 +255,7 @@ class GameEngine(
                         cachedLevelUpOptions = try {
                             generateLevelUpOptions(world, pid)
                         } catch (e: Exception) {
-                            Log.e(TAG, "CRASH generateLevelUpOptions", e); throw e
+                            CrashLogger.logCrash("generateLevelUpOptions", e); throw e
                         }
                         pendingLevelUp = true
                     }
