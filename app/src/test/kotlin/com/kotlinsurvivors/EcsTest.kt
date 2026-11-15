@@ -48,6 +48,28 @@ class WorldTest {
     }
 
     @Test
+    fun `destroying the same entity twice does not duplicate its recycled ID`() {
+        val id = world.createEntity()
+        world.destroyEntity(id)
+        world.destroyEntity(id)          // two systems, same frame
+        world.flushDestroyed()
+
+        world.destroyEntity(id)          // stale id, entity is already gone
+        world.flushDestroyed()
+
+        val a = world.createEntity()
+        val b = world.createEntity()
+        assertNotEquals(a, b)
+    }
+
+    @Test
+    fun `destroying an unknown entity is ignored`() {
+        world.destroyEntity(12345)
+        assertEquals(0, world.flushDestroyed())
+        assertEquals(0, world.getLiveEntityCount())
+    }
+
+    @Test
     fun `player entity is accessible via getPlayerEntity`() {
         assertEquals(-1, world.getPlayerEntity())
         val pid = EntityFactory.createPlayer(world, 100f, 100f)
