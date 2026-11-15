@@ -49,8 +49,8 @@ class GameEngine(
     val gameState: StateFlow<GameState> = _gameState.asStateFlow()
 
     private var elapsedTime    = 0f
-    private var isPaused       = false
-    private var isRunning      = false
+    @Volatile private var isPaused  = false
+    @Volatile private var isRunning = false
     private var pendingLevelUp = false
     private val frameEvents    = mutableListOf<GameEvent>()
     private var frameCount     = 0L
@@ -63,20 +63,29 @@ class GameEngine(
 
     // ── Public API ──────────────────────────────────────────────────────────
 
-    fun start(scope: CoroutineScope) {
+    fun start(scope: CoroutineScope) = launchLoop(scope, previous = null)
+
+    /**
+     * Starts the game loop on the engine thread.
+     *
+     * The world is reset and populated from inside the coroutine, so only the
+     * engine thread ever touches it. When restarting, [previous] is the loop
+     * being replaced: the new loop waits for it to finish before resetting
+     * anything, otherwise the old tick could still be running on the world.
+     *
+     * Uncaught exceptions are recorded by CrashLogger's global handler, which
+     * is installed once in Application.onCreate().
+     */
+    private fun launchLoop(scope: CoroutineScope, previous: Job?) {
         if (isRunning) return
         isRunning = true
-        initWorld()
         Log.d(TAG, "Engine starting. Viewport: ${viewportWidth}x${viewportHeight}")
 
-        // Install global uncaught exception handler to capture any crash
-        val previousHandler = Thread.getDefaultUncaughtExceptionHandler()
-        Thread.setDefaultUncaughtExceptionHandler { thread, throwable ->
-            CrashLogger.logCrash("UNCAUGHT on ${thread.name}", throwable)
-            previousHandler?.uncaughtException(thread, throwable)
-        }
-
         engineJob = scope.launch(engineDispatcher) {
+            previous?.join()
+            resetState()
+            initWorld()
+
             var lastTime    = System.nanoTime()
             var accumulator = 0f
 
@@ -110,6 +119,7 @@ class GameEngine(
                 } catch (e: Exception) {
                     // Any other exception in the game loop — log full details
                     Log.e(TAG, "═══ EXCEPTION IN GAME LOOP (frame $frameCount) ═══", e)
+                    CrashLogger.logCrash("game loop (frame $frameCount, t=${elapsedTime.toInt()}s)", e)
                     Log.e(TAG, "World state: ${world.getDiagnosticString()}")
                     Log.e(TAG, "elapsedTime=$elapsedTime isPaused=$isPaused pendingLevelUp=$pendingLevelUp")
                     Log.e(TAG, "frameEvents count=${frameEvents.size}")
@@ -138,16 +148,19 @@ class GameEngine(
 
     fun restart(scope: CoroutineScope) {
         Log.d(TAG, "Engine restarting")
+        val previous = engineJob
         stop()
-        world.clear()
-        spawnSystem.reset()
-        elapsedTime    = 0f
-        isPaused       = false
-        pendingLevelUp = false
-        frameCount           = 0L
-        cachedLevelUpOptions = emptyList()
-        while (levelUpChannel.tryReceive().isSuccess) { /* discard */ }
-        start(scope)
+        launchLoop(scope, previous)
+    }
+
+    /**
+     * Stops the loop and shuts down the engine thread. Call once, when the
+     * engine is no longer needed. stop() alone keeps the thread alive so that
+     * restart() can reuse it.
+     */
+    fun release() {
+        stop()
+        engineDispatcher.close()
     }
 
     fun applyLevelUpChoice(option: LevelUpOption) {
@@ -157,17 +170,49 @@ class GameEngine(
 
     // ── Private — engine thread only ────────────────────────────────────────
 
+    /**
+     * Applies the player's level-up pick. Only one upgrade is granted per
+     * level-up: extra taps that arrive while no choice is pending (double tap,
+     * a tap on the overlay while it fades out) are discarded.
+     */
     private fun drainLevelUpChoices() {
         var result = levelUpChannel.tryReceive()
         while (result.isSuccess) {
             val option = result.getOrNull() ?: break
-            Log.d(TAG, "Applying level-up choice: ${option.id}")
-            val pid = world.getPlayerEntity()
-            if (pid != -1) applyUpgrade(world, pid, option)
-            pendingLevelUp       = false
-            cachedLevelUpOptions = emptyList()
+            if (pendingLevelUp) {
+                Log.d(TAG, "Applying level-up choice: ${option.id}")
+                val pid = world.getPlayerEntity()
+                if (pid != -1) {
+                    applyUpgrade(world, pid, option)
+                    CrashLogger.log("LEVEL-UP choice '${option.id}' (${option.type}) -> ${loadoutSummary(pid)}")
+                }
+                pendingLevelUp       = false
+                cachedLevelUpOptions = emptyList()
+            } else {
+                Log.d(TAG, "Ignoring level-up choice '${option.id}': none pending")
+            }
             result = levelUpChannel.tryReceive()
         }
+    }
+
+    /** One-line description of what the player currently owns, for the log. */
+    private fun loadoutSummary(pid: Int): String {
+        val weapons  = world.weapons[pid]?.joinToString { "${it.type}:L${it.level}" } ?: "none"
+        val auras    = world.auras[pid]?.size ?: 0
+        val orbitals = world.orbitals[pid]?.size ?: 0
+        return "weapons=[$weapons] auras=$auras orbitals=$orbitals"
+    }
+
+    /** Puts every engine-owned field back to its initial value. Engine thread only. */
+    private fun resetState() {
+        spawnSystem.reset()
+        elapsedTime          = 0f
+        isPaused             = false
+        pendingLevelUp       = false
+        frameCount           = 0L
+        cachedLevelUpOptions = emptyList()
+        frameEvents.clear()
+        while (levelUpChannel.tryReceive().isSuccess) { /* discard stale choices */ }
     }
 
     private fun initWorld() {
