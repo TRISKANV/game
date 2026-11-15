@@ -23,8 +23,15 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # The ubuntu-latest image already ships the Android SDK (ANDROID_HOME).
+      # android-actions/setup-android is no longer needed and currently fails
+      # because it asks sdkmanager for the obsolete 'tools' package.
+      - name: Accept Android SDK licenses
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDKMANAGER="$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -n 1)"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+        shell: bash
 
       - name: Install Gradle and generate wrapper jar
         run: |
@@ -94,8 +101,15 @@ jobs:
           distribution: 'temurin'
           cache: gradle
 
-      - name: Set up Android SDK
-        uses: android-actions/setup-android@v3
+      # The ubuntu-latest image already ships the Android SDK (ANDROID_HOME).
+      # android-actions/setup-android is no longer needed and currently fails
+      # because it asks sdkmanager for the obsolete 'tools' package.
+      - name: Accept Android SDK licenses
+        run: |
+          echo "ANDROID_HOME=$ANDROID_HOME"
+          SDKMANAGER="$(ls "$ANDROID_HOME"/cmdline-tools/*/bin/sdkmanager | head -n 1)"
+          yes | "$SDKMANAGER" --licenses > /dev/null || true
+        shell: bash
 
       - name: Install Gradle and generate wrapper jar
         run: |
