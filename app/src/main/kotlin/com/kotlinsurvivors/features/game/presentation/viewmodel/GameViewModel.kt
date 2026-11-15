@@ -77,8 +77,8 @@ class GameViewModel @Inject constructor(
 
     override fun onCleared() {
         super.onCleared()
-        Log.d(TAG, "ViewModel cleared — stopping engine")
-        engine?.stop()
+        Log.d(TAG, "ViewModel cleared — releasing engine")
+        engine?.release()
         engine = null
     }
 }
