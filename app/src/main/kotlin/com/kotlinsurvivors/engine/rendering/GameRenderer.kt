@@ -1,14 +1,15 @@
 package com.kotlinsurvivors.engine.rendering
 
+import android.graphics.Paint
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.ecs.components.RenderShape
 import kotlin.math.*
@@ -22,13 +23,25 @@ import kotlin.math.*
  * hot path except the pre-allocated trianglePath which is reset in-place.
  */
 class GameRenderer(
-    private val textMeasurer: TextMeasurer
+    // Kept so GameScreen does not change; damage numbers no longer use it
+    // (they are drawn with a pre-allocated native Paint, see renderDamageNumber).
+    @Suppress("unused") private val textMeasurer: TextMeasurer
 ) {
     private var cameraX = 0f
     private var cameraY = 0f
 
     // Pre-allocated — reset() instead of new Path() each frame
     private val trianglePath = Path()
+
+    // Pre-allocated paint for damage numbers: no text layout, no allocation per frame.
+    private val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+        setShadowLayer(3f, 0f, 0f, 0xFF000000.toInt())
+    }
+
+    // Cached strings for the common damage values (avoids a String per number per frame).
+    private val plainTexts = arrayOfNulls<String>(NUMBER_CACHE_SIZE)
+    private val critTexts  = arrayOfNulls<String>(NUMBER_CACHE_SIZE)
 
     fun render(
         drawScope     : DrawScope,
@@ -227,17 +240,37 @@ class GameRenderer(
 
     private fun DrawScope.renderDamageNumber(buf: RenderBuffer, i: Int) {
         val sx = buf.x[i] - cameraX; val sy = buf.y[i] - cameraY
+
+        // Off-screen numbers are skipped. This is what prevented the crash:
+        // Compose's drawText() throws IllegalArgumentException when the text
+        // starts below/right of the canvas (negative remaining height/width).
+        val margin = 48f
+        if (sx < -margin || sx > size.width + margin || sy < -margin || sy > size.height + margin) return
+
         val lifeRatio = if (buf.maxLifetime[i] > 0f)
             (buf.lifetime[i] / buf.maxLifetime[i]).coerceIn(0f, 1f) else 0f
-        val isCrit   = buf.hasFlag(i, RenderBuffer.FLAG_IS_CRITICAL)
-        val color    = if (isCrit) Color(0xFFFFD740) else Color.White
-        val fontSize = if (isCrit) 18.sp else 13.sp
-        drawText(
-            textMeasurer = textMeasurer,
-            text         = if (isCrit) "★${buf.damageValue[i]}" else "${buf.damageValue[i]}",
-            topLeft      = Offset(sx - 12f, sy),
-            style        = TextStyle(color = color.copy(alpha = lifeRatio), fontSize = fontSize)
+        val isCrit = buf.hasFlag(i, RenderBuffer.FLAG_IS_CRITICAL)
+        val color  = if (isCrit) Color(0xFFFFD740) else Color.White
+
+        val textSize = (if (isCrit) 18.sp else 13.sp).toPx()
+        numberPaint.textSize       = textSize
+        numberPaint.isFakeBoldText = isCrit
+        numberPaint.color          = color.copy(alpha = lifeRatio).toArgb()
+
+        drawContext.canvas.nativeCanvas.drawText(
+            numberText(buf.damageValue[i], isCrit), sx, sy + textSize, numberPaint
         )
+    }
+
+    private fun numberText(value: Int, crit: Boolean): String {
+        if (value < 0 || value >= NUMBER_CACHE_SIZE) return if (crit) "★$value" else value.toString()
+        val cache = if (crit) critTexts else plainTexts
+        var text = cache[value]
+        if (text == null) {
+            text = if (crit) "★$value" else value.toString()
+            cache[value] = text
+        }
+        return text
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -246,4 +279,8 @@ class GameRenderer(
         sx > -size && sx < 2000f + size && sy > -size && sy < 1200f + size
 
     private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
+
+    private companion object {
+        const val NUMBER_CACHE_SIZE = 1000
+    }
 }
