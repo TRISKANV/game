@@ -51,10 +51,12 @@ fun MainMenuScreen(
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(0.dp),
-            modifier            = Modifier.padding(24.dp)
+            modifier            = Modifier
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
             // ── Title ─────────────────────────────────────────────────────
-            Spacer(modifier = Modifier.height(32.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text       = "KOTLIN",
@@ -77,7 +79,7 @@ fun MainMenuScreen(
                 fontSize = 14.sp
             )
 
-            Spacer(modifier = Modifier.height(56.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
             // ── Buttons ───────────────────────────────────────────────────
             MenuButton("▶  START GAME",  Color(0xFF4FC3F7), onClick = onStartGame,    isPrimary = true)
@@ -88,7 +90,7 @@ fun MainMenuScreen(
             Spacer(Modifier.height(12.dp))
             MenuButton("⚙  SETTINGS",    Color(0xFFAAAAAA), onClick = onOpenSettings)
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Text(
                 "v1.0.0 · Open Source",
