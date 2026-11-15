@@ -97,6 +97,47 @@ class ExperienceSystemTest {
         assertEquals(1, player.killCount)
         assertTrue(world.getPickupEntities().size > beforePickups)
     }
+
+    @Test
+    fun `enemy killed by non projectile damage is reaped and rewarded`() {
+        // Whip, aura, lightning, orbitals, holy water and bombs only flag the
+        // enemy as dead and emit no event of their own.
+        val enemyId = EntityFactory.createEnemy(world, EnemyType.BASIC, 100f, 100f)
+        world.healths[enemyId]!!.isDead = true
+
+        val beforePickups = world.getPickupEntities().size
+        val output = experienceSystem.processEvents(world, mutableListOf(), dt = 0.016f)
+
+        assertTrue(output.any { it is GameEvent.EnemyKilled && it.entityId == enemyId })
+        assertTrue(world.destroyedTags.contains(enemyId))
+        assertEquals(1, world.players[playerId]!!.killCount)
+        assertTrue(world.getPickupEntities().size > beforePickups)
+    }
+
+    @Test
+    fun `enemy already reported as killed is not rewarded twice`() {
+        val enemyId = EntityFactory.createEnemy(world, EnemyType.BASIC, 100f, 100f)
+        world.healths[enemyId]!!.isDead = true
+        val events = mutableListOf<GameEvent>(
+            GameEvent.EnemyKilled(enemyId, EnemyType.BASIC, 5, 0f)
+        )
+
+        val output = experienceSystem.processEvents(world, events, dt = 0.016f)
+
+        assertEquals(1, output.count { it is GameEvent.EnemyKilled })
+        assertEquals(1, world.players[playerId]!!.killCount)
+    }
+
+    @Test
+    fun `living enemies are left alone`() {
+        val enemyId = EntityFactory.createEnemy(world, EnemyType.BASIC, 100f, 100f)
+
+        val output = experienceSystem.processEvents(world, mutableListOf(), dt = 0.016f)
+
+        assertTrue(output.none { it is GameEvent.EnemyKilled })
+        assertFalse(world.destroyedTags.contains(enemyId))
+        assertEquals(0, world.players[playerId]!!.killCount)
+    }
 }
 
 class SpawnSystemTest {
