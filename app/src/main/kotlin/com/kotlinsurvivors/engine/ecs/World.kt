@@ -40,25 +40,40 @@ class World {
         return id
     }
 
+    /**
+     * Schedules an entity for removal at the end of the frame.
+     *
+     * Safe to call more than once for the same entity (several systems may
+     * decide to remove it in the same frame) and for ids that are no longer
+     * alive: those calls are ignored.
+     */
     fun destroyEntity(id: Int) {
-        if (id in destroyedTags) {
-            Log.w(TAG, "destroyEntity called twice for id=$id — already in destroyedTags")
-        }
+        if (id !in liveEntities) return
         destroyedTags.add(id)
     }
 
+    /**
+     * Removes every entity scheduled with [destroyEntity] and recycles its id.
+     *
+     * An id is only recycled if it is still live. This guarantees that an id
+     * can never sit twice in [freeIds]; otherwise two different new entities
+     * would receive the same id and overwrite each other's components.
+     *
+     * @return the number of entities actually removed.
+     */
     fun flushDestroyed(): Int {
-        val count = destroyedTags.size
-        if (count > 200) {
-            Log.w(TAG, "flushDestroyed: unusually large batch — count=$count")
+        if (destroyedTags.size > 200) {
+            Log.w(TAG, "flushDestroyed: unusually large batch — count=${destroyedTags.size}")
         }
+        var removed = 0
         for (id in destroyedTags) {
-            liveEntities.remove(id)
+            if (!liveEntities.remove(id)) continue
             freeIds.addLast(id)
             removeAllComponents(id)
+            removed++
         }
         destroyedTags.clear()
-        return count
+        return removed
     }
 
     private fun removeAllComponents(id: Int) {
