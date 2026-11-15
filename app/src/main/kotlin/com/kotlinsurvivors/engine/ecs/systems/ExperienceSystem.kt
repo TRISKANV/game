@@ -16,12 +16,17 @@ class ExperienceSystem {
 
     private val toDestroy = ArrayList<Int>(128)
 
+    // Reused every frame by reapUnreportedKills(); avoids allocating a set per tick.
+    private val reportedKills = HashSet<Int>(64)
+
     fun processEvents(
         world  : World,
         events : MutableList<GameEvent>,
         dt     : Float = 0.016f
     ): List<GameEvent> {
         val outputEvents = mutableListOf<GameEvent>()
+
+        reapUnreportedKills(world, events)
 
         for (event in events) {
             when (event) {
@@ -47,6 +52,35 @@ class ExperienceSystem {
         }
 
         return outputEvents
+    }
+
+    /**
+     * Single exit point for enemy deaths.
+     *
+     * Only projectile hits (CollisionSystem.applyDamage) report an EnemyKilled
+     * event. Every other damage source (whip, lightning, aura, orbitals, holy
+     * water, bomb) just marks the enemy as dead. Without this step those enemies
+     * would stay in the world forever: no XP drop, no kill count, still counted
+     * against the spawn cap.
+     *
+     * Any enemy that is dead, not already scheduled for destruction and not
+     * already reported this frame gets its EnemyKilled event here, so
+     * handleEnemyKilled() treats every death the same way.
+     */
+    private fun reapUnreportedKills(world: World, events: MutableList<GameEvent>) {
+        reportedKills.clear()
+        for (event in events) {
+            if (event is GameEvent.EnemyKilled) reportedKills.add(event.entityId)
+        }
+
+        // Only reads the enemy map and appends to the event list, so iterating
+        // the live map is safe here (nothing is created or destroyed meanwhile).
+        for ((id, enemy) in world.enemies) {
+            val health = world.healths[id] ?: continue
+            if (!health.isDead) continue
+            if (id in world.destroyedTags || id in reportedKills) continue
+            events.add(GameEvent.EnemyKilled(id, enemy.type, enemy.experienceValue, enemy.coinDropChance))
+        }
     }
 
     private fun handleEnemyKilled(
