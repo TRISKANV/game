@@ -40,6 +40,11 @@ data class GameState(
     // Times the player has been hit this run. The UI reacts to changes (vibration, screen shake).
     val hitCount         : Int            = 0,
 
+    // Run progress read by the achievement rules
+    val bossKills        : Int            = 0,
+    val weaponCount      : Int            = 0,
+    val secondsWithoutHit: Int            = 0,
+
     // Immutable render data built by engine thread — safe for UI thread to read
     val renderSnapshot   : RenderSnapshot = RenderSnapshot(),
 
@@ -68,7 +73,10 @@ data class GameState(
             playerCoins == other.playerCoins &&
             enemyCount == other.enemyCount &&
             killCount == other.killCount &&
-            hitCount == other.hitCount
+            hitCount == other.hitCount &&
+            bossKills == other.bossKills &&
+            weaponCount == other.weaponCount &&
+            secondsWithoutHit == other.secondsWithoutHit
         // renderSnapshot intentionally excluded — changes every frame
     }
 
@@ -81,6 +89,8 @@ data class GameState(
         result = 31 * result + killCount
         result = 31 * result + enemyCount
         result = 31 * result + hitCount
+        result = 31 * result + bossKills
+        result = 31 * result + weaponCount
         return result
     }
 }
@@ -174,12 +184,12 @@ object AchievementDefinitions {
         Achievement("ach_survive_20",   "Immortal",      "Survive for 20 minutes",          "👑"),
         Achievement("ach_kill_100",     "Centurion",     "Kill 100 enemies in one run",     "⚔️"),
         Achievement("ach_kill_500",     "Slaughterer",   "Kill 500 enemies in one run",     "💀"),
-        Achievement("ach_kill_1000",    "One-Thousand",  "Kill 1000 enemies",               "🔥"),
+        Achievement("ach_kill_1000",    "One-Thousand",  "Kill 1000 enemies in one run",     "🔥"),
         Achievement("ach_level_10",     "Seasoned",      "Reach level 10",                  "⭐"),
         Achievement("ach_level_20",     "Master",        "Reach level 20",                  "🌟"),
         Achievement("ach_boss_kill",    "Boss Slayer",   "Kill a boss",                     "👹"),
         Achievement("ach_max_weapons",  "Armory",        "Equip 6 weapons simultaneously",  "🗡️"),
-        Achievement("ach_coins_500",    "Rich",          "Collect 500 coins total",         "💰"),
+        Achievement("ach_coins_500",    "Rich",          "Collect 500 coins in one run",    "💰"),
         Achievement("ach_no_damage_60", "Untouchable",   "Survive 60s without being hit",   "🛡️"),
     )
 }
