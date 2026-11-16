@@ -1,15 +1,14 @@
 package com.kotlinsurvivors.engine.rendering
 
-import android.graphics.Paint
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.ecs.components.RenderShape
 import kotlin.math.*
@@ -23,25 +22,21 @@ import kotlin.math.*
  * hot path except the pre-allocated trianglePath which is reset in-place.
  */
 class GameRenderer(
-    // Kept so GameScreen does not change; damage numbers no longer use it
-    // (they are drawn with a pre-allocated native Paint, see renderDamageNumber).
-    @Suppress("unused") private val textMeasurer: TextMeasurer
+    private val textMeasurer: TextMeasurer
 ) {
     private var cameraX = 0f
     private var cameraY = 0f
 
+    // Size of the area being drawn, refreshed every frame. Used to skip
+    // anything that falls outside the screen.
+    private var screenW = 0f
+    private var screenH = 0f
+
+    // RenderShape.values() allocates a new array on every call; keep one copy.
+    private val shapes = RenderShape.values()
+
     // Pre-allocated — reset() instead of new Path() each frame
     private val trianglePath = Path()
-
-    // Pre-allocated paint for damage numbers: no text layout, no allocation per frame.
-    private val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
-        textAlign = Paint.Align.CENTER
-        setShadowLayer(3f, 0f, 0f, 0xFF000000.toInt())
-    }
-
-    // Cached strings for the common damage values (avoids a String per number per frame).
-    private val plainTexts = arrayOfNulls<String>(NUMBER_CACHE_SIZE)
-    private val critTexts  = arrayOfNulls<String>(NUMBER_CACHE_SIZE)
 
     fun render(
         drawScope     : DrawScope,
@@ -52,6 +47,9 @@ class GameRenderer(
     ) {
         val buf = snapshot.buffer
         with(drawScope) {
+            screenW = size.width
+            screenH = size.height
+
             // Smooth camera follow
             val targetCX = buf.cameraTargetX - viewportWidth  * 0.5f
             val targetCY = buf.cameraTargetY - viewportHeight * 0.5f
@@ -138,7 +136,7 @@ class GameRenderer(
         if (!inViewport(sx, sy, buf.width[i])) return
         val isFlashing = buf.hasFlag(i, RenderBuffer.FLAG_FLASHING)
         val drawColor  = if (isFlashing) Color.White else Color(buf.getColor(i))
-        val shape      = RenderShape.values()[buf.shapeOrdinal[i]]
+        val shape      = shapes[buf.shapeOrdinal[i]]
         when (shape) {
             RenderShape.CIRCLE -> {
                 drawCircle(drawColor, buf.width[i] * 0.5f, Offset(sx, sy))
@@ -240,47 +238,23 @@ class GameRenderer(
 
     private fun DrawScope.renderDamageNumber(buf: RenderBuffer, i: Int) {
         val sx = buf.x[i] - cameraX; val sy = buf.y[i] - cameraY
-
-        // Off-screen numbers are skipped. This is what prevented the crash:
-        // Compose's drawText() throws IllegalArgumentException when the text
-        // starts below/right of the canvas (negative remaining height/width).
-        val margin = 48f
-        if (sx < -margin || sx > size.width + margin || sy < -margin || sy > size.height + margin) return
-
         val lifeRatio = if (buf.maxLifetime[i] > 0f)
             (buf.lifetime[i] / buf.maxLifetime[i]).coerceIn(0f, 1f) else 0f
-        val isCrit = buf.hasFlag(i, RenderBuffer.FLAG_IS_CRITICAL)
-        val color  = if (isCrit) Color(0xFFFFD740) else Color.White
-
-        val textSize = (if (isCrit) 18.sp else 13.sp).toPx()
-        numberPaint.textSize       = textSize
-        numberPaint.isFakeBoldText = isCrit
-        numberPaint.color          = color.copy(alpha = lifeRatio).toArgb()
-
-        drawContext.canvas.nativeCanvas.drawText(
-            numberText(buf.damageValue[i], isCrit), sx, sy + textSize, numberPaint
+        val isCrit   = buf.hasFlag(i, RenderBuffer.FLAG_IS_CRITICAL)
+        val color    = if (isCrit) Color(0xFFFFD740) else Color.White
+        val fontSize = if (isCrit) 18.sp else 13.sp
+        drawText(
+            textMeasurer = textMeasurer,
+            text         = if (isCrit) "★${buf.damageValue[i]}" else "${buf.damageValue[i]}",
+            topLeft      = Offset(sx - 12f, sy),
+            style        = TextStyle(color = color.copy(alpha = lifeRatio), fontSize = fontSize)
         )
-    }
-
-    private fun numberText(value: Int, crit: Boolean): String {
-        if (value < 0 || value >= NUMBER_CACHE_SIZE) return if (crit) "★$value" else value.toString()
-        val cache = if (crit) critTexts else plainTexts
-        var text = cache[value]
-        if (text == null) {
-            text = if (crit) "★$value" else value.toString()
-            cache[value] = text
-        }
-        return text
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
 
     private fun inViewport(sx: Float, sy: Float, size: Float) =
-        sx > -size && sx < 2000f + size && sy > -size && sy < 1200f + size
+        sx > -size && sx < screenW + size && sy > -size && sy < screenH + size
 
     private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
-
-    private companion object {
-        const val NUMBER_CACHE_SIZE = 1000
-    }
 }
