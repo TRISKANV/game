@@ -37,6 +37,9 @@ data class GameState(
     val enemyCount       : Int            = 0,
     val killCount        : Int            = 0,
 
+    // Times the player has been hit this run. The UI reacts to changes (vibration, screen shake).
+    val hitCount         : Int            = 0,
+
     // Immutable render data built by engine thread — safe for UI thread to read
     val renderSnapshot   : RenderSnapshot = RenderSnapshot(),
 
@@ -45,11 +48,8 @@ data class GameState(
 ) {
     val hpPercent: Float get() = if (playerMaxHp > 0) playerHp.toFloat() / playerMaxHp else 0f
     val xpPercent: Float get() = if (playerXpToNext > 0) playerXp.toFloat() / playerXpToNext else 0f
-    val formattedTime: String get() {
-        val mins = (elapsedTime / 60).toInt()
-        val secs = (elapsedTime % 60).toInt()
-        return "%02d:%02d".format(mins, secs)
-    }
+    val elapsedSeconds: Int get() = elapsedTime.toInt()
+    val formattedTime: String get() = formatClock(elapsedSeconds)
 
     override fun equals(other: Any?): Boolean {
         if (this === other) return true
@@ -67,7 +67,8 @@ data class GameState(
             playerXpToNext == other.playerXpToNext &&
             playerCoins == other.playerCoins &&
             enemyCount == other.enemyCount &&
-            killCount == other.killCount
+            killCount == other.killCount &&
+            hitCount == other.hitCount
         // renderSnapshot intentionally excluded — changes every frame
     }
 
@@ -79,7 +80,21 @@ data class GameState(
         result = 31 * result + playerLevel
         result = 31 * result + killCount
         result = 31 * result + enemyCount
+        result = 31 * result + hitCount
         return result
+    }
+}
+
+/** Formats a number of seconds as mm:ss without going through String.format. */
+fun formatClock(totalSeconds: Int): String {
+    val mins = totalSeconds / 60
+    val secs = totalSeconds % 60
+    return buildString(5) {
+        if (mins < 10) append('0')
+        append(mins)
+        append(':')
+        if (secs < 10) append('0')
+        append(secs)
     }
 }
 
