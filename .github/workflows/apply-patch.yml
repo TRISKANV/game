@@ -1,0 +1,126 @@
+name: Apply patch
+
+# Upload a .zip to the root of the repository (Add file > Upload files).
+# The zip must contain the files with their full repo paths, for example
+# app/src/main/kotlin/com/kotlinsurvivors/engine/GameEngine.kt.
+# This workflow unpacks it, commits the files, deletes the zip and starts
+# the Android CI build on the result.
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - '*.zip'
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: apply-patch
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    name: Unpack patch and build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Unpack and commit patch
+        id: unpack
+        env:
+          BRANCH: ${{ github.ref_name }}
+        run: |
+          shopt -s nullglob
+          zips=(*.zip)
+          if [ ${#zips[@]} -eq 0 ]; then
+            echo "No zip in the repository root, nothing to do."
+            echo "applied=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          python3 - "${zips[@]}" <<'PY'
+          import posixpath
+          import sys
+          import zipfile
+
+          # Only these top-level folders may be written by a patch. Workflows
+          # and other repository settings are deliberately not on the list.
+          ALLOWED_ROOTS = ("app/", "gradle/")
+
+          applied = []
+          problems = []
+
+          for zip_name in sys.argv[1:]:
+              with zipfile.ZipFile(zip_name) as archive:
+                  for info in archive.infolist():
+                      if info.is_dir():
+                          continue
+                      name = info.filename.replace("\\", "/")
+                      clean = posixpath.normpath(name)
+                      if clean.startswith("/") or clean.startswith("..") or "/../" in clean:
+                          problems.append(f"{zip_name}: unsafe path {name}")
+                          continue
+                      if not clean.startswith(ALLOWED_ROOTS):
+                          problems.append(f"{zip_name}: path outside allowed folders {name}")
+                          continue
+                      applied.append((zip_name, info, clean))
+
+          if problems:
+              print("Patch rejected, nothing was written:")
+              for line in problems:
+                  print("  " + line)
+              sys.exit(1)
+
+          if not applied:
+              print("The zip holds no files.")
+              sys.exit(1)
+
+          import os
+          open_archives = {}
+          try:
+              for zip_name, info, clean in applied:
+                  archive = open_archives.get(zip_name)
+                  if archive is None:
+                      archive = zipfile.ZipFile(zip_name)
+                      open_archives[zip_name] = archive
+                  os.makedirs(posixpath.dirname(clean), exist_ok=True)
+                  with archive.open(info) as source, open(clean, "wb") as target:
+                      target.write(source.read())
+                  print("  " + clean)
+          finally:
+              for archive in open_archives.values():
+                  archive.close()
+
+          with open("/tmp/patch-files.txt", "w") as listing:
+              listing.write("\n".join(clean for _, _, clean in applied) + "\n")
+          print(f"{len(applied)} files written.")
+          PY
+
+          git rm -q --cached -- "${zips[@]}" 2>/dev/null || true
+          rm -f -- "${zips[@]}"
+
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "The patch matches what is already in the repository."
+            echo "applied=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          git commit -q -m "Apply patch: ${zips[*]}" -m "$(sed 's/^/- /' /tmp/patch-files.txt)"
+          git pull -q --rebase origin "$BRANCH"
+          git push -q origin "HEAD:$BRANCH"
+          echo "applied=true" >> "$GITHUB_OUTPUT"
+
+      - name: Start the Android CI build
+        if: steps.unpack.outputs.applied == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ github.ref_name }}
+        run: gh workflow run build.yml --ref "$BRANCH"
