@@ -18,7 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.kotlinsurvivors.features.game.domain.model.GameState
+import com.kotlinsurvivors.features.game.domain.model.formatClock
 
 /**
  * GameHUD
@@ -30,10 +30,24 @@ import com.kotlinsurvivors.features.game.domain.model.GameState
  *  - Coins (top-right)
  *  - Pause button (top-right)
  */
+/**
+ * Takes plain values instead of the whole GameState so Compose can skip it
+ * on every frame where none of them changed (the state is republished
+ * 60 times per second, but the numbers shown here change far less often).
+ * [onPause] must be a stable reference, e.g. created with remember.
+ */
 @Composable
 fun GameHUD(
-    gameState: GameState,
-    onPause: () -> Unit
+    hp             : Int,
+    maxHp          : Int,
+    xp             : Int,
+    xpToNext       : Int,
+    level          : Int,
+    kills          : Int,
+    enemies        : Int,
+    coins          : Int,
+    elapsedSeconds : Int,
+    onPause        : () -> Unit
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -48,9 +62,9 @@ fun GameHUD(
             // HP Bar
             HUDBar(
                 label     = "HP",
-                current   = gameState.playerHp,
-                max       = gameState.playerMaxHp,
-                percent   = gameState.hpPercent,
+                current   = hp,
+                max       = maxHp,
+                percent   = if (maxHp > 0) hp.toFloat() / maxHp else 0f,
                 fillColor = Color(0xFFEF5350),
                 bgColor   = Color(0xFF330000)
             )
@@ -58,9 +72,9 @@ fun GameHUD(
             // XP Bar
             HUDBar(
                 label     = "XP",
-                current   = gameState.playerXp,
-                max       = gameState.playerXpToNext,
-                percent   = gameState.xpPercent,
+                current   = xp,
+                max       = xpToNext,
+                percent   = if (xpToNext > 0) xp.toFloat() / xpToNext else 0f,
                 fillColor = Color(0xFF66BB6A),
                 bgColor   = Color(0xFF003300)
             )
@@ -75,7 +89,7 @@ fun GameHUD(
         ) {
             // Timer
             Text(
-                text      = gameState.formattedTime,
+                text      = remember(elapsedSeconds) { formatClock(elapsedSeconds) },
                 color     = Color(0xFFE0E0E0),
                 fontSize  = 22.sp,
                 fontWeight= FontWeight.Bold,
@@ -87,9 +101,9 @@ fun GameHUD(
             Spacer(modifier = Modifier.height(4.dp))
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                HUDChip(label = "Lv.${gameState.playerLevel}", color = Color(0xFFCE93D8))
-                HUDChip(label = "☠ ${gameState.killCount}",    color = Color(0xFFEF9A9A))
-                HUDChip(label = "👾 ${gameState.enemyCount}",  color = Color(0xFFFFCC80))
+                HUDChip(label = remember(level)   { "Lv.$level" }, color = Color(0xFFCE93D8))
+                HUDChip(label = remember(kills)   { "☠ $kills" },  color = Color(0xFFEF9A9A))
+                HUDChip(label = remember(enemies) { "👾 $enemies" }, color = Color(0xFFFFCC80))
             }
         }
 
@@ -114,7 +128,7 @@ fun GameHUD(
                 )
             }
 
-            HUDChip(label = "💰 ${gameState.playerCoins}", color = Color(0xFFFFD740))
+            HUDChip(label = remember(coins) { "💰 $coins" }, color = Color(0xFFFFD740))
         }
     }
 }
@@ -140,7 +154,7 @@ private fun HUDBar(
             modifier = Modifier.fillMaxWidth()
         ) {
             Text(label, color = Color(0xFFBBBBBB), fontSize = 11.sp, fontWeight = FontWeight.Bold)
-            Text("$current / $max", color = Color(0xFFBBBBBB), fontSize = 11.sp)
+            Text(remember(current, max) { "$current / $max" }, color = Color(0xFFBBBBBB), fontSize = 11.sp)
         }
         Spacer(modifier = Modifier.height(2.dp))
         Box(
