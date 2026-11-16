@@ -18,6 +18,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kotlinsurvivors.features.game.domain.model.Achievement
 import com.kotlinsurvivors.features.game.domain.model.formatClock
 
 /**
@@ -129,6 +130,35 @@ fun GameHUD(
             }
 
             HUDChip(label = remember(coins) { "💰 $coins" }, color = Color(0xFFFFD740))
+        }
+    }
+}
+
+/** Small banner shown for a few seconds when an achievement is unlocked. */
+@Composable
+fun AchievementBanner(achievement: Achievement, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier
+            .background(Color(0xE61A1A2E), RoundedCornerShape(10.dp))
+            .border(1.dp, Color(0xFFFFD740), RoundedCornerShape(10.dp))
+            .padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Text(achievement.icon, fontSize = 22.sp)
+        Column {
+            Text(
+                "Achievement unlocked",
+                color      = Color(0xFFFFD740),
+                fontSize   = 11.sp,
+                fontWeight = FontWeight.Bold
+            )
+            Text(
+                achievement.name,
+                color      = Color(0xFFE0E0E0),
+                fontSize   = 15.sp,
+                fontWeight = FontWeight.SemiBold
+            )
         }
     }
 }
