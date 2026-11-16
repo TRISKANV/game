@@ -4,11 +4,15 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
+import android.content.Context
+import android.os.VibrationEffect
+import android.os.Vibrator
 import androidx.compose.foundation.layout.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.*
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -17,6 +21,7 @@ import com.kotlinsurvivors.engine.rendering.GameRenderer
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.presentation.components.*
 import com.kotlinsurvivors.features.game.presentation.viewmodel.GameViewModel
+import com.kotlinsurvivors.features.settings.presentation.viewmodel.SettingsViewModel
 
 /**
  * GameScreen
@@ -29,9 +34,13 @@ import com.kotlinsurvivors.features.game.presentation.viewmodel.GameViewModel
 @Composable
 fun GameScreen(
     onNavigateToMenu: () -> Unit,
-    viewModel: GameViewModel = hiltViewModel()
+    viewModel: GameViewModel = hiltViewModel(),
+    settingsViewModel: SettingsViewModel = hiltViewModel()
 ) {
-    val density = LocalDensity.current
+    val density  = LocalDensity.current
+    val context  = LocalContext.current
+    val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
+    val vibrator = remember(context) { context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator }
 
     BoxWithConstraints(
         modifier = Modifier
@@ -59,6 +68,25 @@ fun GameScreen(
         val textMeasurer = rememberTextMeasurer()
         val renderer     = remember(textMeasurer) { GameRenderer(textMeasurer) }
 
+        // Settings that act on the game. Plain assignments, safe to repeat every frame.
+        SideEffect {
+            renderer.showDamageNumbers = settings.showDamageNumbers
+            renderer.showFps           = settings.showFps
+            viewModel.joystick?.setScale(settings.joystickSize)
+        }
+
+        // Feedback when the player takes a hit.
+        LaunchedEffect(gameState.hitCount) {
+            if (gameState.hitCount == 0) return@LaunchedEffect
+            if (settings.screenShake) renderer.triggerShake()
+            if (settings.vibration) {
+                vibrator?.takeIf { it.hasVibrator() }
+                    ?.vibrate(VibrationEffect.createOneShot(HIT_VIBRATION_MS, VibrationEffect.DEFAULT_AMPLITUDE))
+            }
+        }
+
+        val onPause = remember(viewModel) { { viewModel.pauseGame() } }
+
         // ── Game Canvas ───────────────────────────────────────────────────
         Canvas(
             modifier = Modifier
@@ -78,7 +106,18 @@ fun GameScreen(
 
         // ── HUD ───────────────────────────────────────────────────────────
         if (!gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp) {
-            GameHUD(gameState = gameState, onPause = { viewModel.pauseGame() })
+            GameHUD(
+                hp             = gameState.playerHp,
+                maxHp          = gameState.playerMaxHp,
+                xp             = gameState.playerXp,
+                xpToNext       = gameState.playerXpToNext,
+                level          = gameState.playerLevel,
+                kills          = gameState.killCount,
+                enemies        = gameState.enemyCount,
+                coins          = gameState.playerCoins,
+                elapsedSeconds = gameState.elapsedSeconds,
+                onPause        = onPause
+            )
         }
 
         // ── Virtual Joystick ──────────────────────────────────────────────
@@ -114,6 +153,8 @@ fun GameScreen(
         }
     }
 }
+
+private const val HIT_VIBRATION_MS = 40L
 
 private fun Modifier.joystickInput(
     viewModel    : GameViewModel,
