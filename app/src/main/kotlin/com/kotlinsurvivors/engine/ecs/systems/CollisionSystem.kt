@@ -4,6 +4,7 @@ import android.util.Log
 import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.components.*
+import com.kotlinsurvivors.engine.spatial.IntList
 import com.kotlinsurvivors.engine.spatial.SpatialGrid
 import kotlin.math.sqrt
 
@@ -14,7 +15,7 @@ class CollisionSystem {
     }
 
     private val grid        = SpatialGrid(cellSize = 128f)
-    private val queryResult = ArrayList<Int>(64)
+    private val queryResult = IntList(64)
 
     fun update(world: World, dt: Float, events: MutableList<GameEvent>) {
         try {
@@ -65,7 +66,8 @@ class CollisionSystem {
             queryResult.clear()
             grid.query(pt.x, pt.y, pc.radius + 64f, queryResult)
 
-            for (eid in queryResult) {
+            for (qi in 0 until queryResult.size) {
+                val eid = queryResult[qi]
                 if (eid == pid) continue
                 if (eid in proj.hitEntities) continue
                 val et      = world.transforms[eid] ?: continue
@@ -112,7 +114,8 @@ class CollisionSystem {
         queryResult.clear()
         grid.query(pt.x, pt.y, pc.radius + 80f, queryResult)
 
-        for (eid in queryResult) {
+        for (qi in 0 until queryResult.size) {
+            val eid = queryResult[qi]
             if (eid == playerId) continue
             val enemy   = world.enemies[eid]    ?: continue
             val et      = world.transforms[eid] ?: continue
@@ -160,7 +163,8 @@ class CollisionSystem {
         queryResult.clear()
         grid.query(pt.x, pt.y, pComp.magnetRadius, queryResult)
 
-        for (pkId in queryResult) {
+        for (qi in 0 until queryResult.size) {
+            val pkId = queryResult[qi]
             val pickup = world.pickups[pkId]    ?: continue
             val pkt    = world.transforms[pkId] ?: continue
             val pkc    = world.colliders[pkId]  ?: continue
@@ -193,7 +197,8 @@ class CollisionSystem {
             val c = world.colliders[id]  ?: continue
             queryResult.clear()
             grid.query(t.x, t.y, c.radius * 3f, queryResult)
-            for (otherId in queryResult) {
+            for (qi in 0 until queryResult.size) {
+                val otherId = queryResult[qi]
                 if (otherId <= id || !world.enemies.containsKey(otherId)) continue
                 val ot = world.transforms[otherId] ?: continue
                 val oc = world.colliders[otherId]  ?: continue
