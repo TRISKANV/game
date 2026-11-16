@@ -29,6 +29,7 @@ class GameEngine(
         const val MAX_FRAME_TIME = 0.05f
         const val WORLD_WIDTH    = 4096f
         const val WORLD_HEIGHT   = 4096f
+        private const val RENDER_BUFFER_COUNT = 3
 
         // Logging
         private const val TAG       = "KS_Engine"
@@ -54,6 +55,14 @@ class GameEngine(
     private var pendingLevelUp = false
     private val frameEvents    = mutableListOf<GameEvent>()
     private var frameCount     = 0L
+    private var hitCount       = 0
+
+    // Bookkeeping for emitState(): what was published last, and whether the
+    // simulation has advanced since.
+    private var tickedSinceEmit           = false
+    private var hasEmitted                = false
+    private var lastEmittedPaused         = false
+    private var lastEmittedPendingLevelUp = false
     private var cachedLevelUpOptions: List<LevelUpOption> = emptyList()
 
     private val levelUpChannel = Channel<LevelUpOption>(capacity = 4)
@@ -211,6 +220,9 @@ class GameEngine(
         pendingLevelUp       = false
         frameCount           = 0L
         cachedLevelUpOptions = emptyList()
+        hitCount             = 0
+        tickedSinceEmit      = false
+        hasEmitted           = false
         frameEvents.clear()
         while (levelUpChannel.tryReceive().isSuccess) { /* discard stale choices */ }
     }
@@ -226,6 +238,7 @@ class GameEngine(
     private fun tick(dt: Float) {
         frameCount++
         elapsedTime += dt
+        tickedSinceEmit = true
         frameEvents.clear()
 
         // Periodic stats log every LOG_EVERY frames
@@ -305,6 +318,7 @@ class GameEngine(
                         pendingLevelUp = true
                     }
                 }
+                is GameEvent.PlayerHit -> hitCount++
                 is GameEvent.PlayerDied -> {
                     Log.d(TAG, "PLAYER DIED at ${elapsedTime.toInt()}s kills=${world.players[world.getPlayerEntity()]?.killCount}")
                     isPaused = true
@@ -315,13 +329,28 @@ class GameEngine(
     }
 
     private fun emitState() {
+        // While paused, in a level-up or after game over nothing changes, so
+        // there is nothing new to publish. Skipping keeps the buffer the UI is
+        // drawing from being recycled by frames that would look identical.
+        val flagsChanged = !hasEmitted ||
+            isPaused != lastEmittedPaused ||
+            pendingLevelUp != lastEmittedPendingLevelUp
+        if (!tickedSinceEmit && !flagsChanged) return
+        tickedSinceEmit           = false
+        hasEmitted                = true
+        lastEmittedPaused         = isPaused
+        lastEmittedPendingLevelUp = pendingLevelUp
+
         val pid    = world.getPlayerEntity()
         val player = world.players[pid]
         val health = world.healths[pid]
         val pt     = world.transforms[pid]
 
-        // Build immutable render snapshot on engine thread.
-        // UI thread only reads this — never touches the live World.
+        renderBufferIndex = (renderBufferIndex + 1) % renderBuffers.size
+        renderBuffer      = renderBuffers[renderBufferIndex]
+
+        // Fill the next buffer on the engine thread.
+        // UI thread only reads it — never touches the live World.
         buildRenderSnapshot(pid, pt?.x ?: 0f, pt?.y ?: 0f)
 
         _gameState.value = GameState(
@@ -341,12 +370,21 @@ class GameEngine(
             playerY          = pt?.y ?: 0f,
             enemyCount       = world.getEnemyEntities().size,
             killCount        = player?.killCount ?: 0,
+            hitCount         = hitCount,
             renderSnapshot   = RenderSnapshot(renderBuffer),
             events           = emptyList()
         )
     }
 
-    private val renderBuffer = RenderBuffer()
+    /**
+     * The UI thread draws from the buffer carried by the last emitted state
+     * while the engine already writes the next frame. Rotating through three
+     * buffers keeps the one being drawn untouched for two full frames, so the
+     * renderer never reads a half-written frame.
+     */
+    private val renderBuffers     = Array(RENDER_BUFFER_COUNT) { RenderBuffer() }
+    private var renderBufferIndex = 0
+    private var renderBuffer      = renderBuffers[0]
 
     private fun buildRenderSnapshot(playerId: Int, playerX: Float, playerY: Float) {
         renderBuffer.reset()
