@@ -30,7 +30,20 @@ data class JoystickState(
  */
 class VirtualJoystick {
 
-    val maxRadius = 80f
+    /** Drag distance, in pixels, that counts as full tilt. Scaled by the joystick-size setting. */
+    @Volatile var maxRadius = BASE_RADIUS
+        private set
+
+    /** Applies the player's joystick-size setting (1.0 keeps the default size). */
+    fun setScale(scale: Float) {
+        maxRadius = BASE_RADIUS * scale.coerceIn(MIN_SCALE, MAX_SCALE)
+    }
+
+    private companion object {
+        const val BASE_RADIUS = 80f
+        const val MIN_SCALE   = 0.5f
+        const val MAX_SCALE   = 1.5f
+    }
 
     @Volatile private var centerX   = 0f
     @Volatile private var centerY   = 0f
