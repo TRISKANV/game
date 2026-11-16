@@ -1,14 +1,15 @@
 package com.kotlinsurvivors.engine.rendering
 
+import android.graphics.Paint
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextMeasurer
-import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.drawText
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.ecs.components.RenderShape
 import kotlin.math.*
@@ -22,21 +23,58 @@ import kotlin.math.*
  * hot path except the pre-allocated trianglePath which is reset in-place.
  */
 class GameRenderer(
-    private val textMeasurer: TextMeasurer
+    // Kept so GameScreen does not change; damage numbers no longer use it
+    // (they are drawn with a pre-allocated native Paint, see renderDamageNumber).
+    @Suppress("unused") private val textMeasurer: TextMeasurer
 ) {
+    // Smoothed camera position, carried from frame to frame.
+    private var smoothX = 0f
+    private var smoothY = 0f
+
+    // Camera actually used for drawing this frame: smoothed position plus shake.
     private var cameraX = 0f
     private var cameraY = 0f
 
-    // Size of the area being drawn, refreshed every frame. Used to skip
-    // anything that falls outside the screen.
+    // Size of the area being drawn, refreshed every frame, for culling.
     private var screenW = 0f
     private var screenH = 0f
 
     // RenderShape.values() allocates a new array on every call; keep one copy.
     private val shapes = RenderShape.values()
 
+    /** Display options, set by the screen from the player's settings. */
+    var showDamageNumbers = true
+    var showFps           = false
+
+    private var shakeTimer = 0f
+
+    // Frames-per-second counter for the optional overlay.
+    private var fpsWindowStart = 0L
+    private var fpsFrames      = 0
+    private var fpsText       = "FPS --"
+    private val fpsPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.RIGHT
+        color     = 0xFFB0FFB0.toInt()
+        setShadowLayer(3f, 0f, 0f, 0xFF000000.toInt())
+    }
+
+    /** Shakes the camera briefly. Called when the player is hit. */
+    fun triggerShake() {
+        shakeTimer = SHAKE_DURATION
+    }
+
     // Pre-allocated — reset() instead of new Path() each frame
     private val trianglePath = Path()
+
+    // Pre-allocated paint for damage numbers: no text layout, no allocation per frame.
+    private val numberPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        textAlign = Paint.Align.CENTER
+        setShadowLayer(3f, 0f, 0f, 0xFF000000.toInt())
+    }
+
+    // Cached strings for the common damage values (avoids a String per number per frame).
+    private val plainTexts = arrayOfNulls<String>(NUMBER_CACHE_SIZE)
+    private val critTexts  = arrayOfNulls<String>(NUMBER_CACHE_SIZE)
 
     fun render(
         drawScope     : DrawScope,
@@ -53,8 +91,20 @@ class GameRenderer(
             // Smooth camera follow
             val targetCX = buf.cameraTargetX - viewportWidth  * 0.5f
             val targetCY = buf.cameraTargetY - viewportHeight * 0.5f
-            cameraX = lerp(cameraX, targetCX, (dt * 8f).coerceAtMost(1f))
-            cameraY = lerp(cameraY, targetCY, (dt * 8f).coerceAtMost(1f))
+            smoothX = lerp(smoothX, targetCX, (dt * 8f).coerceAtMost(1f))
+            smoothY = lerp(smoothY, targetCY, (dt * 8f).coerceAtMost(1f))
+
+            var shakeX = 0f
+            var shakeY = 0f
+            if (shakeTimer > 0f) {
+                val strength = SHAKE_STRENGTH * (shakeTimer / SHAKE_DURATION)
+                val t = System.currentTimeMillis()
+                shakeX = sin(t * 0.09f) * strength
+                shakeY = cos(t * 0.11f) * strength
+                shakeTimer = (shakeTimer - dt).coerceAtLeast(0f)
+            }
+            cameraX = smoothX + shakeX
+            cameraY = smoothY + shakeY
 
             drawBackground(viewportWidth, viewportHeight)
 
@@ -94,10 +144,28 @@ class GameRenderer(
                 if (buf.kind[i] == RenderKind.PARTICLE) renderParticle(buf, i)
             }
             // Pass 8: Damage numbers
-            for (i in 0 until buf.count) {
-                if (buf.kind[i] == RenderKind.DAMAGE_NUMBER) renderDamageNumber(buf, i)
+            if (showDamageNumbers) {
+                for (i in 0 until buf.count) {
+                    if (buf.kind[i] == RenderKind.DAMAGE_NUMBER) renderDamageNumber(buf, i)
+                }
             }
+
+            if (showFps) drawFps()
         }
+    }
+
+    private fun DrawScope.drawFps() {
+        val now = System.nanoTime()
+        if (fpsWindowStart == 0L) fpsWindowStart = now
+        fpsFrames++
+        val elapsed = now - fpsWindowStart
+        if (elapsed >= FPS_WINDOW_NANOS) {
+            fpsText        = "FPS " + (fpsFrames * 1_000_000_000L / elapsed)
+            fpsFrames      = 0
+            fpsWindowStart = now
+        }
+        fpsPaint.textSize = 14.sp.toPx()
+        drawContext.canvas.nativeCanvas.drawText(fpsText, size.width - 16f, size.height - 16f, fpsPaint)
     }
 
     // ── Background ──────────────────────────────────────────────────────────
@@ -238,17 +306,37 @@ class GameRenderer(
 
     private fun DrawScope.renderDamageNumber(buf: RenderBuffer, i: Int) {
         val sx = buf.x[i] - cameraX; val sy = buf.y[i] - cameraY
+
+        // Off-screen numbers are skipped. This is what prevented the crash:
+        // Compose's drawText() throws IllegalArgumentException when the text
+        // starts below/right of the canvas (negative remaining height/width).
+        val margin = 48f
+        if (sx < -margin || sx > size.width + margin || sy < -margin || sy > size.height + margin) return
+
         val lifeRatio = if (buf.maxLifetime[i] > 0f)
             (buf.lifetime[i] / buf.maxLifetime[i]).coerceIn(0f, 1f) else 0f
-        val isCrit   = buf.hasFlag(i, RenderBuffer.FLAG_IS_CRITICAL)
-        val color    = if (isCrit) Color(0xFFFFD740) else Color.White
-        val fontSize = if (isCrit) 18.sp else 13.sp
-        drawText(
-            textMeasurer = textMeasurer,
-            text         = if (isCrit) "★${buf.damageValue[i]}" else "${buf.damageValue[i]}",
-            topLeft      = Offset(sx - 12f, sy),
-            style        = TextStyle(color = color.copy(alpha = lifeRatio), fontSize = fontSize)
+        val isCrit = buf.hasFlag(i, RenderBuffer.FLAG_IS_CRITICAL)
+        val color  = if (isCrit) Color(0xFFFFD740) else Color.White
+
+        val textSize = (if (isCrit) 18.sp else 13.sp).toPx()
+        numberPaint.textSize       = textSize
+        numberPaint.isFakeBoldText = isCrit
+        numberPaint.color          = color.copy(alpha = lifeRatio).toArgb()
+
+        drawContext.canvas.nativeCanvas.drawText(
+            numberText(buf.damageValue[i], isCrit), sx, sy + textSize, numberPaint
         )
+    }
+
+    private fun numberText(value: Int, crit: Boolean): String {
+        if (value < 0 || value >= NUMBER_CACHE_SIZE) return if (crit) "★$value" else value.toString()
+        val cache = if (crit) critTexts else plainTexts
+        var text = cache[value]
+        if (text == null) {
+            text = if (crit) "★$value" else value.toString()
+            cache[value] = text
+        }
+        return text
     }
 
     // ── Helpers ──────────────────────────────────────────────────────────────
@@ -257,4 +345,11 @@ class GameRenderer(
         sx > -size && sx < screenW + size && sy > -size && sy < screenH + size
 
     private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
+
+    private companion object {
+        const val NUMBER_CACHE_SIZE = 1000
+        const val SHAKE_DURATION    = 0.25f
+        const val SHAKE_STRENGTH    = 10f
+        const val FPS_WINDOW_NANOS  = 500_000_000L
+    }
 }

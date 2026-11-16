@@ -35,8 +35,9 @@ import com.kotlinsurvivors.engine.ecs.components.RenderShape
 const val MAX_RENDER_ENTITIES = 400
 
 /**
- * Pre-allocated render buffer shared between engine thread (write) and
- * UI thread (read). Written atomically by the engine at end of each tick.
+ * Pre-allocated render buffer. The engine thread fills it and then publishes
+ * it inside GameState; the UI thread only reads it. The engine rotates
+ * through several buffers so the one being drawn is never rewritten.
  *
  * Using a simple struct-of-arrays layout for cache efficiency.
  */
@@ -157,41 +158,7 @@ object RenderKind {
     const val ORBITAL      = 7
 }
 
-// Keep RenderSnapshot as a thin wrapper for backward compat with GameState
+/** Thin wrapper that carries the buffer inside GameState. */
 data class RenderSnapshot(
     val buffer: RenderBuffer = RenderBuffer()
-)
-
-// Keep these for backward compat with GameRenderer (will update renderer too)
-enum class RenderEntityKind {
-    PLAYER, ENEMY, BOSS, PROJECTILE, PICKUP, PARTICLE, DAMAGE_NUMBER, ORBITAL
-}
-
-data class RenderEntity(
-    val kind           : RenderEntityKind,
-    val x              : Float,
-    val y              : Float,
-    val rotation       : Float       = 0f,
-    val shape          : RenderShape = RenderShape.CIRCLE,
-    val color          : Long        = 0xFFFFFFFF,
-    val secondaryColor : Long        = 0xFFAAAAAA,
-    val width          : Float       = 16f,
-    val height         : Float       = 16f,
-    val glowRadius     : Float       = 0f,
-    val glowColor      : Long        = 0x00000000,
-    val alpha          : Float       = 1f,
-    val flashTimer     : Float       = 0f,
-    val isFlashing     : Boolean     = false,
-    val hpPercent      : Float       = 1f,
-    val showHealthBar  : Boolean     = false,
-    val invincibleTimer: Float       = 0f,
-    val hasAura        : Boolean     = false,
-    val auraRadius     : Float       = 0f,
-    val orbitAngle     : Float       = 0f,
-    val orbitRadius    : Float       = 0f,
-    val orbitSize      : Float       = 0f,
-    val lifetime       : Float       = 1f,
-    val maxLifetime    : Float       = 1f,
-    val damageValue    : Int         = 0,
-    val isCritical     : Boolean     = false
 )
