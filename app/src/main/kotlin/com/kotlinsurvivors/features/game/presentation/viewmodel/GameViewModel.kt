@@ -3,6 +3,7 @@ package com.kotlinsurvivors.features.game.presentation.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kotlinsurvivors.core.crash.CrashLogger
 import com.kotlinsurvivors.engine.AchievementEngine
 import com.kotlinsurvivors.engine.GameEngine
 import com.kotlinsurvivors.features.game.domain.model.GameState
@@ -60,6 +61,13 @@ class GameViewModel @Inject constructor(
     fun pauseGame()  {
         Log.d(TAG, "pauseGame()")
         engine?.pause()
+    }
+
+    /** Pauses when the app leaves the foreground so enemies do not keep attacking unseen. */
+    fun pauseForBackground() {
+        val running = engine ?: return
+        CrashLogger.log("AUTO-PAUSE: app left the foreground")
+        running.pause()
     }
 
     fun resumeGame() {

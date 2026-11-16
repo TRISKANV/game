@@ -317,6 +317,10 @@ class GameEngine(
                         } catch (e: Exception) {
                             CrashLogger.logCrash("generateLevelUpOptions", e); throw e
                         }
+                        CrashLogger.log(
+                            "LEVEL-UP offered at level ${event.newLevel}: " +
+                                cachedLevelUpOptions.joinToString { it.id }
+                        )
                         pendingLevelUp = true
                     }
                 }

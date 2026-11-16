@@ -14,9 +14,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.*
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kotlinsurvivors.engine.rendering.GameRenderer
 import com.kotlinsurvivors.features.game.domain.model.Achievement
@@ -90,6 +93,22 @@ fun GameScreen(
         }
 
         val onPause = remember(viewModel) { { viewModel.pauseGame() } }
+
+        // Pause automatically when the app goes to the background or the screen
+        // turns off. A pending level-up and game over already freeze the game.
+        val lifecycleOwner = LocalLifecycleOwner.current
+        val latestState by rememberUpdatedState(gameState)
+        DisposableEffect(lifecycleOwner, viewModel) {
+            val observer = LifecycleEventObserver { _, event ->
+                if (event == Lifecycle.Event.ON_PAUSE &&
+                    !latestState.isGameOver && !latestState.isPendingLevelUp
+                ) {
+                    viewModel.pauseForBackground()
+                }
+            }
+            lifecycleOwner.lifecycle.addObserver(observer)
+            onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+        }
 
         // Banner for achievements unlocked during the run, one at a time.
         var unlockedBanner by remember { mutableStateOf<Achievement?>(null) }
