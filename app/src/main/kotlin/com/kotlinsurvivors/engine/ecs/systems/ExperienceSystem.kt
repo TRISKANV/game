@@ -115,7 +115,10 @@ class ExperienceSystem {
 
         val pid    = world.getPlayerEntity()
         val player = world.players[pid]
-        if (player != null) player.killCount++
+        if (player != null) {
+            player.killCount++
+            if (event.type.isBoss) player.bossKills++
+        }
         world.destroyEntity(eid)
         output.add(event)
     }
