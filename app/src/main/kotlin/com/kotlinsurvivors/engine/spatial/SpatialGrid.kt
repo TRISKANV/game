@@ -3,84 +3,158 @@ package com.kotlinsurvivors.engine.spatial
 import kotlin.math.floor
 
 /**
- * SpatialGrid — fixed version.
+ * Growable list of primitive ints. Used for query results so the collision
+ * code can walk them without boxing every entity id into an Integer.
+ */
+class IntList(initialCapacity: Int = 64) {
+
+    private var data = IntArray(initialCapacity.coerceAtLeast(4))
+
+    var size = 0
+        private set
+
+    operator fun get(index: Int): Int {
+        if (index < 0 || index >= size) throw IndexOutOfBoundsException("index=$index size=$size")
+        return data[index]
+    }
+
+    fun add(value: Int) {
+        if (size == data.size) data = data.copyOf(size * 2)
+        data[size++] = value
+    }
+
+    fun clear() {
+        size = 0
+    }
+
+    fun contains(value: Int): Boolean {
+        for (i in 0 until size) if (data[i] == value) return true
+        return false
+    }
+
+    fun isEmpty(): Boolean = size == 0
+}
+
+/**
+ * Uniform spatial hash grid rebuilt every frame.
  *
- * BUGS FIXED:
+ * Everything lives in primitive arrays: a fixed table of bucket heads and a
+ * pool of nodes chained through [nodeNext]. Inserting, clearing and querying
+ * never allocate once the pools have grown to the size the game needs, so
+ * the collision pass adds no garbage-collector pressure.
  *
- * 1. query() was creating a new HashSet<Int>() on every call.
- *    CollisionSystem calls query() ~130 times per frame at peak.
- *    That's 7,800 HashSet allocations/second → GC thrash → OOM at ~73s.
- *    Fix: one pre-allocated `seen` IntArray with a frame-stamp approach,
- *    replaced here by a single reused HashSet that is cleared in-place.
+ * An entity that overlaps several cells gets one node per cell. Queries
+ * deduplicate with a stamp per entity id, so each id is reported once per
+ * query no matter how many cells it covers.
  *
- * 2. cells HashMap was never reconstructed after many frames, only cleared.
- *    Java HashMap.clear() keeps internal capacity forever.
- *    After the player traverses large areas, capacity grows unbounded.
- *    Fix: replace cells with a fresh HashMap every clear() call.
- *    The initial capacity hint (512) keeps the common case fast.
- *
- * 3. entityCells used getOrPut which allocates a new MutableList per entity
- *    on every insert pass, even for recycled IDs.
- *    Fix: entityCells is also rebuilt fresh every clear().
+ * The grid is not thread-safe: the engine thread owns it.
  */
 class SpatialGrid(
     private val cellSize: Float = 128f
 ) {
-    // Rebuilt fresh every clear() to release capacity from previous frames
-    private var cells       = HashMap<Long, ArrayList<Int>>(512)
-    private var entityCells = HashMap<Int, ArrayList<Long>>(1024)
 
-    // Pre-allocated deduplication set — cleared in-place, never reallocated
-    private val seen = HashSet<Int>(256)
+    private companion object {
+        const val TABLE_SIZE = 4096                 // must be a power of two
+        const val TABLE_MASK = TABLE_SIZE - 1
+        const val INITIAL_NODES = 2048
+        const val NO_NODE = -1
+    }
+
+    /** First node of each bucket, or [NO_NODE]. */
+    private val heads = IntArray(TABLE_SIZE).also { it.fill(NO_NODE) }
+
+    private var nodeId   = IntArray(INITIAL_NODES)
+    private var nodeCx   = IntArray(INITIAL_NODES)
+    private var nodeCy   = IntArray(INITIAL_NODES)
+    private var nodeNext = IntArray(INITIAL_NODES)
+    private var nodeCount = 0
+
+    /** lastSeen[id] == queryStamp means id was already reported by the current query. */
+    private var lastSeen = IntArray(1024)
+    private var queryStamp = 0
 
     fun clear() {
-        // Rebuild with bounded initial capacity instead of growing indefinitely
-        cells       = HashMap(512)
-        entityCells = HashMap(1024)
-        // seen is reused across calls — cleared per-query
+        if (nodeCount > 0) heads.fill(NO_NODE)
+        nodeCount = 0
     }
 
     fun insert(id: Int, tx: Float, ty: Float, radius: Float) {
-        val minCX = cellX(tx - radius)
-        val maxCX = cellX(tx + radius)
-        val minCY = cellY(ty - radius)
-        val maxCY = cellY(ty + radius)
+        if (id < 0) return
+        if (id >= lastSeen.size) lastSeen = lastSeen.copyOf(maxOf(id + 1, lastSeen.size * 2))
 
-        // Reuse existing list for this entity if present, create once if not
-        val occupied = entityCells.getOrPut(id) { ArrayList(4) }
+        val minCX = cellOf(tx - radius)
+        val maxCX = cellOf(tx + radius)
+        val minCY = cellOf(ty - radius)
+        val maxCY = cellOf(ty + radius)
 
         for (cx in minCX..maxCX) {
             for (cy in minCY..maxCY) {
-                val key  = packKey(cx, cy)
-                val cell = cells.getOrPut(key) { ArrayList(8) }
-                cell.add(id)
-                occupied.add(key)
+                if (nodeCount == nodeId.size) growNodes()
+                val node   = nodeCount++
+                val bucket = bucketOf(cx, cy)
+                nodeId[node]   = id
+                nodeCx[node]   = cx
+                nodeCy[node]   = cy
+                nodeNext[node] = heads[bucket]
+                heads[bucket]  = node
             }
         }
     }
 
-    fun query(tx: Float, ty: Float, radius: Float, result: MutableList<Int>) {
-        val minCX = cellX(tx - radius)
-        val maxCX = cellX(tx + radius)
-        val minCY = cellY(ty - radius)
-        val maxCY = cellY(ty + radius)
+    /** Appends the ids found around ([tx], [ty]) to [result] without duplicates. */
+    fun query(tx: Float, ty: Float, radius: Float, result: IntList) {
+        scan(tx, ty, radius) { result.add(it) }
+    }
 
-        // Clear the pre-allocated deduplication set
-        seen.clear()
+    /** Same as the [IntList] overload, for callers that work with boxed lists. */
+    fun query(tx: Float, ty: Float, radius: Float, result: MutableList<Int>) {
+        scan(tx, ty, radius) { result.add(it) }
+    }
+
+    private inline fun scan(tx: Float, ty: Float, radius: Float, onFound: (Int) -> Unit) {
+        val minCX = cellOf(tx - radius)
+        val maxCX = cellOf(tx + radius)
+        val minCY = cellOf(ty - radius)
+        val maxCY = cellOf(ty + radius)
+
+        val stamp = nextStamp()
 
         for (cx in minCX..maxCX) {
             for (cy in minCY..maxCY) {
-                val cell = cells[packKey(cx, cy)] ?: continue
-                for (id in cell) {
-                    if (seen.add(id)) result.add(id)
+                var node = heads[bucketOf(cx, cy)]
+                while (node != NO_NODE) {
+                    // Different cells can share a bucket; only take nodes of this cell.
+                    if (nodeCx[node] == cx && nodeCy[node] == cy) {
+                        val id = nodeId[node]
+                        if (lastSeen[id] != stamp) {
+                            lastSeen[id] = stamp
+                            onFound(id)
+                        }
+                    }
+                    node = nodeNext[node]
                 }
             }
         }
     }
 
-    private fun cellX(wx: Float): Int = floor(wx / cellSize).toInt()
-    private fun cellY(wy: Float): Int = floor(wy / cellSize).toInt()
+    private fun nextStamp(): Int {
+        if (queryStamp == Int.MAX_VALUE) {
+            lastSeen.fill(0)
+            queryStamp = 0
+        }
+        return ++queryStamp
+    }
 
-    private fun packKey(cx: Int, cy: Int): Long =
-        (cx.toLong() and 0xFFFFFFFFL) or (cy.toLong() shl 32)
+    private fun growNodes() {
+        val newSize = nodeId.size * 2
+        nodeId   = nodeId.copyOf(newSize)
+        nodeCx   = nodeCx.copyOf(newSize)
+        nodeCy   = nodeCy.copyOf(newSize)
+        nodeNext = nodeNext.copyOf(newSize)
+    }
+
+    private fun cellOf(world: Float): Int = floor(world / cellSize).toInt()
+
+    private fun bucketOf(cx: Int, cy: Int): Int =
+        ((cx * 73856093) xor (cy * 19349663)) and TABLE_MASK
 }
