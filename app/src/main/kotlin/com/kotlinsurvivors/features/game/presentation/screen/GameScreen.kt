@@ -8,6 +8,7 @@ import android.content.Context
 import android.os.VibrationEffect
 import android.os.Vibrator
 import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Alignment
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -18,10 +19,13 @@ import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kotlinsurvivors.engine.rendering.GameRenderer
+import com.kotlinsurvivors.features.game.domain.model.Achievement
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.presentation.components.*
 import com.kotlinsurvivors.features.game.presentation.viewmodel.GameViewModel
 import com.kotlinsurvivors.features.settings.presentation.viewmodel.SettingsViewModel
+import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.delay
 
 /**
  * GameScreen
@@ -87,6 +91,16 @@ fun GameScreen(
 
         val onPause = remember(viewModel) { { viewModel.pauseGame() } }
 
+        // Banner for achievements unlocked during the run, one at a time.
+        var unlockedBanner by remember { mutableStateOf<Achievement?>(null) }
+        LaunchedEffect(viewModel) {
+            viewModel.newAchievements.collect { achievement ->
+                unlockedBanner = achievement
+                delay(ACHIEVEMENT_BANNER_MS)
+                unlockedBanner = null
+            }
+        }
+
         // ── Game Canvas ───────────────────────────────────────────────────
         Canvas(
             modifier = Modifier
@@ -117,6 +131,13 @@ fun GameScreen(
                 coins          = gameState.playerCoins,
                 elapsedSeconds = gameState.elapsedSeconds,
                 onPause        = onPause
+            )
+        }
+
+        unlockedBanner?.let { achievement ->
+            AchievementBanner(
+                achievement = achievement,
+                modifier    = Modifier.align(Alignment.TopCenter).padding(top = 84.dp)
             )
         }
 
@@ -155,6 +176,7 @@ fun GameScreen(
 }
 
 private const val HIT_VIBRATION_MS = 40L
+private const val ACHIEVEMENT_BANNER_MS = 3000L
 
 private fun Modifier.joystickInput(
     viewModel    : GameViewModel,
