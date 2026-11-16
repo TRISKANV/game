@@ -56,6 +56,7 @@ class GameEngine(
     private val frameEvents    = mutableListOf<GameEvent>()
     private var frameCount     = 0L
     private var hitCount       = 0
+    private var lastHitTime    = 0f
 
     // Bookkeeping for emitState(): what was published last, and whether the
     // simulation has advanced since.
@@ -221,6 +222,7 @@ class GameEngine(
         frameCount           = 0L
         cachedLevelUpOptions = emptyList()
         hitCount             = 0
+        lastHitTime          = 0f
         tickedSinceEmit      = false
         hasEmitted           = false
         frameEvents.clear()
@@ -318,7 +320,10 @@ class GameEngine(
                         pendingLevelUp = true
                     }
                 }
-                is GameEvent.PlayerHit -> hitCount++
+                is GameEvent.PlayerHit -> {
+                    hitCount++
+                    lastHitTime = elapsedTime
+                }
                 is GameEvent.PlayerDied -> {
                     Log.d(TAG, "PLAYER DIED at ${elapsedTime.toInt()}s kills=${world.players[world.getPlayerEntity()]?.killCount}")
                     isPaused = true
@@ -371,6 +376,9 @@ class GameEngine(
             enemyCount       = world.getEnemyEntities().size,
             killCount        = player?.killCount ?: 0,
             hitCount         = hitCount,
+            bossKills        = player?.bossKills ?: 0,
+            weaponCount      = world.weapons[pid]?.size ?: 0,
+            secondsWithoutHit = (elapsedTime - lastHitTime).toInt(),
             renderSnapshot   = RenderSnapshot(renderBuffer),
             events           = emptyList()
         )
@@ -517,9 +525,7 @@ class GameEngine(
             }
         }
 
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.values()
-            .filter { it !in ownedTypes && weapons.size < 6 }
-            .take(2)
+        WeaponOffers.pickNewWeapons(ownedTypes)
             .forEach { wt ->
                 options.add(LevelUpOption(
                     id = "new_${wt.name}", title = "New: ${weaponName(wt)}",
@@ -565,6 +571,7 @@ class GameEngine(
                 if (weapon.level % 3 == 0) weapon.projectileCount++
                 if (weapon.level % 4 == 0) weapon.piercing++
                 weapon.area *= 1.1f
+                WeaponUpgrades.applyToAttachedComponents(world, pid, weapon)
                 Log.d(TAG, "Weapon ${weapon.type} upgraded to Lv${weapon.level} dmg=${weapon.damage}")
             }
             UpgradeType.NEW_WEAPON -> {
