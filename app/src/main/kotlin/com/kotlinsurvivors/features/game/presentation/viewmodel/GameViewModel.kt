@@ -3,6 +3,7 @@ package com.kotlinsurvivors.features.game.presentation.viewmodel
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kotlinsurvivors.engine.AchievementEngine
 import com.kotlinsurvivors.engine.GameEngine
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
@@ -15,7 +16,8 @@ import javax.inject.Inject
 
 @HiltViewModel
 class GameViewModel @Inject constructor(
-    private val gameRepository: GameRepository
+    private val gameRepository: GameRepository,
+    private val achievementEngine: AchievementEngine
 ) : ViewModel() {
 
     companion object {
@@ -29,11 +31,29 @@ class GameViewModel @Inject constructor(
 
     val joystick get() = engine?.joystick
 
+    /** Achievements unlocked during play, for the on-screen banner. */
+    val newAchievements = achievementEngine.newlyUnlocked
+
     fun initEngine(viewportWidth: Float, viewportHeight: Float) {
         if (engine != null) return
         Log.d(TAG, "Initialising engine: ${viewportWidth}x${viewportHeight}")
-        engine = GameEngine(viewportWidth, viewportHeight).also {
-            it.start(viewModelScope)
+        val newEngine = GameEngine(viewportWidth, viewportHeight)
+        engine = newEngine
+        newEngine.start(viewModelScope)
+        trackAchievements(newEngine)
+    }
+
+    /** Checks the achievement rules once per second of play, and once more at game over. */
+    private fun trackAchievements(source: GameEngine) {
+        viewModelScope.launch {
+            achievementEngine.load()
+            var lastChecked = -1
+            source.gameState.collect { state ->
+                if (state.elapsedSeconds != lastChecked || state.isGameOver) {
+                    lastChecked = state.elapsedSeconds
+                    achievementEngine.evaluate(state)
+                }
+            }
         }
     }
 
