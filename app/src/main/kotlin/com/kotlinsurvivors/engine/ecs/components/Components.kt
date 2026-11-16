@@ -126,7 +126,8 @@ data class PlayerComponent(
     var lifeSteal: Float = 0f,
     var regenPerSecond: Float = 0f,
     var killCount: Int = 0,
-    var survivalTime: Float = 0f
+    var survivalTime: Float = 0f,
+    var bossKills: Int = 0
 ) : Component
 
 // ─────────────────────────────────────────────
@@ -134,7 +135,10 @@ data class PlayerComponent(
 // ─────────────────────────────────────────────
 
 enum class EnemyType {
-    BASIC, FAST, TANK, RANGED, EXPLODER, SWARM, BOSS_SHADOW, BOSS_GOLEM, BOSS_NECROMANCER
+    BASIC, FAST, TANK, RANGED, EXPLODER, SWARM, BOSS_SHADOW, BOSS_GOLEM, BOSS_NECROMANCER;
+
+    val isBoss: Boolean
+        get() = this == BOSS_SHADOW || this == BOSS_GOLEM || this == BOSS_NECROMANCER
 }
 
 enum class AIState {
