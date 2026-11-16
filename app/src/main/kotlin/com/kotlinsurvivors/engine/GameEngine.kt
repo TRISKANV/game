@@ -21,7 +21,9 @@ import kotlin.math.roundToInt
 
 class GameEngine(
     private val viewportWidth : Float,
-    private val viewportHeight: Float
+    private val viewportHeight: Float,
+    /** Levels of the shop's permanent upgrades, read at the start of every run. */
+    private val loadPermanentLevels: suspend () -> Map<String, Int> = { emptyMap() }
 ) {
     companion object {
         const val TARGET_FPS     = 60
@@ -94,7 +96,7 @@ class GameEngine(
         engineJob = scope.launch(engineDispatcher) {
             previous?.join()
             resetState()
-            initWorld()
+            initWorld(readPermanentLevels())
 
             var lastTime    = System.nanoTime()
             var accumulator = 0f
@@ -229,9 +231,22 @@ class GameEngine(
         while (levelUpChannel.tryReceive().isSuccess) { /* discard stale choices */ }
     }
 
-    private fun initWorld() {
+    /** A failing database must not stop the game from starting: play without the bonuses. */
+    private suspend fun readPermanentLevels(): Map<String, Int> =
+        try {
+            loadPermanentLevels()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            CrashLogger.logCrash("loading permanent upgrades", e)
+            emptyMap()
+        }
+
+    private fun initWorld(permanentLevels: Map<String, Int>) {
         world.clear()
-        EntityFactory.createPlayer(world, WORLD_WIDTH / 2f, WORLD_HEIGHT / 2f)
+        val playerId = EntityFactory.createPlayer(world, WORLD_WIDTH / 2f, WORLD_HEIGHT / 2f)
+        val applied = PermanentBonuses.applyTo(world, playerId, permanentLevels)
+        CrashLogger.log("Permanent upgrades applied: " + (if (applied.isEmpty()) "none" else applied.entries.joinToString { "${it.key}:${it.value}" }))
         CrashLogger.attachWorld(world)
         CrashLogger.log("Engine init: viewport=${viewportWidth}x${viewportHeight}")
         Log.d(TAG, "World initialised. Player entity: ${world.getPlayerEntity()}")
@@ -594,7 +609,7 @@ class GameEngine(
             }
             UpgradeType.STAT -> {
                 when (option.id) {
-                    "stat_hp"       -> health.current += 30
+                    "stat_hp"       -> { health.max += 30; health.current += 30 }
                     "stat_speed"    -> player.speed *= 1.15f
                     "stat_damage"   -> player.damageMultiplier *= 1.20f
                     "stat_area"     -> player.areaMultiplier *= 1.15f

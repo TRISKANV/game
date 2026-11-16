@@ -25,6 +25,19 @@ android {
 
     }
 
+    // Fixed key for debug builds. Without it every CI build is signed with a
+    // freshly generated key and Android refuses to update the installed app,
+    // so the previous version would have to be uninstalled first.
+    // This is the public debug key, not a release key.
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
+        }
+    }
+
     buildTypes {
         debug {
             isDebuggable = true

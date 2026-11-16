@@ -5,6 +5,7 @@ import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.components.*
 import kotlin.math.pow
+import kotlin.math.roundToInt
 import kotlin.random.Random
 
 class ExperienceSystem {
@@ -99,7 +100,8 @@ class ExperienceSystem {
             }
             EntityFactory.createPickup(world, xpType, t.x, t.y)
 
-            if (Random.nextFloat() < event.coinChance) {
+            val coinChance = event.coinChance * (world.players[world.getPlayerEntity()]?.coinDropMultiplier ?: 1f)
+            if (Random.nextFloat() < coinChance) {
                 val coinType = if (Random.nextFloat() < 0.15f) PickupType.COIN_BAG else PickupType.COIN
                 EntityFactory.createPickup(world, coinType, t.x, t.y)
             }
@@ -140,7 +142,7 @@ class ExperienceSystem {
             PickupType.EXPERIENCE_LARGE -> {
                 val xpBefore = player.experience
                 val levelBefore = player.level
-                player.experience += event.value
+                player.experience += (event.value * player.xpMultiplier).roundToInt()
 
                 var levelsThisFrame = 0
                 while (

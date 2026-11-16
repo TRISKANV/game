@@ -38,7 +38,9 @@ class GameViewModel @Inject constructor(
     fun initEngine(viewportWidth: Float, viewportHeight: Float) {
         if (engine != null) return
         Log.d(TAG, "Initialising engine: ${viewportWidth}x${viewportHeight}")
-        val newEngine = GameEngine(viewportWidth, viewportHeight)
+        val newEngine = GameEngine(viewportWidth, viewportHeight) {
+            gameRepository.getPermanentUpgradeLevels()
+        }
         engine = newEngine
         newEngine.start(viewModelScope)
         trackAchievements(newEngine)

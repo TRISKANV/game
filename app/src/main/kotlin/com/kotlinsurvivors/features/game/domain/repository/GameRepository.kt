@@ -9,4 +9,7 @@ interface GameRepository {
     fun getTopRunsByTime(): Flow<List<RunResult>>
     fun getTopRunsByKills(): Flow<List<RunResult>>
     suspend fun getPlayerStats(): PlayerStats
+
+    /** Level reached in each shop upgrade, keyed by upgrade id. Upgrades never bought are absent. */
+    suspend fun getPermanentUpgradeLevels(): Map<String, Int>
 }

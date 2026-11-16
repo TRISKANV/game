@@ -56,6 +56,9 @@ class GameRepositoryImpl @Inject constructor(
             list.map { it.toDomain() }
         }
 
+    override suspend fun getPermanentUpgradeLevels(): Map<String, Int> =
+        db.permanentUpgradeDao().getAll().associate { it.id to it.currentLevel }
+
     override suspend fun getPlayerStats(): PlayerStats {
         val e = db.playerStatsDao().get() ?: return PlayerStats()
         return PlayerStats(

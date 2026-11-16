@@ -46,7 +46,7 @@ data class VelocityComponent(
  */
 data class HealthComponent(
     var current: Int,
-    val max: Int,
+    var max: Int,
     var isDead: Boolean = false,
     var invincibleTimer: Float = 0f,       // seconds of invincibility after hit
     var invincibleDuration: Float = 0.15f  // default iframes duration
@@ -127,7 +127,9 @@ data class PlayerComponent(
     var regenPerSecond: Float = 0f,
     var killCount: Int = 0,
     var survivalTime: Float = 0f,
-    var bossKills: Int = 0
+    var bossKills: Int = 0,
+    var xpMultiplier: Float = 1f,
+    var coinDropMultiplier: Float = 1f
 ) : Component
 
 // ─────────────────────────────────────────────
