@@ -76,6 +76,13 @@ class RenderBuffer {
     val maxLifetime    = FloatArray(MAX_RENDER_ENTITIES)
     val damageValue    = IntArray(MAX_RENDER_ENTITIES)
 
+    /**
+     * Which sprite to draw. Meaning depends on [kind]: EnemyType ordinal for
+     * enemies and bosses, PickupType ordinal for pickups, WeaponType ordinal for
+     * projectiles, and the facing row (see [Facing]) for the player. -1 = none.
+     */
+    val spriteId       = IntArray(MAX_RENDER_ENTITIES)
+
     // Flag bit masks
     companion object {
         const val FLAG_FLASHING    = 1
@@ -83,6 +90,7 @@ class RenderBuffer {
         const val FLAG_HAS_AURA    = 4
         const val FLAG_IS_CRITICAL = 8
         const val FLAG_IS_BOSS     = 16
+        const val FLAG_MOVING      = 32
     }
 
     fun reset() { count = 0 }
@@ -110,7 +118,8 @@ class RenderBuffer {
         eOrbitSize  : Float      = 0f,
         eLifetime   : Float      = 1f,
         eMaxLifetime: Float      = 1f,
-        eDamageValue: Int        = 0
+        eDamageValue: Int        = 0,
+        eSpriteId   : Int        = -1
     ): Boolean {
         if (count >= MAX_RENDER_ENTITIES) return false
         val i = count++
@@ -136,6 +145,7 @@ class RenderBuffer {
         orbitSize[i]   = eOrbitSize
         lifetime[i]    = eLifetime;  maxLifetime[i] = eMaxLifetime
         damageValue[i] = eDamageValue
+        spriteId[i]    = eSpriteId
         return true
     }
 
@@ -156,6 +166,14 @@ object RenderKind {
     const val PARTICLE     = 5
     const val DAMAGE_NUMBER= 6
     const val ORBITAL      = 7
+}
+
+/** Row of the player sprite sheet for each direction the character can face. */
+object Facing {
+    const val DOWN  = 0
+    const val UP    = 1
+    const val LEFT  = 2
+    const val RIGHT = 3
 }
 
 /** Thin wrapper that carries the buffer inside GameState. */

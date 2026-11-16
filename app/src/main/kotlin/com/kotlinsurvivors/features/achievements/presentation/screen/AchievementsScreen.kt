@@ -92,7 +92,7 @@ private fun AchievementCard(achievement: Achievement) {
         colors   = CardDefaults.cardColors(
             containerColor = if (achievement.isUnlocked) Color(0xFF121E12) else Color(0xFF12121E)
         ),
-        shape  = RoundedCornerShape(12.dp),
+        shape  = RoundedCornerShape(3.dp),
         border = BorderStroke(1.dp, borderColor)
     ) {
         Row(
@@ -107,7 +107,7 @@ private fun AchievementCard(achievement: Achievement) {
                     .background(
                         if (achievement.isUnlocked) Color(0xFF66BB6A).copy(alpha = 0.15f)
                         else Color(0xFF1A1A2E),
-                        RoundedCornerShape(10.dp)
+                        RoundedCornerShape(3.dp)
                     ),
                 contentAlignment = Alignment.Center
             ) {

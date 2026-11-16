@@ -198,13 +198,13 @@ private fun CrashLogViewerDialog(onDismiss: () -> Unit) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(8.dp),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(3.dp),
             color = Color(0xFF0A0A14)
         ) {
             Column(modifier = Modifier.padding(12.dp)) {
                 Text(
                     "DIAGNOSTIC LOG",
-                    color         = Color(0xFF4FC3F7),
+                    color         = Color(0xFF7CE04A),
                     fontSize      = 13.sp,
                     fontWeight    = FontWeight.ExtraBold,
                     letterSpacing = 2.sp
@@ -248,7 +248,7 @@ private fun CrashLogViewerDialog(onDismiss: () -> Unit) {
                     modifier = Modifier
                         .weight(1f)
                         .fillMaxWidth()
-                        .background(Color.Black, RoundedCornerShape(6.dp))
+                        .background(Color.Black, RoundedCornerShape(3.dp))
                         .padding(6.dp)
                 ) {
                     items(lines) { line ->
@@ -282,7 +282,7 @@ private fun lineColor(line: String): Color = when {
     "CRASH" in line || "UNCAUGHT" in line || "Caused by" in line -> Color(0xFFEF5350)
     "EXIT REASON" in line || "PREVIOUS SESSION" in line          -> Color(0xFFFFCA28)
     "onTrimMemory" in line || "onLowMemory" in line              -> Color(0xFFFFA726)
-    "SESSION START" in line || "FOREGROUND" in line || "BACKGROUND" in line -> Color(0xFF4FC3F7)
+    "SESSION START" in line || "FOREGROUND" in line || "BACKGROUND" in line -> Color(0xFF7CE04A)
     "STATS" in line                                              -> Color(0xFF81C784)
     else                                                         -> Color(0xFFBBBBBB)
 }
@@ -310,13 +310,13 @@ private fun shareText(context: Context, text: String) {
 private fun SettingsSection(title: String) {
     Text(
         title,
-        color         = Color(0xFF4FC3F7),
+        color         = Color(0xFF7CE04A),
         fontSize      = 11.sp,
         fontWeight    = FontWeight.ExtraBold,
         letterSpacing = 2.sp,
         modifier      = Modifier.padding(top = 8.dp, bottom = 4.dp)
     )
-    Divider(color = Color(0xFF4FC3F7).copy(alpha = 0.15f))
+    Divider(color = Color(0xFF7CE04A).copy(alpha = 0.15f))
     Spacer(Modifier.height(4.dp))
 }
 
@@ -342,8 +342,8 @@ private fun SettingsToggle(
             checked         = checked,
             onCheckedChange = onToggle,
             colors          = SwitchDefaults.colors(
-                checkedThumbColor   = Color(0xFF4FC3F7),
-                checkedTrackColor   = Color(0xFF4FC3F7).copy(alpha = 0.3f),
+                checkedThumbColor   = Color(0xFF7CE04A),
+                checkedTrackColor   = Color(0xFF7CE04A).copy(alpha = 0.3f),
                 uncheckedThumbColor = Color(0xFF555555),
                 uncheckedTrackColor = Color(0xFF222233)
             )
@@ -365,15 +365,15 @@ private fun SettingsSlider(
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             Text(label,    color = Color(0xFFE0E0E0), fontSize = 14.sp, fontWeight = FontWeight.Medium)
-            Text(sublabel, color = Color(0xFF4FC3F7),  fontSize = 13.sp)
+            Text(sublabel, color = Color(0xFF7CE04A),  fontSize = 13.sp)
         }
         Slider(
             value         = value,
             onValueChange = onValue,
             valueRange    = range,
             colors        = SliderDefaults.colors(
-                thumbColor       = Color(0xFF4FC3F7),
-                activeTrackColor = Color(0xFF4FC3F7)
+                thumbColor       = Color(0xFF7CE04A),
+                activeTrackColor = Color(0xFF7CE04A)
             )
         )
     }

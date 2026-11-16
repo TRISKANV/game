@@ -1,6 +1,6 @@
 package com.kotlinsurvivors.features.menu.presentation.screen
 
-import androidx.compose.animation.core.*
+import android.graphics.Bitmap
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -9,23 +9,35 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import kotlin.math.cos
-import kotlin.math.sin
-import kotlin.random.Random
+import com.kotlinsurvivors.engine.rendering.SpriteAtlas
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
+import kotlin.math.max
+import kotlin.math.roundToInt
+
+private val Accent = Color(0xFF7CE04A)
+
+/** Pixel art used behind the menu: the night skyline and the character sprite sheet. */
+private class MenuArt(val background: Bitmap, val character: Bitmap)
 
 /**
  * MainMenuScreen
  *
- * Atmospheric main menu with animated particle background,
- * inspired by Vampire Survivors' dark fantasy aesthetic.
+ * Night-city backdrop in pixel art with the main character standing in the
+ * street. If the images cannot be loaded the menu still works on a plain
+ * dark background.
  */
 @Composable
 fun MainMenuScreen(
@@ -34,18 +46,32 @@ fun MainMenuScreen(
     onOpenAchievements: () -> Unit,
     onOpenSettings  : () -> Unit
 ) {
-    val infiniteTransition = rememberInfiniteTransition(label = "menuBg")
-    val time by infiniteTransition.animateFloat(
-        initialValue  = 0f,
-        targetValue   = 2f * Math.PI.toFloat(),
-        animationSpec = infiniteRepeatable(tween(12000, easing = LinearEasing)),
-        label         = "time"
-    )
+    val context = LocalContext.current
+    val art by produceState<MenuArt?>(null, context) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                MenuArt(
+                    background = SpriteAtlas.bitmap(context.applicationContext, "menu_bg.png"),
+                    character  = SpriteAtlas.bitmap(context.applicationContext, "player.png")
+                )
+            } catch (e: Exception) {
+                null
+            }
+        }
+    }
+
+    // Walk-in-place animation of the character: advances a frame every 140 ms.
+    val step by produceState(0) {
+        while (true) {
+            delay(CHARACTER_FRAME_MS)
+            value = (value + 1) % WALK_FRAMES
+        }
+    }
 
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .drawBehind { drawMenuBackground(time) },
+            .drawBehind { drawMenuBackground(art, step) },
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -55,12 +81,11 @@ fun MainMenuScreen(
                 .verticalScroll(rememberScrollState())
                 .padding(horizontal = 24.dp, vertical = 12.dp)
         ) {
-            // ── Title ─────────────────────────────────────────────────────
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
                 text       = "KOTLIN",
-                color      = Color(0xFF4FC3F7),
+                color      = Accent,
                 fontSize   = 18.sp,
                 fontWeight = FontWeight.ExtraBold,
                 letterSpacing = 10.sp
@@ -68,33 +93,32 @@ fun MainMenuScreen(
             Text(
                 text       = "SURVIVORS",
                 color      = Color.White,
-                fontSize   = 52.sp,
+                fontSize   = 48.sp,
                 fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 4.sp,
-                lineHeight  = 54.sp
+                letterSpacing = 2.sp,
+                lineHeight  = 52.sp
             )
             Text(
                 text     = "Survive the endless night",
-                color    = Color(0xFF888888),
-                fontSize = 14.sp
+                color    = Color(0xFFA5B3A0),
+                fontSize = 13.sp
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(20.dp))
 
-            // ── Buttons ───────────────────────────────────────────────────
-            MenuButton("▶  START GAME",  Color(0xFF4FC3F7), onClick = onStartGame,    isPrimary = true)
-            Spacer(Modifier.height(12.dp))
+            MenuButton("▶  START GAME",  Accent,            onClick = onStartGame,    isPrimary = true)
+            Spacer(Modifier.height(10.dp))
             MenuButton("🛒  SHOP",        Color(0xFFFFD740), onClick = onOpenShop)
-            Spacer(Modifier.height(12.dp))
-            MenuButton("🏆  ACHIEVEMENTS",Color(0xFF66BB6A), onClick = onOpenAchievements)
-            Spacer(Modifier.height(12.dp))
-            MenuButton("⚙  SETTINGS",    Color(0xFFAAAAAA), onClick = onOpenSettings)
+            Spacer(Modifier.height(10.dp))
+            MenuButton("🏆  ACHIEVEMENTS", Color(0xFF80CBC4), onClick = onOpenAchievements)
+            Spacer(Modifier.height(10.dp))
+            MenuButton("⚙  SETTINGS",    Color(0xFFB0B8B0), onClick = onOpenSettings)
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(14.dp))
 
             Text(
                 "v1.0.0 · Open Source",
-                color    = Color(0xFF444444),
+                color    = Color(0xFF55605A),
                 fontSize = 11.sp
             )
         }
@@ -112,15 +136,15 @@ private fun MenuButton(
         onClick  = onClick,
         modifier = Modifier
             .width(260.dp)
-            .height(if (isPrimary) 58.dp else 50.dp),
+            .height(if (isPrimary) 56.dp else 48.dp),
         colors   = ButtonDefaults.buttonColors(
-            containerColor = if (isPrimary) color.copy(alpha = 0.2f) else Color.Transparent,
+            containerColor = if (isPrimary) color.copy(alpha = 0.22f) else Color(0xAA0A0A12),
             contentColor   = color
         ),
-        shape    = RoundedCornerShape(12.dp),
+        shape    = RoundedCornerShape(2.dp),
         border   = BorderStroke(
-            width = if (isPrimary) 2.dp else 1.dp,
-            color = color.copy(alpha = if (isPrimary) 0.7f else 0.35f)
+            width = if (isPrimary) 3.dp else 2.dp,
+            color = color.copy(alpha = if (isPrimary) 0.85f else 0.45f)
         )
     ) {
         Text(
@@ -132,48 +156,53 @@ private fun MenuButton(
     }
 }
 
-private fun DrawScope.drawMenuBackground(time: Float) {
-    // Dark background
-    drawRect(color = Color(0xFF080812), size = size)
+private fun DrawScope.drawMenuBackground(art: MenuArt?, step: Int) {
+    drawRect(color = Color(0xFF07070F), size = size)
 
-    // Animated grid
-    val gridColor = Color(0xFF0F0F1F)
-    val gridSize  = 80f
-    var x = 0f
-    while (x < size.width) {
-        drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), strokeWidth = 1f)
-        x += gridSize
-    }
-    var y = 0f
-    while (y < size.height) {
-        drawLine(gridColor, Offset(0f, y), Offset(size.width, y), strokeWidth = 1f)
-        y += gridSize
+    if (art != null) {
+        val bg = art.background
+        // Cover the screen, keeping the picture's proportions and the street in view.
+        val scale   = max(size.width / bg.width, size.height / bg.height)
+        val dstW    = (bg.width * scale).roundToInt()
+        val dstH    = (bg.height * scale).roundToInt()
+        val offsetX = ((size.width - dstW) / 2f).roundToInt()
+        val offsetY = (size.height - dstH)
+        drawImage(
+            image         = bg.asImageBitmap(),
+            srcSize       = IntSize(bg.width, bg.height),
+            dstOffset     = IntOffset(offsetX, offsetY),
+            dstSize       = IntSize(dstW, dstH),
+            filterQuality = FilterQuality.None
+        )
+
+        // The character stands on the street, to the right of the buttons.
+        val sheet  = art.character
+        val cellW  = sheet.width / SpriteAtlas.PLAYER_COLUMNS
+        val cellH  = sheet.height / SpriteAtlas.PLAYER_ROWS
+        val spriteH = size.height * 0.34f
+        val spriteW = spriteH * cellW / cellH
+        val column  = 1 + step                                  // walk frames 1..4 of the front row
+        val feetY   = offsetY + dstH * 0.93f
+        val bob     = if (step % 2 == 0) 0f else -spriteH * 0.015f
+        drawImage(
+            image         = sheet.asImageBitmap(),
+            srcOffset     = IntOffset(column * cellW, 0),
+            srcSize       = IntSize(cellW, cellH),
+            dstOffset     = IntOffset((size.width * 0.80f - spriteW / 2f).roundToInt(), (feetY - spriteH + bob).roundToInt()),
+            dstSize       = IntSize(spriteW.roundToInt(), spriteH.roundToInt()),
+            filterQuality = FilterQuality.None
+        )
     }
 
-    // Floating orbs
-    val orbCount = 20
-    for (i in 0 until orbCount) {
-        val t    = time + i * 0.314f
-        val rx   = size.width  * 0.5f + cos(t * 0.7f + i) * (size.width  * 0.45f)
-        val ry   = size.height * 0.5f + sin(t * 0.5f + i * 1.3f) * (size.height * 0.4f)
-        val rr   = 2f + sin(t + i * 0.5f).toFloat() * 1.5f
-        val alpha= (0.1f + 0.06f * sin(t + i).toFloat()).coerceIn(0f, 1f)
-        val hue  = (i * 37f) % 360f
-        val col  = when ((i % 3)) {
-            0 -> Color(0xFF4FC3F7).copy(alpha = alpha)
-            1 -> Color(0xFFCE93D8).copy(alpha = alpha)
-            else -> Color(0xFFFFD740).copy(alpha = alpha)
-        }
-        drawCircle(col, rr, Offset(rx, ry))
-    }
-
-    // Bottom gradient fade
     drawRect(
         brush = Brush.verticalGradient(
-            listOf(Color.Transparent, Color(0x88000000)),
-            startY = size.height * 0.5f,
+            listOf(Color(0x66000000), Color.Transparent, Color(0x99000000)),
+            startY = 0f,
             endY   = size.height
         ),
         size = size
     )
 }
+
+private const val CHARACTER_FRAME_MS = 140L
+private const val WALK_FRAMES = SpriteAtlas.PLAYER_COLUMNS - 1

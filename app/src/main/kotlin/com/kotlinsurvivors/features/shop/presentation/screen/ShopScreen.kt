@@ -118,14 +118,14 @@ private fun ShopUpgradeCard(
 
     val borderColor = when {
         upgrade.isMaxed -> Color(0xFFFFD740)
-        canAfford       -> Color(0xFF4FC3F7).copy(alpha = 0.6f)
+        canAfford       -> Color(0xFF7CE04A).copy(alpha = 0.6f)
         else            -> Color(0xFF333355)
     }
 
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors   = CardDefaults.cardColors(containerColor = Color(0xFF12121E)),
-        shape    = RoundedCornerShape(14.dp),
+        shape    = RoundedCornerShape(3.dp),
         border   = BorderStroke(1.5.dp, borderColor)
     ) {
         Column(
@@ -166,7 +166,7 @@ private fun ShopUpgradeCard(
             // Per-level effect
             Text(
                 upgrade.effectPerLevel,
-                color      = Color(0xFF4FC3F7),
+                color      = Color(0xFF7CE04A),
                 fontSize   = 11.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -185,7 +185,7 @@ private fun ShopUpgradeCard(
                         .fillMaxHeight()
                         .background(
                             Brush.horizontalGradient(
-                                listOf(Color(0xFF4FC3F7), Color(0xFFCE93D8))
+                                listOf(Color(0xFF7CE04A), Color(0xFFCE93D8))
                             )
                         )
                 )
@@ -203,7 +203,7 @@ private fun ShopUpgradeCard(
                         disabledContainerColor = Color(0xFF1A1A2E),
                         disabledContentColor   = Color(0xFF555555)
                     ),
-                    shape    = RoundedCornerShape(8.dp),
+                    shape    = RoundedCornerShape(3.dp),
                     border   = BorderStroke(1.dp, if (canAfford) Color(0xFFFFD740).copy(alpha = 0.4f) else Color(0xFF333333))
                 ) {
                     Text(
@@ -217,8 +217,8 @@ private fun ShopUpgradeCard(
                     modifier         = Modifier
                         .fillMaxWidth()
                         .height(36.dp)
-                        .background(Color(0xFFFFD740).copy(alpha = 0.08f), RoundedCornerShape(8.dp))
-                        .border(1.dp, Color(0xFFFFD740).copy(alpha = 0.3f), RoundedCornerShape(8.dp)),
+                        .background(Color(0xFFFFD740).copy(alpha = 0.08f), RoundedCornerShape(3.dp))
+                        .border(1.dp, Color(0xFFFFD740).copy(alpha = 0.3f), RoundedCornerShape(3.dp)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("✦ MAXED ✦", color = Color(0xFFFFD740), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)

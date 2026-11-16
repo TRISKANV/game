@@ -22,13 +22,16 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kotlinsurvivors.engine.rendering.GameRenderer
+import com.kotlinsurvivors.engine.rendering.SpriteAtlas
 import com.kotlinsurvivors.features.game.domain.model.Achievement
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.presentation.components.*
 import com.kotlinsurvivors.features.game.presentation.viewmodel.GameViewModel
 import com.kotlinsurvivors.features.settings.presentation.viewmodel.SettingsViewModel
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 /**
  * GameScreen
@@ -75,10 +78,18 @@ fun GameScreen(
         val textMeasurer = rememberTextMeasurer()
         val renderer     = remember(textMeasurer) { GameRenderer(textMeasurer) }
 
+        // Sprites are decoded once, off the main thread. Until they arrive the
+        // renderer draws plain shapes, so the game never waits on the assets.
+        var sprites by remember { mutableStateOf<SpriteAtlas?>(null) }
+        LaunchedEffect(context) {
+            sprites = withContext(Dispatchers.IO) { SpriteAtlas.load(context.applicationContext) }
+        }
+
         // Settings that act on the game. Plain assignments, safe to repeat every frame.
         SideEffect {
             renderer.showDamageNumbers = settings.showDamageNumbers
             renderer.showFps           = settings.showFps
+            renderer.atlas             = sprites
             viewModel.joystick?.setScale(settings.joystickSize)
         }
 

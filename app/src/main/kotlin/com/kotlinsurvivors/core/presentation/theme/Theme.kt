@@ -5,20 +5,20 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
 // ── Brand Colors ─────────────────────────────────────────────────────────────
-val BluePrimary     = Color(0xFF4FC3F7)
-val BluePrimaryDark = Color(0xFF0288D1)
+val GreenPrimary     = Color(0xFF7CE04A)   // toxic green, matches the main character
+val GreenPrimaryDark = Color(0xFF2E7D32)
 val PurpleAccent    = Color(0xFFCE93D8)
 val GoldAccent      = Color(0xFFFFD740)
 val GreenXP         = Color(0xFF66BB6A)
 val RedDanger       = Color(0xFFEF5350)
-val DarkBg          = Color(0xFF0A0A14)
-val DarkSurface     = Color(0xFF12121E)
-val DarkCard        = Color(0xFF1A1A2E)
+val DarkBg          = Color(0xFF08080F)
+val DarkSurface     = Color(0xFF11111B)
+val DarkCard        = Color(0xFF181826)
 
 private val DarkColorScheme = darkColorScheme(
-    primary          = BluePrimary,
+    primary          = GreenPrimary,
     onPrimary        = Color.Black,
-    primaryContainer = BluePrimaryDark,
+    primaryContainer = GreenPrimaryDark,
     secondary        = PurpleAccent,
     onSecondary      = Color.Black,
     tertiary         = GoldAccent,
@@ -29,7 +29,7 @@ private val DarkColorScheme = darkColorScheme(
     onSurface        = Color(0xFFE0E0E0),
     error            = RedDanger,
     onError          = Color.White,
-    outline          = Color(0xFF333355)
+    outline          = Color(0xFF2E3A2E)
 )
 
 @Composable

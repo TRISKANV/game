@@ -81,11 +81,11 @@ fun JoystickWidget(joystick: VirtualJoystick, modifier: Modifier = Modifier) {
 
             if (isActive) {
                 drawCircle(
-                    Color(0x884FC3F7), r * 0.45f,
+                    Color(0x887CE04A), r * 0.45f,
                     androidx.compose.ui.geometry.Offset(center.x + knobOffset.x, center.y + knobOffset.y)
                 )
             } else {
-                drawCircle(Color(0x444FC3F7), r * 0.45f, center)
+                drawCircle(Color(0x447CE04A), r * 0.45f, center)
             }
         }
     }
@@ -106,18 +106,18 @@ fun PauseMenuOverlay(
         Card(
             modifier = Modifier.width(300.dp),
             colors   = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E)),
-            shape    = RoundedCornerShape(20.dp),
-            border   = BorderStroke(1.dp, Color(0xFF4FC3F7).copy(alpha = 0.4f))
+            shape    = RoundedCornerShape(3.dp),
+            border   = BorderStroke(1.dp, Color(0xFF7CE04A).copy(alpha = 0.4f))
         ) {
             Column(
                 modifier            = Modifier.padding(32.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("PAUSED", color = Color(0xFF4FC3F7), fontSize = 28.sp,
+                Text("PAUSED", color = Color(0xFF7CE04A), fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold, letterSpacing = 4.sp)
-                HorizontalDivider(color = Color(0xFF4FC3F7).copy(alpha = 0.2f))
-                PauseButton("▶  Resume",    Color(0xFF4FC3F7), onResume)
+                HorizontalDivider(color = Color(0xFF7CE04A).copy(alpha = 0.2f))
+                PauseButton("▶  Resume",    Color(0xFF7CE04A), onResume)
                 PauseButton("↺  Restart",   Color(0xFFFFCA28), onRestart)
                 PauseButton("⌂  Main Menu", Color(0xFFEF5350), onMainMenu)
             }
@@ -134,7 +134,7 @@ private fun PauseButton(text: String, color: Color, onClick: () -> Unit) {
             containerColor = color.copy(alpha = 0.15f),
             contentColor   = color
         ),
-        shape  = RoundedCornerShape(10.dp),
+        shape  = RoundedCornerShape(3.dp),
         border = BorderStroke(1.dp, color.copy(alpha = 0.4f))
     ) {
         Text(text, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
@@ -232,12 +232,12 @@ private fun LevelUpCard(option: LevelUpOption, onClick: () -> Unit, modifier: Mo
         },
         modifier  = modifier.scale(scale),
         colors    = CardDefaults.cardColors(containerColor = Color(0xFF12121E)),
-        shape     = RoundedCornerShape(14.dp),
+        shape     = RoundedCornerShape(3.dp),
         border    = if (borderBrush == null) BorderStroke(2.dp, rColor.copy(alpha = 0.7f)) else null
     ) {
         Box(
             modifier = if (borderBrush != null)
-                Modifier.border(BorderStroke(2.dp, borderBrush), RoundedCornerShape(14.dp))
+                Modifier.border(BorderStroke(2.dp, borderBrush), RoundedCornerShape(3.dp))
             else Modifier
         ) {
             Column(
@@ -313,8 +313,8 @@ fun GameOverOverlay(
             // Stats card
             Card(
                 colors   = CardDefaults.cardColors(containerColor = Color(0xFF1A1A2E)),
-                shape    = RoundedCornerShape(16.dp),
-                border   = BorderStroke(1.dp, Color(0xFF4FC3F7).copy(alpha = 0.3f)),
+                shape    = RoundedCornerShape(3.dp),
+                border   = BorderStroke(1.dp, Color(0xFF7CE04A).copy(alpha = 0.3f)),
                 modifier = Modifier.width(320.dp)
             ) {
                 Column(
@@ -324,12 +324,12 @@ fun GameOverOverlay(
                     // Header
                     Text(
                         "RUN SUMMARY",
-                        color         = Color(0xFF4FC3F7),
+                        color         = Color(0xFF7CE04A),
                         fontSize      = 11.sp,
                         fontWeight    = FontWeight.ExtraBold,
                         letterSpacing = 2.sp
                     )
-                    HorizontalDivider(color = Color(0xFF4FC3F7).copy(alpha = 0.2f))
+                    HorizontalDivider(color = Color(0xFF7CE04A).copy(alpha = 0.2f))
 
                     StatRow("⏱  Survived",       gameState.formattedTime)
                     StatRow("☠  Kills",           gameState.killCount.toString())
@@ -360,8 +360,8 @@ fun GameOverOverlay(
             Button(
                 onClick  = onRestart,
                 modifier = Modifier.fillMaxWidth(0.6f),
-                colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFF4FC3F7)),
-                shape    = RoundedCornerShape(12.dp)
+                colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFF7CE04A)),
+                shape    = RoundedCornerShape(3.dp)
             ) {
                 Text("Play Again", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
             }
@@ -370,7 +370,7 @@ fun GameOverOverlay(
                 onClick  = onMainMenu,
                 modifier = Modifier.fillMaxWidth(0.6f),
                 border   = BorderStroke(1.dp, Color(0xFFAAAAAA)),
-                shape    = RoundedCornerShape(12.dp)
+                shape    = RoundedCornerShape(3.dp)
             ) {
                 Text("Main Menu", color = Color(0xFFAAAAAA), fontSize = 15.sp)
             }
@@ -381,7 +381,7 @@ fun GameOverOverlay(
 private fun runRating(state: GameState): Pair<String, Color> = when {
     state.elapsedTime >= 600f || state.killCount >= 500 -> Pair("S  LEGENDARY", Color(0xFFFFD740))
     state.elapsedTime >= 300f || state.killCount >= 200 -> Pair("A  EXCELLENT",  Color(0xFFCE93D8))
-    state.elapsedTime >= 120f || state.killCount >= 100 -> Pair("B  GREAT",      Color(0xFF4FC3F7))
+    state.elapsedTime >= 120f || state.killCount >= 100 -> Pair("B  GREAT",      Color(0xFF7CE04A))
     state.elapsedTime >= 60f  || state.killCount >= 50  -> Pair("C  GOOD",       Color(0xFF66BB6A))
     else                                                 -> Pair("D  KEEP GOING", Color(0xFFAAAAAA))
 }

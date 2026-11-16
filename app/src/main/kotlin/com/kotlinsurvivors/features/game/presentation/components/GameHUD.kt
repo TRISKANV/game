@@ -95,7 +95,7 @@ fun GameHUD(
                 fontSize  = 22.sp,
                 fontWeight= FontWeight.Bold,
                 modifier  = Modifier
-                    .background(Color(0xCC0A0A14), RoundedCornerShape(8.dp))
+                    .background(Color(0xCC0A0A14), RoundedCornerShape(3.dp))
                     .padding(horizontal = 16.dp, vertical = 4.dp)
             )
 
@@ -120,7 +120,7 @@ fun GameHUD(
                 onClick  = onPause,
                 modifier = Modifier
                     .size(40.dp)
-                    .background(Color(0xCC1A1A2E), RoundedCornerShape(8.dp))
+                    .background(Color(0xCC1A1A2E), RoundedCornerShape(3.dp))
             ) {
                 Icon(
                     imageVector = Icons.Filled.Pause,
@@ -139,8 +139,8 @@ fun GameHUD(
 fun AchievementBanner(achievement: Achievement, modifier: Modifier = Modifier) {
     Row(
         modifier = modifier
-            .background(Color(0xE61A1A2E), RoundedCornerShape(10.dp))
-            .border(1.dp, Color(0xFFFFD740), RoundedCornerShape(10.dp))
+            .background(Color(0xE61A1A2E), RoundedCornerShape(3.dp))
+            .border(1.dp, Color(0xFFFFD740), RoundedCornerShape(3.dp))
             .padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -191,7 +191,7 @@ private fun HUDBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(12.dp)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(3.dp))
                 .background(bgColor)
         ) {
             Box(
@@ -214,7 +214,7 @@ private fun HUDChip(label: String, color: Color) {
         fontSize = 13.sp,
         fontWeight = FontWeight.SemiBold,
         modifier = Modifier
-            .background(Color(0xCC0A0A14), RoundedCornerShape(6.dp))
+            .background(Color(0xCC0A0A14), RoundedCornerShape(3.dp))
             .padding(horizontal = 10.dp, vertical = 3.dp)
     )
 }

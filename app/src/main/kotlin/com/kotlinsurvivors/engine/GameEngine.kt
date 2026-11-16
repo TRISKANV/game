@@ -17,6 +17,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import com.kotlinsurvivors.engine.rendering.RenderBuffer
 import com.kotlinsurvivors.engine.rendering.RenderKind
 import com.kotlinsurvivors.engine.rendering.RenderSnapshot
+import com.kotlinsurvivors.engine.ecs.components.VelocityComponent
+import com.kotlinsurvivors.engine.rendering.Facing
+import kotlin.math.abs
+import kotlin.math.atan2
 import kotlin.math.roundToInt
 
 class GameEngine(
@@ -32,6 +36,7 @@ class GameEngine(
         const val WORLD_WIDTH    = 4096f
         const val WORLD_HEIGHT   = 4096f
         private const val RENDER_BUFFER_COUNT = 3
+        private const val FACING_MIN_SPEED_SQ  = 25f   // below 5 px/s the player counts as standing still
 
         // Logging
         private const val TAG       = "KS_Engine"
@@ -225,6 +230,8 @@ class GameEngine(
         cachedLevelUpOptions = emptyList()
         hitCount             = 0
         lastHitTime          = 0f
+        playerFacing         = Facing.DOWN
+        playerMoving         = false
         tickedSinceEmit      = false
         hasEmitted           = false
         frameEvents.clear()
@@ -413,6 +420,23 @@ class GameEngine(
     private var renderBufferIndex = 0
     private var renderBuffer      = renderBuffers[0]
 
+    // Direction the character sprite faces. Kept between frames so the player
+    // keeps looking the way they last walked when they stop.
+    private var playerFacing = Facing.DOWN
+    private var playerMoving = false
+
+    private fun updatePlayerFacing(v: VelocityComponent?) {
+        val vx = v?.vx ?: 0f
+        val vy = v?.vy ?: 0f
+        playerMoving = vx * vx + vy * vy > FACING_MIN_SPEED_SQ
+        if (!playerMoving) return
+        playerFacing = if (abs(vx) > abs(vy)) {
+            if (vx < 0f) Facing.LEFT else Facing.RIGHT
+        } else {
+            if (vy < 0f) Facing.UP else Facing.DOWN
+        }
+    }
+
     private fun buildRenderSnapshot(playerId: Int, playerX: Float, playerY: Float) {
         renderBuffer.reset()
         renderBuffer.cameraTargetX = playerX
@@ -434,7 +458,8 @@ class GameEngine(
                 eShape = r.shape, eColor = r.color, eSecColor = r.secondaryColor,
                 eWidth = r.width, eHeight = r.height,
                 eGlowRadius = r.glowRadius, eGlowColor = r.glowColor,
-                eFlashTimer = r.flashTimer, eHpPercent = h.percentage, eFlags = f
+                eFlashTimer = r.flashTimer, eHpPercent = h.percentage, eFlags = f,
+                eSpriteId = world.enemies[eid]?.type?.ordinal ?: -1
             )
         }
 
@@ -443,11 +468,14 @@ class GameEngine(
             val r    = world.renders[pid]     ?: continue
             val proj = world.projectiles[pid] ?: continue
             val f    = if (proj.isCritical) RenderBuffer.FLAG_IS_CRITICAL else 0
+            val v    = world.velocities[pid]
+            val angle = if (v != null && (v.vx != 0f || v.vy != 0f)) atan2(v.vy, v.vx) else 0f
             renderBuffer.write(
                 kindOrdinal = RenderKind.PROJECTILE,
-                ex = t.x, ey = t.y,
+                ex = t.x, ey = t.y, eRotation = angle,
                 eColor = r.color, eWidth = r.width, eHeight = r.height,
-                eGlowRadius = r.glowRadius, eGlowColor = r.glowColor, eFlags = f
+                eGlowRadius = r.glowRadius, eGlowColor = r.glowColor, eFlags = f,
+                eSpriteId = proj.weaponType.ordinal
             )
         }
 
@@ -458,7 +486,8 @@ class GameEngine(
                 kindOrdinal = RenderKind.PICKUP,
                 ex = t.x, ey = t.y,
                 eColor = r.color, eWidth = r.width, eHeight = r.height,
-                eGlowRadius = r.glowRadius, eGlowColor = r.glowColor
+                eGlowRadius = r.glowRadius, eGlowColor = r.glowColor,
+                eSpriteId = world.pickups[pkId]?.type?.ordinal ?: -1
             )
         }
 
@@ -472,6 +501,8 @@ class GameEngine(
                 var f = 0
                 if (r.flashTimer > 0f)                   f = f or RenderBuffer.FLAG_FLASHING
                 if (auras != null && auras.isNotEmpty()) f = f or RenderBuffer.FLAG_HAS_AURA
+                updatePlayerFacing(world.velocities[playerId])
+                if (playerMoving) f = f or RenderBuffer.FLAG_MOVING
                 renderBuffer.write(
                     kindOrdinal  = RenderKind.PLAYER,
                     ex = t.x, ey = t.y,
@@ -480,7 +511,8 @@ class GameEngine(
                     eGlowRadius = r.glowRadius, eGlowColor = r.glowColor,
                     eFlashTimer = r.flashTimer, eFlags = f,
                     eInvincTimer = h.invincibleTimer,
-                    eAuraRadius  = auras?.firstOrNull()?.radius ?: 0f
+                    eAuraRadius  = auras?.firstOrNull()?.radius ?: 0f,
+                    eSpriteId    = playerFacing
                 )
                 orbitals?.forEach { orb ->
                     renderBuffer.write(
