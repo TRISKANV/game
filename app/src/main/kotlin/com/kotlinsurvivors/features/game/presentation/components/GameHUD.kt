@@ -13,7 +13,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.Image
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -50,6 +54,9 @@ fun GameHUD(
     elapsedSeconds : Int,
     onPause        : () -> Unit
 ) {
+    val pauseIcon = rememberUiImage("ui_icon_pause.png")
+    val coinIcon  = rememberUiImage("ui_icon_money.png")
+
     Box(modifier = Modifier.fillMaxSize()) {
 
         // ── Left side: HP + XP ────────────────────────────────────────────
@@ -122,14 +129,23 @@ fun GameHUD(
                     .size(40.dp)
                     .background(Color(0xCC1A1A2E), RoundedCornerShape(3.dp))
             ) {
-                Icon(
-                    imageVector = Icons.Filled.Pause,
-                    contentDescription = "Pause",
-                    tint = Color(0xFFE0E0E0)
-                )
+                if (pauseIcon != null) {
+                    Image(
+                        bitmap             = pauseIcon,
+                        contentDescription = "Pause",
+                        modifier           = Modifier.size(20.dp),
+                        colorFilter        = ColorFilter.tint(Color(0xFFE0E0E0), BlendMode.Modulate)
+                    )
+                } else {
+                    Icon(
+                        imageVector = Icons.Filled.Pause,
+                        contentDescription = "Pause",
+                        tint = Color(0xFFE0E0E0)
+                    )
+                }
             }
 
-            HUDChip(label = remember(coins) { "💰 $coins" }, color = Color(0xFFFFD740))
+            HUDChip(label = remember(coins) { "$coins" }, color = Color(0xFFFFD740), icon = coinIcon)
         }
     }
 }
@@ -207,14 +223,27 @@ private fun HUDBar(
 }
 
 @Composable
-private fun HUDChip(label: String, color: Color) {
-    Text(
-        text     = label,
-        color    = color,
-        fontSize = 13.sp,
-        fontWeight = FontWeight.SemiBold,
+private fun HUDChip(label: String, color: Color, icon: ImageBitmap? = null) {
+    Row(
         modifier = Modifier
-            .background(Color(0xCC0A0A14), RoundedCornerShape(3.dp))
-            .padding(horizontal = 10.dp, vertical = 3.dp)
-    )
+            .background(Color(0xCC0A0A14), RoundedCornerShape(6.dp))
+            .padding(horizontal = 10.dp, vertical = 3.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        if (icon != null) {
+            Image(
+                bitmap             = icon,
+                contentDescription = null,
+                modifier           = Modifier.size(14.dp),
+                colorFilter        = ColorFilter.tint(color, BlendMode.Modulate)
+            )
+        }
+        Text(
+            text       = label,
+            color      = color,
+            fontSize   = 13.sp,
+            fontWeight = FontWeight.SemiBold
+        )
+    }
 }

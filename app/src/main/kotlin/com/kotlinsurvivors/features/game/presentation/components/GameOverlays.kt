@@ -15,7 +15,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -63,6 +68,8 @@ fun JoystickWidget(joystick: VirtualJoystick, modifier: Modifier = Modifier) {
     val baseRadius = joystick.maxRadius.dp
     val isActive   = joystick.isActive
     val knobOffset = joystick.getKnobOffset()
+    val padImage   = rememberUiImage("ui_joystick_pad.png")
+    val nubImage   = rememberUiImage("ui_joystick_nub.png")
 
     Box(modifier = modifier) {
         androidx.compose.foundation.Canvas(
@@ -72,24 +79,45 @@ fun JoystickWidget(joystick: VirtualJoystick, modifier: Modifier = Modifier) {
         ) {
             val center = androidx.compose.ui.geometry.Offset(size.width / 2f, size.height / 2f)
             val r      = size.minDimension / 2f
+            val nubCenter = if (isActive)
+                androidx.compose.ui.geometry.Offset(center.x + knobOffset.x, center.y + knobOffset.y)
+            else center
 
+            if (padImage != null && nubImage != null) {
+                // The images are white; multiplying by green tints them to match the theme.
+                val tint = ColorFilter.tint(Color(0xFF7CE04A), BlendMode.Modulate)
+                drawImage(
+                    image         = padImage,
+                    dstSize       = IntSize(size.width.toInt(), size.height.toInt()),
+                    alpha         = if (isActive) 0.55f else 0.35f,
+                    colorFilter   = tint,
+                    filterQuality = FilterQuality.Medium
+                )
+                val nubSize = (r * NUB_DIAMETER_FACTOR).toInt()
+                drawImage(
+                    image         = nubImage,
+                    dstOffset     = IntOffset((nubCenter.x - nubSize / 2f).toInt(), (nubCenter.y - nubSize / 2f).toInt()),
+                    dstSize       = IntSize(nubSize, nubSize),
+                    alpha         = if (isActive) 0.95f else 0.6f,
+                    colorFilter   = tint,
+                    filterQuality = FilterQuality.Medium
+                )
+                return@Canvas
+            }
+
+            // Fallback while the images load, or if they are missing.
             drawCircle(Color(0x22FFFFFF), r, center)
             drawCircle(
                 Color(0x44FFFFFF), r, center,
                 style = androidx.compose.ui.graphics.drawscope.Stroke(width = 2f)
             )
-
-            if (isActive) {
-                drawCircle(
-                    Color(0x887CE04A), r * 0.45f,
-                    androidx.compose.ui.geometry.Offset(center.x + knobOffset.x, center.y + knobOffset.y)
-                )
-            } else {
-                drawCircle(Color(0x447CE04A), r * 0.45f, center)
-            }
+            drawCircle(Color(if (isActive) 0x887CE04A else 0x447CE04A), r * 0.45f, nubCenter)
         }
     }
 }
+
+/** Diameter of the joystick knob relative to the radius of its base. */
+private const val NUB_DIAMETER_FACTOR = 0.95f
 
 // ── Pause Menu ───────────────────────────────────────────────────────────────
 

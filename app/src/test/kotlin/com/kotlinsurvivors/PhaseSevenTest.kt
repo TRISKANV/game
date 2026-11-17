@@ -71,6 +71,16 @@ class SpriteAssetsTest {
     }
 
     @Test
+    fun interfaceImagesExistAndAreSquare() {
+        val files = listOf("ui_joystick_pad.png", "ui_joystick_nub.png", "ui_icon_pause.png", "ui_icon_money.png")
+        for (name in files) {
+            val img = image(name)
+            assertEquals("$name should be square", img.width, img.height)
+        }
+        assertTrue("Kenney credit file is missing", File(dir, "CREDITS.txt").isFile)
+    }
+
+    @Test
     fun menuBackgroundAndGroundTileAreOpaque() {
         for (name in listOf("menu_bg.png", "ground.png")) {
             val img = image(name)
