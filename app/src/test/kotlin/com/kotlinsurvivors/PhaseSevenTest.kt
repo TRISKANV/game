@@ -30,11 +30,11 @@ class SpriteAssetsTest {
     }
 
     @Test
-    fun playerSheetHasFiveColumnsAndFourRows() {
+    fun playerSheetHasFiveColumnsAndOneRowPerFacing() {
         val sheet = image("player.png")
         assertEquals(0, sheet.width % SpriteAtlas.PLAYER_COLUMNS)
         assertEquals(0, sheet.height % SpriteAtlas.PLAYER_ROWS)
-        assertTrue(Facing.RIGHT == SpriteAtlas.PLAYER_ROWS - 1)
+        assertEquals("one sheet row per Facing value", SpriteAtlas.PLAYER_ROWS - 1, Facing.DOWN_RIGHT)
     }
 
     @Test
@@ -110,19 +110,25 @@ class RenderBufferSpriteTest {
     }
 
     @Test
-    fun diagonalMovementUsesTheSideView() {
-        assertEquals(Facing.RIGHT, Facing.of(1f, 1f))
-        assertEquals(Facing.LEFT,  Facing.of(-1f, -1f))
-        assertEquals(Facing.LEFT,  Facing.of(-1f, 1.5f))
-        assertEquals(Facing.RIGHT, Facing.of(1f, -1.9f))
+    fun downwardDiagonalsHaveTheirOwnSprites() {
+        assertEquals(Facing.DOWN_RIGHT, Facing.of(1f, 1f))
+        assertEquals(Facing.DOWN_LEFT,  Facing.of(-1f, 1f))
+        assertEquals(Facing.DOWN_LEFT,  Facing.of(-1f, 1.9f))
+        assertEquals(Facing.DOWN_RIGHT, Facing.of(1.9f, 1f))
     }
 
     @Test
-    fun mostlyVerticalMovementUsesFrontAndBack() {
-        assertEquals(Facing.DOWN, Facing.of(0.3f, 1f))
-        assertEquals(Facing.UP,   Facing.of(-0.4f, -1f))
-        assertEquals(Facing.DOWN, Facing.of(0f, 1f))
+    fun upwardDiagonalsFallBackToTheSideView() {
+        assertEquals(Facing.RIGHT, Facing.of(1f, -1f))
+        assertEquals(Facing.LEFT,  Facing.of(-1f, -1.5f))
+    }
+
+    @Test
+    fun mostlyStraightMovementUsesFourMainViews() {
+        assertEquals(Facing.DOWN,  Facing.of(0.3f, 1f))
+        assertEquals(Facing.UP,    Facing.of(-0.4f, -1f))
+        assertEquals(Facing.DOWN,  Facing.of(0f, 1f))
         assertEquals(Facing.RIGHT, Facing.of(1f, 0f))
-        assertEquals(Facing.LEFT,  Facing.of(-1f, 0f))
+        assertEquals(Facing.LEFT,  Facing.of(-1f, 0.4f))
     }
 }

@@ -174,21 +174,25 @@ object Facing {
     const val UP    = 1
     const val LEFT  = 2
     const val RIGHT = 3
+    const val DOWN_LEFT  = 4
+    const val DOWN_RIGHT = 5
 
-    /** Movement must be this many times more vertical than horizontal to face up or down. */
-    private const val VERTICAL_DOMINANCE = 2f
+    /** Movement is vertical (or horizontal) when it is this many times larger on that axis. */
+    private const val AXIS_DOMINANCE = 2f
 
     /**
-     * Direction for a movement of ([vx], [vy]). There are no diagonal sprites, so
-     * diagonals use the side view; front and back are kept for mostly vertical movement.
+     * Direction for a movement of ([vx], [vy]). Down-left and down-right have their
+     * own sprites; for diagonals going up there is no back-facing diagonal art, so
+     * those use the side view.
      */
     fun of(vx: Float, vy: Float): Int {
         val ax = if (vx < 0f) -vx else vx
         val ay = if (vy < 0f) -vy else vy
-        return if (ay > ax * VERTICAL_DOMINANCE) {
-            if (vy < 0f) UP else DOWN
-        } else {
-            if (vx < 0f) LEFT else RIGHT
+        return when {
+            ay > ax * AXIS_DOMINANCE -> if (vy < 0f) UP else DOWN
+            ax > ay * AXIS_DOMINANCE -> if (vx < 0f) LEFT else RIGHT
+            vy > 0f                  -> if (vx < 0f) DOWN_LEFT else DOWN_RIGHT
+            else                     -> if (vx < 0f) LEFT else RIGHT
         }
     }
 }

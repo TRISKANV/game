@@ -10,7 +10,7 @@ import com.kotlinsurvivors.engine.ecs.components.EnemyType
  * All the pixel-art images the game draws, decoded once.
  *
  * The files live in assets/sprites/ and are cut into cells by size:
- *  - player.png      5 columns (idle + 4 walk frames) x 4 rows (see [Facing])
+ *  - player.png      5 columns (idle + 4 walk frames) x 6 rows (see [Facing])
  *  - enemy_*.png     2 animation frames side by side, one file per [EnemyType]
  *  - pickups.png     12x12 cells in PickupType order
  *  - projectiles.png 12x12 cells in WeaponType order (the last one is the Bible)
@@ -41,7 +41,7 @@ class SpriteAtlas private constructor(
         private const val DIR = "sprites/"
 
         const val PLAYER_COLUMNS = 5
-        const val PLAYER_ROWS    = 4
+        const val PLAYER_ROWS    = 6
         const val ENEMY_FRAMES   = 2
         const val ITEM_CELL      = 12
         const val DECAL_CELL     = 28
