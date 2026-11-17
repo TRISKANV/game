@@ -108,4 +108,21 @@ class RenderBufferSpriteTest {
             seen = seen or flag
         }
     }
+
+    @Test
+    fun diagonalMovementUsesTheSideView() {
+        assertEquals(Facing.RIGHT, Facing.of(1f, 1f))
+        assertEquals(Facing.LEFT,  Facing.of(-1f, -1f))
+        assertEquals(Facing.LEFT,  Facing.of(-1f, 1.5f))
+        assertEquals(Facing.RIGHT, Facing.of(1f, -1.9f))
+    }
+
+    @Test
+    fun mostlyVerticalMovementUsesFrontAndBack() {
+        assertEquals(Facing.DOWN, Facing.of(0.3f, 1f))
+        assertEquals(Facing.UP,   Facing.of(-0.4f, -1f))
+        assertEquals(Facing.DOWN, Facing.of(0f, 1f))
+        assertEquals(Facing.RIGHT, Facing.of(1f, 0f))
+        assertEquals(Facing.LEFT,  Facing.of(-1f, 0f))
+    }
 }

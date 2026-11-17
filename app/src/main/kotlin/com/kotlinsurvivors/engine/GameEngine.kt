@@ -430,11 +430,7 @@ class GameEngine(
         val vy = v?.vy ?: 0f
         playerMoving = vx * vx + vy * vy > FACING_MIN_SPEED_SQ
         if (!playerMoving) return
-        playerFacing = if (abs(vx) > abs(vy)) {
-            if (vx < 0f) Facing.LEFT else Facing.RIGHT
-        } else {
-            if (vy < 0f) Facing.UP else Facing.DOWN
-        }
+        playerFacing = Facing.of(vx, vy)
     }
 
     private fun buildRenderSnapshot(playerId: Int, playerX: Float, playerY: Float) {

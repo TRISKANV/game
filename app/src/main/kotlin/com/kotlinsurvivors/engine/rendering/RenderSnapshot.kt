@@ -174,6 +174,23 @@ object Facing {
     const val UP    = 1
     const val LEFT  = 2
     const val RIGHT = 3
+
+    /** Movement must be this many times more vertical than horizontal to face up or down. */
+    private const val VERTICAL_DOMINANCE = 2f
+
+    /**
+     * Direction for a movement of ([vx], [vy]). There are no diagonal sprites, so
+     * diagonals use the side view; front and back are kept for mostly vertical movement.
+     */
+    fun of(vx: Float, vy: Float): Int {
+        val ax = if (vx < 0f) -vx else vx
+        val ay = if (vy < 0f) -vy else vy
+        return if (ay > ax * VERTICAL_DOMINANCE) {
+            if (vy < 0f) UP else DOWN
+        } else {
+            if (vx < 0f) LEFT else RIGHT
+        }
+    }
 }
 
 /** Thin wrapper that carries the buffer inside GameState. */
