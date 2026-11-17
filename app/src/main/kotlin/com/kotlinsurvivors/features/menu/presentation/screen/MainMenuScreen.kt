@@ -166,7 +166,7 @@ private fun DrawScope.drawMenuBackground(art: MenuArt?, step: Int) {
         val dstW    = (bg.width * scale).roundToInt()
         val dstH    = (bg.height * scale).roundToInt()
         val offsetX = ((size.width - dstW) / 2f).roundToInt()
-        val offsetY = (size.height - dstH)
+        val offsetY = (size.height - dstH).roundToInt()
         drawImage(
             image         = bg.asImageBitmap(),
             srcSize       = IntSize(bg.width, bg.height),
