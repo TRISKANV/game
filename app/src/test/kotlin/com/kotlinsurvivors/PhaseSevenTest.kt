@@ -81,6 +81,17 @@ class SpriteAssetsTest {
     }
 
     @Test
+    fun menuButtonsHaveNormalAndPressedImagesOfTheSameSize() {
+        for (name in listOf("start", "shop", "achievements", "settings")) {
+            val normal  = image("ui_btn_$name.png")
+            val pressed = image("ui_btn_${name}_down.png")
+            assertEquals("$name width", normal.width, pressed.width)
+            assertEquals("$name height", normal.height, pressed.height)
+        }
+        assertTrue("menu title is missing", image("ui_title.png").width > 0)
+    }
+
+    @Test
     fun roomImageMatchesTheLayoutSize() {
         val room = image("room.png")
         assertEquals(com.kotlinsurvivors.features.room.domain.RoomLayout.WIDTH.toInt(), room.width)
