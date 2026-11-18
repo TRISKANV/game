@@ -2,8 +2,6 @@ package com.kotlinsurvivors.features.menu.presentation.screen
 
 import android.graphics.Bitmap
 import androidx.compose.foundation.*
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -14,25 +12,21 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
-import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.DrawScope
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.rendering.SpriteAtlas
+import com.kotlinsurvivors.features.game.presentation.components.PixelButton
+import com.kotlinsurvivors.features.game.presentation.components.PixelImage
 import com.kotlinsurvivors.features.game.presentation.components.rememberUiImage
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
-import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.roundToInt
 
@@ -139,10 +133,6 @@ fun MainMenuScreen(
     }
 }
 
-/**
- * A menu button drawn from pixel art (ui_btn_<art>.png, with a _down variant for the
- * pressed state). If the images are missing it falls back to a plain Material button.
- */
 @Composable
 private fun MenuButton(
     text      : String,
@@ -151,73 +141,35 @@ private fun MenuButton(
     onClick   : () -> Unit,
     isPrimary : Boolean = false
 ) {
-    val normal = rememberUiImage("ui_btn_$art.png")
-    val down   = rememberUiImage("ui_btn_${art}_down.png")
-    val source = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val image = if (pressed) (down ?: normal) else normal
-
-    if (image != null) {
-        PixelImage(
-            image       = image,
-            description = text.filter { it.isLetter() || it == ' ' }.trim(),
-            targetWidth = 216.dp,
-            modifier    = Modifier.clickable(
-                interactionSource = source,
-                indication        = null,
-                role              = Role.Button,
-                onClick           = onClick
-            )
-        )
-        return
-    }
-
-    Button(
-        onClick  = onClick,
-        modifier = Modifier
-            .width(260.dp)
-            .height(if (isPrimary) 56.dp else 48.dp),
-        colors   = ButtonDefaults.buttonColors(
-            containerColor = if (isPrimary) color.copy(alpha = 0.22f) else Color(0xAA0A0A12),
-            contentColor   = color
-        ),
-        shape    = RoundedCornerShape(2.dp),
-        border   = BorderStroke(
-            width = if (isPrimary) 3.dp else 2.dp,
-            color = color.copy(alpha = if (isPrimary) 0.85f else 0.45f)
-        )
-    ) {
-        Text(
-            text       = text,
-            fontSize   = if (isPrimary) 16.sp else 14.sp,
-            fontWeight = if (isPrimary) FontWeight.ExtraBold else FontWeight.SemiBold,
-            letterSpacing = if (isPrimary) 2.sp else 0.sp
-        )
-    }
-}
-
-/**
- * Draws pixel art close to [targetWidth], rounded down to a whole number of screen
- * pixels per image pixel so every pixel keeps the same size and the edges stay sharp.
- */
-@Composable
-private fun PixelImage(
-    image       : ImageBitmap,
-    description : String,
-    targetWidth : Dp,
-    modifier    : Modifier = Modifier
-) {
-    val density = LocalDensity.current.density
-    val scale   = floor(targetWidth.value * density / image.width).coerceAtLeast(1f)
-    Image(
-        bitmap             = image,
-        contentDescription = description,
-        contentScale       = ContentScale.FillBounds,
-        filterQuality      = FilterQuality.None,
-        modifier           = modifier.size(
-            width  = (image.width * scale / density).dp,
-            height = (image.height * scale / density).dp
-        )
+    PixelButton(
+        art         = art,
+        description = text.filter { it.isLetter() || it == ' ' }.trim(),
+        targetWidth = 216.dp,
+        onClick     = onClick,
+        fallback    = {
+            Button(
+                onClick  = onClick,
+                modifier = Modifier
+                    .width(260.dp)
+                    .height(if (isPrimary) 56.dp else 48.dp),
+                colors   = ButtonDefaults.buttonColors(
+                    containerColor = if (isPrimary) color.copy(alpha = 0.22f) else Color(0xAA0A0A12),
+                    contentColor   = color
+                ),
+                shape    = RoundedCornerShape(2.dp),
+                border   = BorderStroke(
+                    width = if (isPrimary) 3.dp else 2.dp,
+                    color = color.copy(alpha = if (isPrimary) 0.85f else 0.45f)
+                )
+            ) {
+                Text(
+                    text       = text,
+                    fontSize   = if (isPrimary) 16.sp else 14.sp,
+                    fontWeight = if (isPrimary) FontWeight.ExtraBold else FontWeight.SemiBold,
+                    letterSpacing = if (isPrimary) 2.sp else 0.sp
+                )
+            }
+        }
     )
 }
 

@@ -121,8 +121,55 @@ private const val NUB_DIAMETER_FACTOR = 0.95f
 
 // ── Pause Menu ───────────────────────────────────────────────────────────────
 
+/**
+ * Pause menu drawn from pixel art (panel, title and three buttons). The layout is
+ * measured in image pixels ([unit] dp each) to match ui_panel_pause.png; if the images
+ * are not there it shows the plain Material version.
+ */
 @Composable
 fun PauseMenuOverlay(
+    onResume   : () -> Unit,
+    onRestart  : () -> Unit,
+    onMainMenu : () -> Unit
+) {
+    val panel = rememberUiImage("ui_panel_pause.png")
+    val title = rememberUiImage("ui_title_paused.png")
+    if (panel == null || title == null) {
+        PlainPauseMenu(onResume, onRestart, onMainMenu)
+        return
+    }
+
+    val unit = pixelUnit(240.dp, panel.width)
+    Box(
+        modifier         = Modifier.fillMaxSize().background(Color(0xBB000000)),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(contentAlignment = Alignment.TopCenter) {
+            PixelImage(panel, null, targetWidth = unit * panel.width)
+            Column(
+                modifier            = Modifier.padding(top = unit * PAUSE_TITLE_TOP),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                PixelImage(title, "Paused", targetWidth = unit * title.width)
+                Spacer(Modifier.height(unit * PAUSE_TITLE_GAP))
+                PixelButton("resume",   "Resume",    unit * PAUSE_BUTTON_WIDTH, onResume)   { PauseButton("▶  Resume",    Color(0xFF7CE04A), onResume) }
+                Spacer(Modifier.height(unit * PAUSE_BUTTON_GAP))
+                PixelButton("restart",  "Restart",   unit * PAUSE_BUTTON_WIDTH, onRestart)  { PauseButton("↺  Restart",   Color(0xFFFFCA28), onRestart) }
+                Spacer(Modifier.height(unit * PAUSE_BUTTON_GAP))
+                PixelButton("mainmenu", "Main menu", unit * PAUSE_BUTTON_WIDTH, onMainMenu) { PauseButton("⌂  Main Menu", Color(0xFFEF5350), onMainMenu) }
+            }
+        }
+    }
+}
+
+// Positions inside ui_panel_pause.png, in image pixels (see gen_menu_ui.py).
+private const val PAUSE_TITLE_TOP    = 7
+private const val PAUSE_TITLE_GAP    = 11
+private const val PAUSE_BUTTON_WIDTH = 96
+private const val PAUSE_BUTTON_GAP   = 3
+
+@Composable
+private fun PlainPauseMenu(
     onResume   : () -> Unit,
     onRestart  : () -> Unit,
     onMainMenu : () -> Unit

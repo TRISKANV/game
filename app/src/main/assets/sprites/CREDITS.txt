@@ -1,3 +1,4 @@
 ui_joystick_pad.png, ui_joystick_nub.png, ui_icon_pause.png and ui_icon_money.png come from
 "Mobile Controls" by Kenney (www.kenney.nl), CC0 1.0.
-ui_btn_*.png and ui_title.png (main menu) and all other images were drawn for this game.
+The other ui_*.png files (menu and pause buttons, titles, panel, HUD bars) and all other images
+were drawn for this game.

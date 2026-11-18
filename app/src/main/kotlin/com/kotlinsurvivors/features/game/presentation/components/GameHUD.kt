@@ -1,6 +1,7 @@
 package com.kotlinsurvivors.features.game.presentation.components
 
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
@@ -15,15 +16,22 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.features.game.domain.model.Achievement
 import com.kotlinsurvivors.features.game.domain.model.formatClock
+import kotlin.math.roundToInt
 
 /**
  * GameHUD
@@ -68,7 +76,8 @@ fun GameHUD(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             // HP Bar
-            HUDBar(
+            StatBar(
+                art       = "hp",
                 label     = "HP",
                 current   = hp,
                 max       = maxHp,
@@ -78,7 +87,8 @@ fun GameHUD(
             )
 
             // XP Bar
-            HUDBar(
+            StatBar(
+                art       = "xp",
                 label     = "XP",
                 current   = xp,
                 max       = xpToNext,
@@ -178,6 +188,73 @@ fun AchievementBanner(achievement: Achievement, modifier: Modifier = Modifier) {
         }
     }
 }
+
+/**
+ * A pixel-art bar: ui_bar_<art>.png is the frame with its icon and empty track,
+ * ui_bar_<art>_fill.png is cropped to the current value and drawn inside the track.
+ * Falls back to the plain [HUDBar] while the images load or if they are missing.
+ */
+@Composable
+private fun StatBar(
+    art: String,
+    label: String,
+    current: Int,
+    max: Int,
+    percent: Float,
+    fillColor: Color,
+    bgColor: Color
+) {
+    val frame = rememberUiImage("ui_bar_$art.png")
+    val fill  = rememberUiImage("ui_bar_${art}_fill.png")
+    if (frame == null || fill == null) {
+        HUDBar(label, current, max, percent, fillColor, bgColor)
+        return
+    }
+
+    val animatedPercent by animateFloatAsState(
+        targetValue   = percent.coerceIn(0f, 1f),
+        animationSpec = tween(durationMillis = 150),
+        label         = "barAnim"
+    )
+    val unit = pixelUnit(BAR_WIDTH, frame.width)
+
+    Box(
+        modifier         = Modifier.size(unit * frame.width, unit * frame.height),
+        contentAlignment = Alignment.CenterEnd
+    ) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val k = size.width / frame.width
+            drawImage(
+                image         = frame,
+                dstSize       = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+                filterQuality = FilterQuality.None
+            )
+            val filled = (fill.width * animatedPercent).roundToInt().coerceIn(0, fill.width)
+            if (filled > 0) {
+                drawImage(
+                    image         = fill,
+                    srcSize       = IntSize(filled, fill.height),
+                    dstOffset     = IntOffset((BAR_TRACK_X * k).roundToInt(), (BAR_TRACK_Y * k).roundToInt()),
+                    dstSize       = IntSize((filled * k).roundToInt(), (fill.height * k).roundToInt()),
+                    filterQuality = FilterQuality.None
+                )
+            }
+        }
+        Text(
+            text     = remember(current, max) { "$current / $max" },
+            color    = Color.White,
+            fontSize = 9.sp,
+            fontWeight = FontWeight.Bold,
+            style    = TextStyle(shadow = Shadow(Color.Black, Offset(1f, 1f), 0f)),
+            modifier = Modifier.padding(end = unit * 3)
+        )
+    }
+}
+
+// Where the track starts inside ui_bar_*.png, in image pixels (see gen_menu_ui.py).
+private const val BAR_TRACK_X = 12
+private const val BAR_TRACK_Y = 2
+private val BAR_WIDTH = 220.dp
 
 @Composable
 private fun HUDBar(

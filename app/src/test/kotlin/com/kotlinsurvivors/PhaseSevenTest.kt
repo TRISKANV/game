@@ -92,6 +92,29 @@ class SpriteAssetsTest {
     }
 
     @Test
+    fun pauseMenuAndHudBarImagesFitTheirLayout() {
+        for (name in listOf("resume", "restart", "mainmenu")) {
+            val normal  = image("ui_btn_$name.png")
+            val pressed = image("ui_btn_${name}_down.png")
+            assertEquals("$name button width (the pause layout assumes 96)", 96, normal.width)
+            assertEquals(normal.width, pressed.width)
+            assertEquals(normal.height, pressed.height)
+        }
+        val panel = image("ui_panel_pause.png")
+        // 7 (title top) + 18 (title) + 11 (gap) + 3 buttons of 24 + 2 gaps of 3 must fit inside the panel
+        assertTrue(panel.height >= 7 + 18 + 11 + 3 * 24 + 2 * 3)
+        assertEquals(18, image("ui_title_paused.png").height)
+
+        for (name in listOf("hp", "xp")) {
+            val frame = image("ui_bar_$name.png")
+            val fill  = image("ui_bar_${name}_fill.png")
+            assertEquals(100, frame.width)
+            // the track starts at x=12, y=2 and the fill must end inside the frame
+            assertTrue(12 + fill.width <= frame.width && 2 + fill.height <= frame.height)
+        }
+    }
+
+    @Test
     fun roomImageMatchesTheLayoutSize() {
         val room = image("room.png")
         assertEquals(com.kotlinsurvivors.features.room.domain.RoomLayout.WIDTH.toInt(), room.width)
