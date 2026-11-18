@@ -44,8 +44,7 @@ fun MainMenuScreen(
     onStartGame     : () -> Unit,
     onOpenShop      : () -> Unit,
     onOpenAchievements: () -> Unit,
-    onOpenSettings  : () -> Unit,
-    onOpenRoom      : () -> Unit
+    onOpenSettings  : () -> Unit
 ) {
     val context = LocalContext.current
     val art by produceState<MenuArt?>(null, context) {
@@ -108,8 +107,6 @@ fun MainMenuScreen(
             Spacer(modifier = Modifier.height(20.dp))
 
             MenuButton("▶  START GAME",  Accent,            onClick = onStartGame,    isPrimary = true)
-            Spacer(Modifier.height(10.dp))
-            MenuButton("🚪  LEVEL 0 · THE ROOM", Color(0xFF9FA8DA), onClick = onOpenRoom)
             Spacer(Modifier.height(10.dp))
             MenuButton("🛒  SHOP",        Color(0xFFFFD740), onClick = onOpenShop)
             Spacer(Modifier.height(10.dp))

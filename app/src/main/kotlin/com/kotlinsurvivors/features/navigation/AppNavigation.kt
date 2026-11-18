@@ -29,11 +29,10 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
     ) {
         composable(Screen.MainMenu.route) {
             MainMenuScreen(
-                onStartGame        = { navController.navigate(Screen.Game.route) },
+                onStartGame        = { navController.navigate(Screen.Room.route) },
                 onOpenShop         = { navController.navigate(Screen.Shop.route) },
                 onOpenAchievements = { navController.navigate(Screen.Achievements.route) },
-                onOpenSettings     = { navController.navigate(Screen.Settings.route) },
-                onOpenRoom         = { navController.navigate(Screen.Room.route) }
+                onOpenSettings     = { navController.navigate(Screen.Settings.route) }
             )
         }
 
@@ -45,9 +44,15 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
             )
         }
 
-        // Level 0. The door leads back to the menu until the hallway exists.
+        // Level 0: every run starts in the room; its door leads into the game.
         composable(Screen.Room.route) {
-            RoomScreen(onExit = { navController.popBackStack(Screen.MainMenu.route, inclusive = false) })
+            RoomScreen(
+                onExit = {
+                    navController.navigate(Screen.Game.route) {
+                        popUpTo(Screen.Room.route) { inclusive = true }
+                    }
+                }
+            )
         }
 
         composable(Screen.Shop.route) {
