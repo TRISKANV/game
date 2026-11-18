@@ -104,6 +104,9 @@ class SpriteAssetsTest {
         // 7 (title top) + 18 (title) + 11 (gap) + 3 buttons of 24 + 2 gaps of 3 must fit inside the panel
         assertTrue(panel.height >= 7 + 18 + 11 + 3 * 24 + 2 * 3)
         assertEquals(18, image("ui_title_paused.png").height)
+        for (name in listOf("ui_title_gameover.png", "ui_title_levelup.png", "ui_btn_playagain.png", "ui_btn_playagain_down.png")) {
+            assertTrue("$name is empty", image(name).width > 0)
+        }
 
         for (name in listOf("hp", "xp")) {
             val frame = image("ui_bar_$name.png")

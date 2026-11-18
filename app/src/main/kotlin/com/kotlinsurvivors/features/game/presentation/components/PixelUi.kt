@@ -9,6 +9,10 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
@@ -81,4 +85,36 @@ fun PixelButton(
             onClick           = onClick
         )
     )
+}
+
+/** Like [pixelUnit] for things that are not images: a whole number of screen pixels close to [approx]. */
+@Composable
+fun pixelUnitOf(approx: Dp): Dp {
+    val density = LocalDensity.current.density
+    val scale   = floor(approx.value * density + 0.01f).coerceAtLeast(1f)
+    return (scale / density).dp
+}
+
+private val PixelInk = Color(0xFF06050A)
+
+/**
+ * Pixel-art panel behind any content: a dark outline, a [frame]-coloured border two
+ * [unit]s thick with a lighter top line, and a [body] fill, all with cut corners.
+ * Unlike an image it stretches to whatever size the content needs.
+ */
+fun Modifier.pixelFrame(unit: Dp, frame: Color, body: Color, light: Color): Modifier = drawBehind {
+    val u = unit.toPx()
+
+    fun layer(inset: Float, color: Color) {
+        val w = size.width - 2f * inset
+        val h = size.height - 2f * inset
+        if (w <= 2f * u || h <= 2f * u) return
+        drawRect(color, Offset(inset + u, inset), Size(w - 2f * u, h))
+        drawRect(color, Offset(inset, inset + u), Size(w, h - 2f * u))
+    }
+
+    layer(0f, PixelInk)
+    layer(u, frame)
+    drawRect(light, Offset(2f * u, u), Size(size.width - 4f * u, u))
+    layer(3f * u, body)
 }
