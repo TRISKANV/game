@@ -22,20 +22,22 @@ object RoomLayout {
 
     /** Furniture the player cannot walk through. */
     val furniture: List<Named> = listOf(
-        Named("desk", Box(246f, 126f, 162f, 24f)),
-        Named("desk_chair", Box(312f, 164f, 34f, 16f)),
-        Named("pc_tower", Box(412f, 126f, 30f, 22f)),
-        Named("wardrobe", Box(30f, 126f, 52f, 20f)),
-        Named("bed", Box(30f, 176f, 64f, 50f)),
-        Named("nightstand", Box(100f, 204f, 22f, 14f)),
-        Named("backpack", Box(32f, 300f, 40f, 28f)),
-        Named("table_left", Box(166f, 308f, 84f, 20f)),
-        Named("armchair", Box(254f, 308f, 46f, 20f)),
-        Named("bookshelf", Box(538f, 130f, 34f, 18f)),
-        Named("fridge", Box(578f, 130f, 38f, 18f)),
-        Named("extinguisher", Box(596f, 174f, 14f, 10f)),
-        Named("trash_bin", Box(500f, 246f, 38f, 14f)),
-        Named("table_right", Box(470f, 312f, 92f, 20f))
+        Named("desk", Box(246f, 112f, 162f, 38f)),
+        Named("desk_chair", Box(310f, 150f, 38f, 34f)),
+        Named("pc_tower", Box(412f, 80f, 30f, 68f)),
+        Named("wardrobe", Box(30f, 50f, 52f, 96f)),
+        Named("bed", Box(30f, 176f, 80f, 74f)),
+        Named("nightstand", Box(116f, 185f, 22f, 33f)),
+        Named("backpack", Box(32f, 286f, 40f, 42f)),
+        Named("floor_laptop", Box(112f, 272f, 40f, 26f)),
+        Named("controller", Box(86f, 300f, 30f, 14f)),
+        Named("table_left", Box(166f, 292f, 84f, 38f)),
+        Named("armchair", Box(252f, 292f, 48f, 34f)),
+        Named("bookshelf", Box(538f, 70f, 34f, 78f)),
+        Named("fridge", Box(578f, 56f, 38f, 92f)),
+        Named("extinguisher", Box(596f, 152f, 14f, 32f)),
+        Named("trash_bin", Box(500f, 214f, 38f, 46f)),
+        Named("table_right", Box(470f, 296f, 92f, 38f))
     )
 
     data class Box(val x: Float, val y: Float, val w: Float, val h: Float) {
