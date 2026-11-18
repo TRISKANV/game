@@ -81,6 +81,13 @@ class SpriteAssetsTest {
     }
 
     @Test
+    fun roomImageMatchesTheLayoutSize() {
+        val room = image("room.png")
+        assertEquals(com.kotlinsurvivors.features.room.domain.RoomLayout.WIDTH.toInt(), room.width)
+        assertEquals(com.kotlinsurvivors.features.room.domain.RoomLayout.HEIGHT.toInt(), room.height)
+    }
+
+    @Test
     fun menuBackgroundAndGroundTileAreOpaque() {
         for (name in listOf("menu_bg.png", "ground.png")) {
             val img = image(name)
