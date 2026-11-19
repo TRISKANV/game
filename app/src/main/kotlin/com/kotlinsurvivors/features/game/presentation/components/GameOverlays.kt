@@ -19,7 +19,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
@@ -35,6 +39,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.UpgradeRarity
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.cos
+import kotlin.math.sin
+import kotlin.random.Random
 import com.kotlinsurvivors.engine.input.VirtualJoystick
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
@@ -229,9 +238,15 @@ private fun PauseButton(text: String, color: Color, onClick: () -> Unit) {
 
 private const val LEVEL_UP_FADE_MS = 400
 
+/**
+ * Level up by roulette: a wheel spins and lands on the upgrade the engine drew
+ * ([winnerIndex] of [options]); the player then takes it. Tapping the wheel while it
+ * spins jumps to the result.
+ */
 @Composable
 fun LevelUpOverlay(
     options     : List<LevelUpOption>,
+    winnerIndex : Int,
     playerLevel : Int,
     onChoice    : (LevelUpOption) -> Unit
 ) {
@@ -256,54 +271,153 @@ fun LevelUpOverlay(
             .background(Color(0xCC000014)),
         contentAlignment = Alignment.Center
     ) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier            = Modifier
+        if (options.isEmpty()) {
+            CircularProgressIndicator(color = Color(0xFFFFD740), modifier = Modifier.size(32.dp))
+            return@Box
+        }
+        val winner = options[winnerIndex.coerceIn(0, options.lastIndex)]
+
+        // The wheel turns several times and stops with the winning slice under the pointer.
+        val sliceDegrees = 360f / options.size
+        val stopOffset   = remember(options, winnerIndex) { (Random.nextFloat() - 0.5f) * sliceDegrees * 0.6f }
+        val target       = SPIN_TURNS * 360f - winnerIndex * sliceDegrees + stopOffset
+        val spin         = remember { Animatable(0f) }
+        LaunchedEffect(target) {
+            delay(LEVEL_UP_FADE_MS.toLong() / 2)
+            spin.animateTo(target, tween(SPIN_MS, easing = CubicBezierEasing(0.1f, 0.75f, 0.15f, 1f)))
+        }
+        val landed by remember { derivedStateOf { spin.value >= target - 0.5f } }
+        val scope = rememberCoroutineScope()
+
+        Row(
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(20.dp),
+            modifier              = Modifier
                 .graphicsLayer {
                     val s = 0.9f + 0.1f * appear.value
                     scaleX = s
                     scaleY = s
                 }
-                .padding(horizontal = 20.dp)
+                .padding(horizontal = 24.dp)
         ) {
-            // Animated title
-            if (titleImage != null) {
-                PixelImage(titleImage, "Level up", targetWidth = 250.dp, modifier = Modifier.alpha(pulse))
-            } else {
-                Text(
-                    "LEVEL UP!",
-                    color       = Color(0xFFFFD740).copy(alpha = pulse),
-                    fontSize    = 32.sp,
-                    fontWeight  = FontWeight.ExtraBold,
-                    letterSpacing = 4.sp
+            RouletteWheel(
+                options  = options,
+                rotation = { spin.value },
+                modifier = Modifier.clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication        = null,
+                    enabled           = !landed,
+                    onClick           = { scope.launch { spin.snapTo(target) } }
                 )
-            }
-            Text(
-                "Level $playerLevel — Choose your power",
-                color    = Color(0xFFBBBBBB),
-                fontSize = 13.sp
             )
 
-            Spacer(Modifier.height(4.dp))
-
-            Row(
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                modifier              = Modifier.fillMaxWidth()
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier            = Modifier.weight(1f).widthIn(max = 320.dp)
             ) {
-                if (options.isEmpty()) {
-                    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator(color = Color(0xFFFFD740), modifier = Modifier.size(32.dp))
-                    }
+                if (titleImage != null) {
+                    PixelImage(titleImage, "Level up", targetWidth = 220.dp, modifier = Modifier.alpha(pulse))
                 } else {
-                    options.forEach { option ->
-                        LevelUpCard(option = option, onClick = { onChoice(option) }, modifier = Modifier.weight(1f))
+                    Text(
+                        "LEVEL UP!",
+                        color         = Color(0xFFFFD740).copy(alpha = pulse),
+                        fontSize      = 30.sp,
+                        fontWeight    = FontWeight.ExtraBold,
+                        letterSpacing = 4.sp
+                    )
+                }
+                Text(
+                    if (landed) "Level $playerLevel — Your prize" else "Level $playerLevel — Spinning...",
+                    color    = Color(0xFFBBBBBB),
+                    fontSize = 13.sp
+                )
+                // The room for the card is kept while the wheel spins so nothing jumps.
+                Box(Modifier.fillMaxWidth().heightIn(min = RESULT_MIN_HEIGHT), contentAlignment = Alignment.Center) {
+                    if (landed) {
+                        LevelUpCard(option = winner, onClick = { onChoice(winner) }, modifier = Modifier.fillMaxWidth())
+                    } else {
+                        Text("Tap the wheel to skip", color = Color(0xFF777777), fontSize = 11.sp)
                     }
                 }
             }
         }
     }
 }
+
+private const val SPIN_TURNS = 5
+private const val SPIN_MS    = 3600
+private val RESULT_MIN_HEIGHT = 150.dp
+private val WHEEL_SIZE = 176.dp
+
+/** The wheel: one slice per option, coloured by rarity, with a fixed pointer at the top. */
+@Composable
+private fun RouletteWheel(
+    options  : List<LevelUpOption>,
+    rotation : () -> Float,
+    modifier : Modifier = Modifier
+) {
+    val sliceDegrees = 360f / options.size
+    val half = WHEEL_SIZE.value / 2f
+
+    Box(modifier = modifier.size(WHEEL_SIZE)) {
+        Box(modifier = Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation() }) {
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val inset  = WHEEL_INSET.toPx()
+                val box    = Size(size.width - inset * 2, size.height - inset * 2)
+                val corner = Offset(inset, inset)
+                options.forEachIndexed { i, option ->
+                    val start = i * sliceDegrees - sliceDegrees / 2f - 90f
+                    drawArc(
+                        color      = lerp(rarityColor(option.rarity), Color.Black, 0.45f),
+                        startAngle = start, sweepAngle = sliceDegrees, useCenter = true,
+                        topLeft    = corner, size = box
+                    )
+                    drawArc(
+                        color      = Color(0xFF0E0A1A),
+                        startAngle = start, sweepAngle = sliceDegrees, useCenter = true,
+                        topLeft    = corner, size = box, style = Stroke(width = 2.dp.toPx())
+                    )
+                }
+                drawCircle(Color(0xFF3A2278), radius = box.width / 2f, style = Stroke(width = 5.dp.toPx()),
+                    center = center)
+                drawCircle(Color(0xFF14101F), radius = HUB_RADIUS.toPx(), center = center)
+                drawCircle(Color(0xFF7C4DFF), radius = HUB_RADIUS.toPx(), style = Stroke(width = 2.dp.toPx()),
+                    center = center)
+            }
+            // The icons turn with their slice, standing out from the hub.
+            options.forEachIndexed { i, option ->
+                val angle  = i * sliceDegrees
+                val radius = (half - WHEEL_INSET.value) * 0.68f
+                val dx = sin(Math.toRadians(angle.toDouble())).toFloat() * radius
+                val dy = -cos(Math.toRadians(angle.toDouble())).toFloat() * radius
+                PixelIcon(
+                    key      = option.icon,
+                    iconSize = WHEEL_ICON,
+                    modifier = Modifier
+                        .offset(x = (half + dx - WHEEL_ICON.value / 2f).dp, y = (half + dy - WHEEL_ICON.value / 2f).dp)
+                        .graphicsLayer { rotationZ = angle }
+                )
+            }
+        }
+        // Pointer, fixed at the top.
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val w = 9.dp.toPx()
+            val tip = Path().apply {
+                moveTo(center.x - w, 0f)
+                lineTo(center.x + w, 0f)
+                lineTo(center.x, 22.dp.toPx())
+                close()
+            }
+            drawPath(tip, Color(0xFFFFD740))
+            drawPath(tip, Color(0xFF0E0A1A), style = Stroke(width = 2.dp.toPx()))
+        }
+    }
+}
+
+private val WHEEL_INSET = 10.dp
+private val WHEEL_ICON  = 22.dp
+private val HUB_RADIUS  = 14.dp
 
 @Composable
 private fun LevelUpCard(option: LevelUpOption, onClick: () -> Unit, modifier: Modifier = Modifier) {

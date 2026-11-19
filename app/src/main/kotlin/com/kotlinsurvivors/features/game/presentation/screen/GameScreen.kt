@@ -200,6 +200,7 @@ fun GameScreen(
         if (gameState.isPendingLevelUp) {
             LevelUpOverlay(
                 options     = gameState.levelUpOptions,
+                winnerIndex = gameState.levelUpWinner,
                 playerLevel = gameState.playerLevel,
                 onChoice    = { option -> viewModel.applyLevelUpChoice(option) }
             )

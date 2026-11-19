@@ -264,4 +264,22 @@ class Level1MapTest {
             assertFalse("enemy $id spawned on screen at (${t.x}, ${t.y})", visible)
         }
     }
+
+    @Test
+    fun enemiesReachAPlayerStandingInAGapTooNarrowForTheClearanceSearch() {
+        // A corridor two cells (32 px) wide down the west edge, open only at the top.
+        val n = 64
+        val grid = ByteArray(n * n)
+        for (i in 0 until n) { grid[i] = 1; grid[(n - 1) * n + i] = 1; grid[i * n] = 1; grid[i * n + n - 1] = 1 }
+        for (y in 6..57) grid[y * n + 3] = 1
+        val narrow = LevelMap(n, 16f, grid)
+        val world = World()
+        val pid = EntityFactory.createPlayer(world, 32f, 760f)
+        val movement = MovementSystem(1024f, 1024f).also { it.levelMap = narrow }
+        val eid = EntityFactory.createEnemy(world, EnemyType.FAST, 600f, 400f)
+        repeat(60 * 60) { movement.update(world, 1f / 60f, JoystickState()) }
+        val p = world.transforms[pid]!!; val e = world.transforms[eid]!!
+        val dist = kotlin.math.hypot(p.x - e.x, p.y - e.y)
+        assertTrue("enemy is stuck at (${e.x}, ${e.y}), ${dist.toInt()} px from the player", dist < 60f && e.x < 48f)
+    }
 }

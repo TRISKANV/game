@@ -72,6 +72,18 @@ class FlowField(private val map: LevelMap) {
             if (stamp[i] == generation || !walkable[i]) continue
             stamp[i] = generation; steps[i] = 1; queue[tail++] = i
         }
+        tail = flood(0, tail, clearanceOnly = true)
+        // A target in a narrow spot (a gap between a barrier and the border, say) is not
+        // reached by the clearance search at all. Then let the search squeeze through
+        // every free cell, starting again from what it has found, so enemies can still
+        // find the way in.
+        if (tail < NARROW_SPOT_CELLS) flood(0, tail, clearanceOnly = false)
+    }
+
+    /** Breadth-first expansion of the queue from [from] on; returns the new end of the queue. */
+    private fun flood(from: Int, end: Int, clearanceOnly: Boolean): Int {
+        var head = from
+        var tail = end
         while (head < tail) {
             val cur = queue[head++]
             val d = steps[cur]
@@ -81,10 +93,12 @@ class FlowField(private val map: LevelMap) {
                 val nx = cx + DX4[k]; val ny = cy + DY4[k]
                 if (nx < 0 || ny < 0 || nx >= n || ny >= n) continue
                 val i = ny * n + nx
-                if (stamp[i] == generation || !walkable[i]) continue
+                if (stamp[i] == generation) continue
+                if (if (clearanceOnly) !walkable[i] else map.isBlockedCell(nx, ny)) continue
                 stamp[i] = generation; steps[i] = d + 1; queue[tail++] = i
             }
         }
+        return tail
     }
 
     /**
@@ -119,6 +133,7 @@ class FlowField(private val map: LevelMap) {
 
     private companion object {
         const val MAX_STEPS    = 110
+        const val NARROW_SPOT_CELLS = 400   // fewer cells than this found: the target is boxed in
         const val MIN_INTERVAL = 0.12f
         const val MAX_INTERVAL = 0.5f
         val DX4 = intArrayOf(1, -1, 0, 0)

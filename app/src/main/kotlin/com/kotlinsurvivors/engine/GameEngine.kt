@@ -42,6 +42,7 @@ class GameEngine(
         const val MAX_FRAME_TIME = 0.05f
         const val WORLD_WIDTH    = 4096f
         const val WORLD_HEIGHT   = 4096f
+        const val MAX_WEAPON_LEVEL = 8
         private const val RENDER_BUFFER_COUNT = 8
         private const val FACING_MIN_SPEED_SQ  = 25f   // below 5 px/s the player counts as standing still
 
@@ -79,6 +80,7 @@ class GameEngine(
     private var lastEmittedPaused         = false
     private var lastEmittedPendingLevelUp = false
     private var cachedLevelUpOptions: List<LevelUpOption> = emptyList()
+    private var cachedLevelUpWinner = 0
 
     private val levelUpChannel = Channel<LevelUpOption>(capacity = 4)
 
@@ -212,6 +214,7 @@ class GameEngine(
                 }
                 pendingLevelUp       = false
                 cachedLevelUpOptions = emptyList()
+                cachedLevelUpWinner  = 0
             } else {
                 Log.d(TAG, "Ignoring level-up choice '${option.id}': none pending")
             }
@@ -235,6 +238,7 @@ class GameEngine(
         pendingLevelUp       = false
         frameCount           = 0L
         cachedLevelUpOptions = emptyList()
+        cachedLevelUpWinner  = 0
         hitCount             = 0
         lastHitTime          = 0f
         playerFacing         = Facing.DOWN
@@ -357,14 +361,17 @@ class GameEngine(
                         // Generate options ONCE on the engine thread and cache them.
                         // emitState() will reuse the cache — no regeneration per frame.
                         val pid = world.getPlayerEntity()
-                        cachedLevelUpOptions = try {
-                            generateLevelUpOptions(world, pid)
+                        val spin = try {
+                            LevelUpRoulette.spin(levelUpPool(world, pid))
                         } catch (e: Exception) {
-                            CrashLogger.logCrash("generateLevelUpOptions", e); throw e
+                            CrashLogger.logCrash("level-up roulette", e); throw e
                         }
+                        cachedLevelUpOptions = spin.segments
+                        cachedLevelUpWinner  = spin.winnerIndex
                         CrashLogger.log(
                             "LEVEL-UP offered at level ${event.newLevel}: " +
-                                cachedLevelUpOptions.joinToString { it.id }
+                                cachedLevelUpOptions.joinToString { it.id } +
+                                " -> roulette lands on '${cachedLevelUpOptions[cachedLevelUpWinner].id}'"
                         )
                         pendingLevelUp = true
                     }
@@ -413,6 +420,7 @@ class GameEngine(
             isGameOver       = health?.isDead ?: false,
             isPendingLevelUp = pendingLevelUp,
             levelUpOptions   = cachedLevelUpOptions,  // reuse cached, never regenerate per frame
+            levelUpWinner    = cachedLevelUpWinner,
             elapsedTime      = elapsedTime,
             playerHp         = health?.current ?: 0,
             playerMaxHp      = health?.max ?: 100,
@@ -571,14 +579,15 @@ class GameEngine(
 
     // ── Upgrade generation & application — unchanged from original ──────────
 
-    private fun generateLevelUpOptions(world: World, pid: Int): List<LevelUpOption> {
-        val player  = world.players[pid]  ?: return emptyList()
+    /** Everything the level-up roulette may land on right now. */
+    private fun levelUpPool(world: World, pid: Int): List<LevelUpOption> {
+        world.players[pid] ?: return emptyList()
         val weapons = world.weapons[pid]  ?: return emptyList()
         val ownedTypes = weapons.map { it.type }.toSet()
         val options = mutableListOf<LevelUpOption>()
 
         for (weapon in weapons) {
-            if (weapon.level < 8) {
+            if (weapon.level < MAX_WEAPON_LEVEL) {
                 val rarity = when {
                     weapon.level >= 6 -> UpgradeRarity.EPIC
                     weapon.level >= 3 -> UpgradeRarity.RARE
@@ -618,12 +627,18 @@ class GameEngine(
             LevelUpOption("stat_armor",    "Iron Skin",     "+1 Armor",          UpgradeType.STAT, icon = "shield",  rarity = UpgradeRarity.COMMON),
         ))
 
-        val shuffled = options.shuffled()
-        val result   = shuffled.take(3).toMutableList()
-        if (player.level >= 5 && result.none { it.rarity.ordinal >= UpgradeRarity.RARE.ordinal }) {
-            shuffled.firstOrNull { it.rarity.ordinal >= UpgradeRarity.RARE.ordinal }?.let { result[2] = it }
+        // Legendary: the rarest prizes of the wheel.
+        options.add(LevelUpOption("legend_titan", "Titan Heart", "+100 Max HP and a full heal",
+            UpgradeType.STAT, icon = "heart", rarity = UpgradeRarity.LEGENDARY))
+        options.add(LevelUpOption("legend_fury", "Warlord's Fury", "+50% Damage",
+            UpgradeType.STAT, icon = "sword", rarity = UpgradeRarity.LEGENDARY))
+        options.add(LevelUpOption("legend_time", "Time Warp", "+35% Attack Speed",
+            UpgradeType.STAT, icon = "bolt", rarity = UpgradeRarity.LEGENDARY))
+        if (weapons.any { it.level < MAX_WEAPON_LEVEL }) {
+            options.add(LevelUpOption("legend_arsenal", "Arsenal Surge", "Every weapon gains a level",
+                UpgradeType.STAT, icon = "crown", rarity = UpgradeRarity.LEGENDARY))
         }
-        return result
+        return options
     }
 
     private fun applyUpgrade(world: World, pid: Int, option: LevelUpOption) {
@@ -636,14 +651,7 @@ class GameEngine(
         when (option.type) {
             UpgradeType.WEAPON_UPGRADE -> {
                 val weapon = weapons.find { it.type == option.weaponType } ?: return
-                weapon.level++
-                weapon.damage = (weapon.damage * 1.2f).roundToInt()
-                weapon.cooldown *= 0.92f
-                if (weapon.level % 3 == 0) weapon.projectileCount++
-                if (weapon.level % 4 == 0) weapon.piercing++
-                weapon.area *= 1.1f
-                WeaponUpgrades.applyToAttachedComponents(world, pid, weapon)
-                Log.d(TAG, "Weapon ${weapon.type} upgraded to Lv${weapon.level} dmg=${weapon.damage}")
+                levelUpWeapon(world, pid, weapon)
             }
             UpgradeType.NEW_WEAPON -> {
                 val wt = option.weaponType ?: return
@@ -670,9 +678,25 @@ class GameEngine(
                     "stat_magnet"   -> { player.magnetRadius *= 1.5f; player.pickupRadius *= 1.5f }
                     "stat_crit"     -> player.criticalChance = (player.criticalChance + 0.10f).coerceAtMost(0.80f)
                     "stat_armor"    -> player.armor += 1
+                    "legend_titan"  -> { health.max += 100; health.current = health.max }
+                    "legend_fury"   -> player.damageMultiplier *= 1.50f
+                    "legend_time"   -> player.attackSpeedMultiplier *= 1.35f
+                    "legend_arsenal" -> weapons.filter { it.level < MAX_WEAPON_LEVEL }
+                        .forEach { levelUpWeapon(world, pid, it) }
                 }
             }
         }
+    }
+
+    private fun levelUpWeapon(world: World, pid: Int, weapon: com.kotlinsurvivors.engine.ecs.components.WeaponComponent) {
+        weapon.level++
+        weapon.damage = (weapon.damage * 1.2f).roundToInt()
+        weapon.cooldown *= 0.92f
+        if (weapon.level % 3 == 0) weapon.projectileCount++
+        if (weapon.level % 4 == 0) weapon.piercing++
+        weapon.area *= 1.1f
+        WeaponUpgrades.applyToAttachedComponents(world, pid, weapon)
+        Log.d(TAG, "Weapon ${weapon.type} upgraded to Lv${weapon.level} dmg=${weapon.damage}")
     }
 
     private fun newWeaponComponent(type: com.kotlinsurvivors.engine.ecs.components.WeaponType) =

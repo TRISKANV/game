@@ -19,6 +19,8 @@ data class GameState(
     val isGameOver       : Boolean        = false,
     val isPendingLevelUp : Boolean        = false,
     val levelUpOptions   : List<LevelUpOption> = emptyList(),
+    /** Which of [levelUpOptions] the level-up roulette lands on. */
+    val levelUpWinner    : Int            = 0,
 
     // Time
     val elapsedTime      : Float          = 0f,
@@ -64,6 +66,7 @@ data class GameState(
             isGameOver == other.isGameOver &&
             isPendingLevelUp == other.isPendingLevelUp &&
             levelUpOptions == other.levelUpOptions &&
+            levelUpWinner == other.levelUpWinner &&
             elapsedTime == other.elapsedTime &&
             playerHp == other.playerHp &&
             playerMaxHp == other.playerMaxHp &&
