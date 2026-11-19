@@ -1,12 +1,15 @@
 package com.kotlinsurvivors.features.game.presentation.components
 
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
@@ -15,12 +18,20 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.kotlinsurvivors.engine.rendering.SpriteAtlas
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlin.math.floor
+import kotlin.math.roundToInt
 
 /**
  * Size of one image pixel on screen, in dp, when an image [imageWidth] pixels wide is
@@ -117,4 +128,51 @@ fun Modifier.pixelFrame(unit: Dp, frame: Color, body: Color, light: Color): Modi
     layer(u, frame)
     drawRect(light, Offset(2f * u, u), Size(size.width - 4f * u, u))
     layer(3f * u, body)
+}
+
+/** The icon strip is decoded once and kept for the life of the process. */
+private object UiIconSheet {
+    @Volatile var image: ImageBitmap? = null
+}
+
+@Composable
+private fun rememberIconSheet(): ImageBitmap? {
+    val appContext = LocalContext.current.applicationContext
+    val sheet by produceState(UiIconSheet.image, appContext) {
+        if (value == null) {
+            value = withContext(Dispatchers.IO) {
+                try {
+                    SpriteAtlas.bitmap(appContext, "ui_icons.png").asImageBitmap()
+                        .also { UiIconSheet.image = it }
+                } catch (e: Exception) {
+                    null
+                }
+            }
+        }
+    }
+    return sheet
+}
+
+/**
+ * One of the pixel-art icons of ui_icons.png (see [UI_ICON_KEYS]) drawn close to
+ * [iconSize]. An unknown name or a missing sheet leaves an empty space of the same size.
+ */
+@Composable
+fun PixelIcon(key: String, iconSize: Dp, modifier: Modifier = Modifier) {
+    val sheet = rememberIconSheet()
+    val index = UI_ICON_KEYS.indexOf(key)
+    val side  = pixelUnit(iconSize, UI_ICON_CELL) * UI_ICON_CELL
+    if (sheet == null || index < 0) {
+        Spacer(modifier.size(side))
+        return
+    }
+    Canvas(modifier.size(side)) {
+        drawImage(
+            image         = sheet,
+            srcOffset     = IntOffset(index * UI_ICON_CELL, 0),
+            srcSize       = IntSize(UI_ICON_CELL, UI_ICON_CELL),
+            dstSize       = IntSize(size.width.roundToInt(), size.height.roundToInt()),
+            filterQuality = FilterQuality.None
+        )
+    }
 }

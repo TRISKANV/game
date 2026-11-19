@@ -116,7 +116,7 @@ data class LevelUpOption(
     val description : String,
     val type        : UpgradeType,
     val weaponType  : WeaponType? = null,
-    val icon        : String = "⭐",
+    val icon        : String = "star",
     val rarity      : com.kotlinsurvivors.engine.UpgradeRarity = com.kotlinsurvivors.engine.UpgradeRarity.COMMON
 )
 
@@ -177,19 +177,19 @@ data class Achievement(
 
 object AchievementDefinitions {
     val all = listOf(
-        Achievement("ach_first_kill",   "First Blood",   "Kill your first enemy",           "🩸"),
-        Achievement("ach_survive_1",    "Survivor",      "Survive for 1 minute",            "⏱️"),
-        Achievement("ach_survive_5",    "Veteran",       "Survive for 5 minutes",           "🏅"),
-        Achievement("ach_survive_10",   "Legend",        "Survive for 10 minutes",          "🏆"),
-        Achievement("ach_survive_20",   "Immortal",      "Survive for 20 minutes",          "👑"),
-        Achievement("ach_kill_100",     "Centurion",     "Kill 100 enemies in one run",     "⚔️"),
-        Achievement("ach_kill_500",     "Slaughterer",   "Kill 500 enemies in one run",     "💀"),
-        Achievement("ach_kill_1000",    "One-Thousand",  "Kill 1000 enemies in one run",     "🔥"),
-        Achievement("ach_level_10",     "Seasoned",      "Reach level 10",                  "⭐"),
-        Achievement("ach_level_20",     "Master",        "Reach level 20",                  "🌟"),
-        Achievement("ach_boss_kill",    "Boss Slayer",   "Kill a boss",                     "👹"),
-        Achievement("ach_max_weapons",  "Armory",        "Equip 6 weapons simultaneously",  "🗡️"),
-        Achievement("ach_coins_500",    "Rich",          "Collect 500 coins in one run",    "💰"),
-        Achievement("ach_no_damage_60", "Untouchable",   "Survive 60s without being hit",   "🛡️"),
+        Achievement("ach_first_kill",   "First Blood",   "Kill your first enemy",           "blood"),
+        Achievement("ach_survive_1",    "Survivor",      "Survive for 1 minute",            "clock"),
+        Achievement("ach_survive_5",    "Veteran",       "Survive for 5 minutes",           "medal"),
+        Achievement("ach_survive_10",   "Legend",        "Survive for 10 minutes",          "trophy"),
+        Achievement("ach_survive_20",   "Immortal",      "Survive for 20 minutes",          "crown"),
+        Achievement("ach_kill_100",     "Centurion",     "Kill 100 enemies in one run",     "sword"),
+        Achievement("ach_kill_500",     "Slaughterer",   "Kill 500 enemies in one run",     "skull"),
+        Achievement("ach_kill_1000",    "One-Thousand",  "Kill 1000 enemies in one run",     "fire"),
+        Achievement("ach_level_10",     "Seasoned",      "Reach level 10",                  "star"),
+        Achievement("ach_level_20",     "Master",        "Reach level 20",                  "sparkle"),
+        Achievement("ach_boss_kill",    "Boss Slayer",   "Kill a boss",                     "demon"),
+        Achievement("ach_max_weapons",  "Armory",        "Equip 6 weapons simultaneously",  "knife"),
+        Achievement("ach_coins_500",    "Rich",          "Collect 500 coins in one run",    "coin"),
+        Achievement("ach_no_damage_60", "Untouchable",   "Survive 60s without being hit",   "shield"),
     )
 }

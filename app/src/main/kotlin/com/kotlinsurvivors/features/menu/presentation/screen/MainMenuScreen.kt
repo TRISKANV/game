@@ -114,13 +114,13 @@ fun MainMenuScreen(
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            MenuButton("▶  START GAME",  Accent,            "start",        onClick = onStartGame,    isPrimary = true)
+            MenuButton("START GAME",  Accent,            "start",        onClick = onStartGame,    isPrimary = true)
             Spacer(Modifier.height(8.dp))
-            MenuButton("🛒  SHOP",        Color(0xFFFFD740), "shop",         onClick = onOpenShop)
+            MenuButton("SHOP",        Color(0xFFFFD740), "shop",         onClick = onOpenShop)
             Spacer(Modifier.height(8.dp))
-            MenuButton("🏆  ACHIEVEMENTS", Color(0xFF80CBC4), "achievements", onClick = onOpenAchievements)
+            MenuButton("ACHIEVEMENTS", Color(0xFF80CBC4), "achievements", onClick = onOpenAchievements)
             Spacer(Modifier.height(8.dp))
-            MenuButton("⚙  SETTINGS",    Color(0xFFB0B8B0), "settings",     onClick = onOpenSettings)
+            MenuButton("SETTINGS",    Color(0xFFB0B8B0), "settings",     onClick = onOpenSettings)
 
             Spacer(modifier = Modifier.height(14.dp))
 

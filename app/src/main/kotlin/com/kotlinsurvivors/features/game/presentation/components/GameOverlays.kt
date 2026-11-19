@@ -160,11 +160,11 @@ fun PauseMenuOverlay(
             ) {
                 PixelImage(title, "Paused", targetWidth = unit * title.width)
                 Spacer(Modifier.height(unit * PAUSE_TITLE_GAP))
-                PixelButton("resume",   "Resume",    unit * PAUSE_BUTTON_WIDTH, onResume)   { PauseButton("▶  Resume",    Color(0xFF7CE04A), onResume) }
+                PixelButton("resume",   "Resume",    unit * PAUSE_BUTTON_WIDTH, onResume)   { PauseButton("Resume",    Color(0xFF7CE04A), onResume) }
                 Spacer(Modifier.height(unit * PAUSE_BUTTON_GAP))
-                PixelButton("restart",  "Restart",   unit * PAUSE_BUTTON_WIDTH, onRestart)  { PauseButton("↺  Restart",   Color(0xFFFFCA28), onRestart) }
+                PixelButton("restart",  "Restart",   unit * PAUSE_BUTTON_WIDTH, onRestart)  { PauseButton("Restart",   Color(0xFFFFCA28), onRestart) }
                 Spacer(Modifier.height(unit * PAUSE_BUTTON_GAP))
-                PixelButton("mainmenu", "Main menu", unit * PAUSE_BUTTON_WIDTH, onMainMenu) { PauseButton("⌂  Main Menu", Color(0xFFEF5350), onMainMenu) }
+                PixelButton("mainmenu", "Main menu", unit * PAUSE_BUTTON_WIDTH, onMainMenu) { PauseButton("Main Menu", Color(0xFFEF5350), onMainMenu) }
             }
         }
     }
@@ -200,9 +200,9 @@ private fun PlainPauseMenu(
                 Text("PAUSED", color = Color(0xFF7CE04A), fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold, letterSpacing = 4.sp)
                 HorizontalDivider(color = Color(0xFF7CE04A).copy(alpha = 0.2f))
-                PauseButton("▶  Resume",    Color(0xFF7CE04A), onResume)
-                PauseButton("↺  Restart",   Color(0xFFFFCA28), onRestart)
-                PauseButton("⌂  Main Menu", Color(0xFFEF5350), onMainMenu)
+                PauseButton("Resume",    Color(0xFF7CE04A), onResume)
+                PauseButton("Restart",   Color(0xFFFFCA28), onRestart)
+                PauseButton("Main Menu", Color(0xFFEF5350), onMainMenu)
             }
         }
     }
@@ -269,7 +269,7 @@ fun LevelUpOverlay(
                 PixelImage(titleImage, "Level up", targetWidth = 250.dp, modifier = Modifier.alpha(pulse))
             } else {
                 Text(
-                    "⬆ LEVEL UP! ⬆",
+                    "LEVEL UP!",
                     color       = Color(0xFFFFD740).copy(alpha = pulse),
                     fontSize    = 32.sp,
                     fontWeight  = FontWeight.ExtraBold,
@@ -345,7 +345,7 @@ private fun LevelUpCard(option: LevelUpOption, onClick: () -> Unit, modifier: Mo
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             // Icon
-            Text(option.icon, fontSize = 36.sp)
+            PixelIcon(option.icon, 40.dp)
 
             // Rarity badge
             Text(
@@ -439,10 +439,10 @@ fun GameOverOverlay(
                 )
                 HorizontalDivider(color = Color(0xFF7CE04A).copy(alpha = 0.2f))
 
-                StatRow("⏱  Survived",       gameState.formattedTime)
-                StatRow("☠  Kills",           gameState.killCount.toString())
-                StatRow("⭐  Level Reached",  gameState.playerLevel.toString())
-                StatRow("💰  Coins Earned",   gameState.playerCoins.toString())
+                StatRow("clock", "Survived",       gameState.formattedTime)
+                StatRow("skull", "Kills",          gameState.killCount.toString())
+                StatRow("star",  "Level Reached",  gameState.playerLevel.toString())
+                StatRow("coin",  "Coins Earned",   gameState.playerCoins.toString())
 
                 // Performance rating
                 HorizontalDivider(color = Color(0xFF333355))
@@ -498,9 +498,16 @@ private fun runRating(state: GameState): Pair<String, Color> = when {
 }
 
 @Composable
-private fun StatRow(label: String, value: String) {
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Text(label, color = Color(0xFFBBBBBB), fontSize = 13.sp)
+private fun StatRow(iconKey: String, label: String, value: String) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment     = Alignment.CenterVertically
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            PixelIcon(iconKey, 16.dp)
+            Text(label, color = Color(0xFFBBBBBB), fontSize = 13.sp)
+        }
         Text(value, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.Bold)
     }
 }

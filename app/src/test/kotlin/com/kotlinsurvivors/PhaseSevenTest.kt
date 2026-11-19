@@ -9,6 +9,9 @@ import com.kotlinsurvivors.engine.rendering.RenderKind
 import com.kotlinsurvivors.engine.rendering.SpriteAtlas
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import com.kotlinsurvivors.features.game.domain.model.AchievementDefinitions
+import com.kotlinsurvivors.features.game.presentation.components.UI_ICON_CELL
+import com.kotlinsurvivors.features.game.presentation.components.UI_ICON_KEYS
 import org.junit.Test
 import java.awt.image.BufferedImage
 import java.io.File
@@ -114,6 +117,20 @@ class SpriteAssetsTest {
             assertEquals(100, frame.width)
             // the track starts at x=12, y=2 and the fill must end inside the frame
             assertTrue(12 + fill.width <= frame.width && 2 + fill.height <= frame.height)
+        }
+    }
+
+    @Test
+    fun iconStripHasOneCellPerKeyAndEveryAchievementIconExists() {
+        val strip = image("ui_icons.png")
+        assertEquals(UI_ICON_CELL, strip.height)
+        assertEquals(UI_ICON_CELL * UI_ICON_KEYS.size, strip.width)
+        assertEquals("icon names must be unique", UI_ICON_KEYS.size, UI_ICON_KEYS.toSet().size)
+        for (a in AchievementDefinitions.all) {
+            assertTrue("achievement ${a.id} uses unknown icon '${a.icon}'", a.icon in UI_ICON_KEYS)
+        }
+        for (name in listOf("lock", "check", "coin", "skull", "invader", "clock", "star", "sparkle")) {
+            assertTrue("UI icon '$name' missing", name in UI_ICON_KEYS)
         }
     }
 

@@ -3,6 +3,9 @@ package com.kotlinsurvivors.features.game.presentation.components
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -20,6 +23,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.text.TextStyle
@@ -62,8 +66,9 @@ fun GameHUD(
     elapsedSeconds : Int,
     onPause        : () -> Unit
 ) {
-    val pauseIcon = rememberUiImage("ui_icon_pause.png")
-    val coinIcon  = rememberUiImage("ui_icon_money.png")
+    val pauseIcon   = rememberUiImage("ui_icon_pause.png")
+    val pauseSource = remember { MutableInteractionSource() }
+    val pausePressed by pauseSource.collectIsPressedAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
 
@@ -120,8 +125,8 @@ fun GameHUD(
 
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 HUDChip(label = remember(level)   { "Lv.$level" }, color = Color(0xFFCE93D8))
-                HUDChip(label = remember(kills)   { "☠ $kills" },  color = Color(0xFFEF9A9A))
-                HUDChip(label = remember(enemies) { "👾 $enemies" }, color = Color(0xFFFFCC80))
+                HUDChip(label = remember(kills)   { "$kills" },    color = Color(0xFFEF9A9A), iconKey = "skull")
+                HUDChip(label = remember(enemies) { "$enemies" },  color = Color(0xFFFFCC80), iconKey = "invader")
             }
         }
 
@@ -133,11 +138,22 @@ fun GameHUD(
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            IconButton(
-                onClick  = onPause,
+            // No ripple on purpose: this button disappears the moment it is pressed (the HUD
+            // is hidden while paused) and a ripple cut off half way can leave stray lines.
+            Box(
+                contentAlignment = Alignment.Center,
                 modifier = Modifier
                     .size(40.dp)
-                    .background(Color(0xCC1A1A2E), RoundedCornerShape(3.dp))
+                    .background(
+                        if (pausePressed) Color(0xFF3A2278) else Color(0xCC1A1A2E),
+                        RoundedCornerShape(3.dp)
+                    )
+                    .clickable(
+                        interactionSource = pauseSource,
+                        indication        = null,
+                        role              = Role.Button,
+                        onClick           = onPause
+                    )
             ) {
                 if (pauseIcon != null) {
                     Image(
@@ -155,7 +171,7 @@ fun GameHUD(
                 }
             }
 
-            HUDChip(label = remember(coins) { "$coins" }, color = Color(0xFFFFD740), icon = coinIcon)
+            HUDChip(label = remember(coins) { "$coins" }, color = Color(0xFFFFD740), iconKey = "coin")
         }
     }
 }
@@ -171,7 +187,7 @@ fun AchievementBanner(achievement: Achievement, modifier: Modifier = Modifier) {
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Text(achievement.icon, fontSize = 22.sp)
+        PixelIcon(achievement.icon, 24.dp)
         Column {
             Text(
                 "Achievement unlocked",
@@ -300,7 +316,7 @@ private fun HUDBar(
 }
 
 @Composable
-private fun HUDChip(label: String, color: Color, icon: ImageBitmap? = null) {
+private fun HUDChip(label: String, color: Color, iconKey: String? = null) {
     Row(
         modifier = Modifier
             .background(Color(0xCC0A0A14), RoundedCornerShape(6.dp))
@@ -308,13 +324,8 @@ private fun HUDChip(label: String, color: Color, icon: ImageBitmap? = null) {
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(4.dp)
     ) {
-        if (icon != null) {
-            Image(
-                bitmap             = icon,
-                contentDescription = null,
-                modifier           = Modifier.size(14.dp),
-                colorFilter        = ColorFilter.tint(color, BlendMode.Modulate)
-            )
+        if (iconKey != null) {
+            PixelIcon(iconKey, 16.dp)
         }
         Text(
             text       = label,

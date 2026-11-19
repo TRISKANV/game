@@ -7,6 +7,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import com.kotlinsurvivors.features.game.presentation.components.PixelIcon
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -111,10 +112,7 @@ private fun AchievementCard(achievement: Achievement) {
                     ),
                 contentAlignment = Alignment.Center
             ) {
-                Text(
-                    if (achievement.isUnlocked) achievement.icon else "🔒",
-                    fontSize = 26.sp
-                )
+                PixelIcon(if (achievement.isUnlocked) achievement.icon else "lock", 32.dp)
             }
 
             // Text column
@@ -143,7 +141,7 @@ private fun AchievementCard(achievement: Achievement) {
 
             // Checkmark
             if (achievement.isUnlocked) {
-                Text("✓", color = Color(0xFF66BB6A), fontSize = 20.sp, fontWeight = FontWeight.ExtraBold)
+                PixelIcon("check", 20.dp)
             }
         }
     }

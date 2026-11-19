@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import com.kotlinsurvivors.features.game.presentation.components.PixelIcon
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -58,7 +59,7 @@ fun ShopScreen(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier          = Modifier.padding(end = 16.dp)
                     ) {
-                        Text("💰", fontSize = 18.sp)
+                        PixelIcon("coin", 20.dp)
                         Spacer(Modifier.width(4.dp))
                         Text(
                             "${uiState.availableCoins}",
@@ -206,8 +207,10 @@ private fun ShopUpgradeCard(
                     shape    = RoundedCornerShape(3.dp),
                     border   = BorderStroke(1.dp, if (canAfford) Color(0xFFFFD740).copy(alpha = 0.4f) else Color(0xFF333333))
                 ) {
+                    PixelIcon("coin", 16.dp)
+                    Spacer(Modifier.width(6.dp))
                     Text(
-                        "💰 ${upgrade.nextCost}",
+                        "${upgrade.nextCost}",
                         fontSize   = 13.sp,
                         fontWeight = FontWeight.Bold
                     )
@@ -221,7 +224,11 @@ private fun ShopUpgradeCard(
                         .border(1.dp, Color(0xFFFFD740).copy(alpha = 0.3f), RoundedCornerShape(3.dp)),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text("✦ MAXED ✦", color = Color(0xFFFFD740), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        PixelIcon("sparkle", 16.dp)
+                        Text("MAXED", color = Color(0xFFFFD740), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+                        PixelIcon("sparkle", 16.dp)
+                    }
                 }
             }
         }

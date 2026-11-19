@@ -584,15 +584,15 @@ class GameEngine(
             }
 
         options.addAll(listOf(
-            LevelUpOption("stat_hp",       "Vital Boost",   "+30 Max HP",        UpgradeType.STAT, icon = "❤️",  rarity = UpgradeRarity.COMMON),
-            LevelUpOption("stat_speed",    "Swift Feet",    "+15% Move Speed",   UpgradeType.STAT, icon = "👟",  rarity = UpgradeRarity.COMMON),
-            LevelUpOption("stat_damage",   "Power Surge",   "+20% Damage",       UpgradeType.STAT, icon = "⚔️",  rarity = UpgradeRarity.RARE),
-            LevelUpOption("stat_area",     "Wide Strike",   "+15% Area",         UpgradeType.STAT, icon = "🌐",  rarity = UpgradeRarity.COMMON),
-            LevelUpOption("stat_cooldown", "Rapid Fire",    "-10% Cooldowns",    UpgradeType.STAT, icon = "⚡",  rarity = UpgradeRarity.RARE),
-            LevelUpOption("stat_regen",    "Regeneration",  "+1 HP/sec Regen",   UpgradeType.STAT, icon = "🔋",  rarity = UpgradeRarity.COMMON),
-            LevelUpOption("stat_magnet",   "Magnetism",     "+50% Pickup Range", UpgradeType.STAT, icon = "🧲",  rarity = UpgradeRarity.RARE),
-            LevelUpOption("stat_crit",     "Sharpness",     "+10% Crit Chance",  UpgradeType.STAT, icon = "💥",  rarity = UpgradeRarity.EPIC),
-            LevelUpOption("stat_armor",    "Iron Skin",     "+1 Armor",          UpgradeType.STAT, icon = "🛡️",  rarity = UpgradeRarity.COMMON),
+            LevelUpOption("stat_hp",       "Vital Boost",   "+30 Max HP",        UpgradeType.STAT, icon = "heart",  rarity = UpgradeRarity.COMMON),
+            LevelUpOption("stat_speed",    "Swift Feet",    "+15% Move Speed",   UpgradeType.STAT, icon = "boots",  rarity = UpgradeRarity.COMMON),
+            LevelUpOption("stat_damage",   "Power Surge",   "+20% Damage",       UpgradeType.STAT, icon = "sword",  rarity = UpgradeRarity.RARE),
+            LevelUpOption("stat_area",     "Wide Strike",   "+15% Area",         UpgradeType.STAT, icon = "globe",  rarity = UpgradeRarity.COMMON),
+            LevelUpOption("stat_cooldown", "Rapid Fire",    "-10% Cooldowns",    UpgradeType.STAT, icon = "bolt",  rarity = UpgradeRarity.RARE),
+            LevelUpOption("stat_regen",    "Regeneration",  "+1 HP/sec Regen",   UpgradeType.STAT, icon = "battery",  rarity = UpgradeRarity.COMMON),
+            LevelUpOption("stat_magnet",   "Magnetism",     "+50% Pickup Range", UpgradeType.STAT, icon = "magnet",  rarity = UpgradeRarity.RARE),
+            LevelUpOption("stat_crit",     "Sharpness",     "+10% Crit Chance",  UpgradeType.STAT, icon = "burst",  rarity = UpgradeRarity.EPIC),
+            LevelUpOption("stat_armor",    "Iron Skin",     "+1 Armor",          UpgradeType.STAT, icon = "shield",  rarity = UpgradeRarity.COMMON),
         ))
 
         val shuffled = options.shuffled()
@@ -721,16 +721,16 @@ class GameEngine(
         else -> "+Damage"
     }
     private fun weaponIcon(type: com.kotlinsurvivors.engine.ecs.components.WeaponType) = when (type) {
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "🪄"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> "🔪"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.CROSS        -> "✝️"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND   -> "🔥"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.AXE         -> "🪓"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> "⚡"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC      -> "🧄"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "💧"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "🌀"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "📖"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "wand"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> "knife"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.CROSS        -> "cross"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND   -> "fire"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.AXE         -> "axe"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> "bolt"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC      -> "garlic"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "water"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "whip"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "bible"
     }
 }
 
