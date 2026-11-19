@@ -10,6 +10,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
@@ -41,8 +45,6 @@ import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.UpgradeRarity
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlin.math.cos
-import kotlin.math.sin
 import kotlin.random.Random
 import com.kotlinsurvivors.engine.input.VirtualJoystick
 import com.kotlinsurvivors.features.game.domain.model.GameState
@@ -239,9 +241,9 @@ private fun PauseButton(text: String, color: Color, onClick: () -> Unit) {
 private const val LEVEL_UP_FADE_MS = 400
 
 /**
- * Level up by roulette: a wheel spins and lands on the upgrade the engine drew
- * ([winnerIndex] of [options]); the player then takes it. Tapping the wheel while it
- * spins jumps to the result.
+ * Level up like opening a case: a strip of upgrades runs past the marker in the middle,
+ * slows down and stops on the prize the engine drew ([winnerIndex] of [options]). The
+ * player then takes it. Tapping the strip while it runs jumps to the result.
  */
 @Composable
 fun LevelUpOverlay(
@@ -250,7 +252,8 @@ fun LevelUpOverlay(
     playerLevel : Int,
     onChoice    : (LevelUpOption) -> Unit
 ) {
-    val pulse by rememberInfiniteTransition(label = "pulse").animateFloat(
+    // Read inside graphicsLayer only, so the pulse redraws the title without recomposing the overlay.
+    val pulse = rememberInfiniteTransition(label = "pulse").animateFloat(
         initialValue  = 0.85f,
         targetValue   = 1f,
         animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
@@ -277,224 +280,201 @@ fun LevelUpOverlay(
         }
         val winner = options[winnerIndex.coerceIn(0, options.lastIndex)]
 
-        // The wheel turns several times and stops with the winning slice under the pointer.
-        val sliceDegrees = 360f / options.size
-        val stopOffset   = remember(options, winnerIndex) { (Random.nextFloat() - 0.5f) * sliceDegrees * 0.6f }
-        val target       = SPIN_TURNS * 360f - winnerIndex * sliceDegrees + stopOffset
-        val spin         = remember { Animatable(0f) }
-        LaunchedEffect(target) {
-            delay(LEVEL_UP_FADE_MS.toLong() / 2)
-            spin.animateTo(target, tween(SPIN_MS, easing = CubicBezierEasing(0.1f, 0.75f, 0.15f, 1f)))
-        }
-        val landed by remember { derivedStateOf { spin.value >= target - 0.5f } }
+        // How far the strip must travel to put the prize under the marker. It stops
+        // somewhere inside the prize's tile, not always dead centre, like the real thing.
+        val tilePx       = with(LocalDensity.current) { REEL_TILE_WIDTH.toPx() }
+        var viewportPx   by remember { mutableIntStateOf(0) }
+        val stopInTile   = remember(winnerIndex) { 0.5f + (Random.nextFloat() - 0.5f) * 0.7f }
+        val target       = winnerIndex * tilePx + stopInTile * tilePx - viewportPx / 2f
+        val targetNow    by rememberUpdatedState(target)
+
+        val listState = rememberLazyListState()
+        val scroll    = remember { Animatable(0f) }
+        val landed by remember { derivedStateOf { viewportPx > 0 && scroll.value >= targetNow - 0.5f } }
         val scope = rememberCoroutineScope()
 
-        Row(
-            verticalAlignment     = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(20.dp),
-            modifier              = Modifier
+        // The strip is a lazy list scrolled by hand: only the tiles in view are ever composed.
+        LaunchedEffect(listState) {
+            var applied = 0f
+            snapshotFlow { scroll.value }.collect { value ->
+                listState.dispatchRawDelta(value - applied)
+                applied = value
+            }
+        }
+        LaunchedEffect(viewportPx) {
+            if (viewportPx == 0) return@LaunchedEffect
+            delay(LEVEL_UP_FADE_MS.toLong())
+            scroll.animateTo(target, tween(SPIN_MS, easing = CubicBezierEasing(0.08f, 0.55f, 0.12f, 1f)))
+        }
+
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier            = Modifier
                 .graphicsLayer {
                     val s = 0.9f + 0.1f * appear.value
                     scaleX = s
                     scaleY = s
                 }
                 .padding(horizontal = 24.dp)
+                .widthIn(max = REEL_MAX_WIDTH)
         ) {
-            RouletteWheel(
-                options  = options,
-                rotation = { spin.value },
-                modifier = Modifier.clickable(
-                    interactionSource = remember { MutableInteractionSource() },
-                    indication        = null,
-                    enabled           = !landed,
-                    onClick           = { scope.launch { spin.snapTo(target) } }
+            if (titleImage != null) {
+                PixelImage(titleImage, "Level up", targetWidth = 200.dp, modifier = Modifier.graphicsLayer { alpha = pulse.value })
+            } else {
+                Text(
+                    "LEVEL UP!",
+                    color         = Color(0xFFFFD740),
+                    fontSize      = 28.sp,
+                    fontWeight    = FontWeight.ExtraBold,
+                    letterSpacing = 4.sp
                 )
-            )
+            }
 
+            if (landed) {
+                val rColor = rarityColor(winner.rarity)
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text(
+                        rarityLabel(winner.rarity),
+                        color         = rColor,
+                        fontSize      = 10.sp,
+                        fontWeight    = FontWeight.ExtraBold,
+                        letterSpacing = 1.5.sp,
+                        modifier      = Modifier
+                            .background(rColor.copy(alpha = 0.15f), RoundedCornerShape(2.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    )
+                    Text(winner.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                }
+            } else {
+                Text("Level $playerLevel — Opening...", color = Color(0xFFBBBBBB), fontSize = 13.sp)
+            }
+
+            // The strip, with the marker in the middle.
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(REEL_HEIGHT)
+                    .clip(RoundedCornerShape(3.dp))
+                    .background(Color(0xFF0B0814))
+                    .onSizeChanged { viewportPx = it.width }
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication        = null,
+                        enabled           = !landed,
+                        onClick           = { scope.launch { scroll.snapTo(target) } }
+                    )
+            ) {
+                LazyRow(
+                    state             = listState,
+                    userScrollEnabled = false,
+                    modifier          = Modifier.fillMaxSize()
+                ) {
+                    items(options.size) { index -> ReelTile(options[index]) }
+                }
+                Box(
+                    Modifier.align(Alignment.CenterStart).fillMaxHeight().width(40.dp)
+                        .background(Brush.horizontalGradient(listOf(Color(0xFF0B0814), Color.Transparent)))
+                )
+                Box(
+                    Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(40.dp)
+                        .background(Brush.horizontalGradient(listOf(Color.Transparent, Color(0xFF0B0814))))
+                )
+                Canvas(modifier = Modifier.fillMaxSize()) {
+                    val gold = Color(0xFFFFD740)
+                    val dark = Color(0xFF0E0A1A)
+                    val arrow = 8.dp.toPx()
+                    drawLine(gold, Offset(center.x, 0f), Offset(center.x, size.height), strokeWidth = 3.dp.toPx())
+                    val top = Path().apply {
+                        moveTo(center.x - arrow, 0f); lineTo(center.x + arrow, 0f); lineTo(center.x, arrow * 1.4f); close()
+                    }
+                    val bottom = Path().apply {
+                        moveTo(center.x - arrow, size.height); lineTo(center.x + arrow, size.height)
+                        lineTo(center.x, size.height - arrow * 1.4f); close()
+                    }
+                    drawPath(top, gold); drawPath(top, dark, style = Stroke(width = 2.dp.toPx()))
+                    drawPath(bottom, gold); drawPath(bottom, dark, style = Stroke(width = 2.dp.toPx()))
+                }
+            }
+
+            // Kept at the same height while the strip runs so nothing jumps when it stops.
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier            = Modifier.weight(1f).widthIn(max = 320.dp)
+                modifier            = Modifier.fillMaxWidth().heightIn(min = RESULT_MIN_HEIGHT)
             ) {
-                if (titleImage != null) {
-                    PixelImage(titleImage, "Level up", targetWidth = 220.dp, modifier = Modifier.alpha(pulse))
+                if (landed) {
+                    Text(winner.description, color = Color(0xFFBBBBBB), fontSize = 13.sp, textAlign = TextAlign.Center)
+                    TakeButton(onClick = { onChoice(winner) })
                 } else {
-                    Text(
-                        "LEVEL UP!",
-                        color         = Color(0xFFFFD740).copy(alpha = pulse),
-                        fontSize      = 30.sp,
-                        fontWeight    = FontWeight.ExtraBold,
-                        letterSpacing = 4.sp
-                    )
-                }
-                Text(
-                    if (landed) "Level $playerLevel — Your prize" else "Level $playerLevel — Spinning...",
-                    color    = Color(0xFFBBBBBB),
-                    fontSize = 13.sp
-                )
-                // The room for the card is kept while the wheel spins so nothing jumps.
-                Box(Modifier.fillMaxWidth().heightIn(min = RESULT_MIN_HEIGHT), contentAlignment = Alignment.Center) {
-                    if (landed) {
-                        LevelUpCard(option = winner, onClick = { onChoice(winner) }, modifier = Modifier.fillMaxWidth())
-                    } else {
-                        Text("Tap the wheel to skip", color = Color(0xFF777777), fontSize = 11.sp)
-                    }
+                    Text("Tap to skip", color = Color(0xFF777777), fontSize = 11.sp)
                 }
             }
         }
     }
 }
 
-private const val SPIN_TURNS = 5
-private const val SPIN_MS    = 3600
-private val RESULT_MIN_HEIGHT = 150.dp
-private val WHEEL_SIZE = 176.dp
+private const val SPIN_MS = 5200
+private val REEL_TILE_WIDTH   = 84.dp
+private val REEL_HEIGHT       = 108.dp
+private val REEL_MAX_WIDTH    = 560.dp
+private val RESULT_MIN_HEIGHT = 64.dp
 
-/** The wheel: one slice per option, coloured by rarity, with a fixed pointer at the top. */
+/** One upgrade on the strip: its icon and name inside a frame in the colour of its rarity. */
 @Composable
-private fun RouletteWheel(
-    options  : List<LevelUpOption>,
-    rotation : () -> Float,
-    modifier : Modifier = Modifier
-) {
-    val sliceDegrees = 360f / options.size
-    val half = WHEEL_SIZE.value / 2f
-
-    Box(modifier = modifier.size(WHEEL_SIZE)) {
-        Box(modifier = Modifier.fillMaxSize().graphicsLayer { rotationZ = rotation() }) {
-            Canvas(modifier = Modifier.fillMaxSize()) {
-                val inset  = WHEEL_INSET.toPx()
-                val box    = Size(size.width - inset * 2, size.height - inset * 2)
-                val corner = Offset(inset, inset)
-                options.forEachIndexed { i, option ->
-                    val start = i * sliceDegrees - sliceDegrees / 2f - 90f
-                    drawArc(
-                        color      = lerp(rarityColor(option.rarity), Color.Black, 0.45f),
-                        startAngle = start, sweepAngle = sliceDegrees, useCenter = true,
-                        topLeft    = corner, size = box
-                    )
-                    drawArc(
-                        color      = Color(0xFF0E0A1A),
-                        startAngle = start, sweepAngle = sliceDegrees, useCenter = true,
-                        topLeft    = corner, size = box, style = Stroke(width = 2.dp.toPx())
-                    )
-                }
-                drawCircle(Color(0xFF3A2278), radius = box.width / 2f, style = Stroke(width = 5.dp.toPx()),
-                    center = center)
-                drawCircle(Color(0xFF14101F), radius = HUB_RADIUS.toPx(), center = center)
-                drawCircle(Color(0xFF7C4DFF), radius = HUB_RADIUS.toPx(), style = Stroke(width = 2.dp.toPx()),
-                    center = center)
-            }
-            // The icons turn with their slice, standing out from the hub.
-            options.forEachIndexed { i, option ->
-                val angle  = i * sliceDegrees
-                val radius = (half - WHEEL_INSET.value) * 0.68f
-                val dx = sin(Math.toRadians(angle.toDouble())).toFloat() * radius
-                val dy = -cos(Math.toRadians(angle.toDouble())).toFloat() * radius
-                PixelIcon(
-                    key      = option.icon,
-                    iconSize = WHEEL_ICON,
-                    modifier = Modifier
-                        .offset(x = (half + dx - WHEEL_ICON.value / 2f).dp, y = (half + dy - WHEEL_ICON.value / 2f).dp)
-                        .graphicsLayer { rotationZ = angle }
-                )
-            }
-        }
-        // Pointer, fixed at the top.
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = 9.dp.toPx()
-            val tip = Path().apply {
-                moveTo(center.x - w, 0f)
-                lineTo(center.x + w, 0f)
-                lineTo(center.x, 22.dp.toPx())
-                close()
-            }
-            drawPath(tip, Color(0xFFFFD740))
-            drawPath(tip, Color(0xFF0E0A1A), style = Stroke(width = 2.dp.toPx()))
-        }
-    }
-}
-
-private val WHEEL_INSET = 10.dp
-private val WHEEL_ICON  = 22.dp
-private val HUB_RADIUS  = 14.dp
-
-@Composable
-private fun LevelUpCard(option: LevelUpOption, onClick: () -> Unit, modifier: Modifier = Modifier) {
-    val source  = remember { MutableInteractionSource() }
-    val pressed by source.collectIsPressedAsState()
-    val scale by animateFloatAsState(
-        if (pressed) 0.95f else 1f,
-        spring(stiffness = Spring.StiffnessHigh), label = "scale"
-    )
-
+private fun ReelTile(option: LevelUpOption) {
     val rColor = rarityColor(option.rarity)
-    val rLabel = rarityLabel(option.rarity)
-
-    // Legendary gets a border that pulses
-    val legendaryPulse by rememberInfiniteTransition(label = "legendaryPulse").animateFloat(
-        initialValue  = 0.7f,
-        targetValue   = 1f,
-        animationSpec = infiniteRepeatable(tween(800), RepeatMode.Reverse),
-        label         = "legendaryAlpha"
-    )
-    val frameColor = if (option.rarity == UpgradeRarity.LEGENDARY) rColor.copy(alpha = legendaryPulse) else rColor.copy(alpha = 0.8f)
-
     Box(
-        modifier = modifier
-            .scale(scale)
+        modifier = Modifier
+            .width(REEL_TILE_WIDTH)
+            .fillMaxHeight()
+            .padding(3.dp)
             .pixelFrame(
                 unit  = pixelUnitOf(2.dp),
-                frame = frameColor,
-                body  = Color(0xFF14101F),
+                frame = rColor.copy(alpha = 0.9f),
+                body  = lerp(rColor, Color.Black, 0.75f),
                 light = lerp(rColor, Color.White, 0.45f)
             )
+    ) {
+        Column(
+            modifier            = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            PixelIcon(option.icon, 36.dp)
+            Text(
+                option.title,
+                color      = Color.White,
+                fontSize   = 10.sp,
+                fontWeight = FontWeight.Bold,
+                textAlign  = TextAlign.Center,
+                lineHeight = 12.sp,
+                maxLines   = 2
+            )
+        }
+    }
+}
+
+@Composable
+private fun TakeButton(onClick: () -> Unit) {
+    Box(
+        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .pixelFrame(
+                unit  = pixelUnitOf(2.dp),
+                frame = Color(0xFF7C4DFF),
+                body  = Color(0xFF3A2278),
+                light = Color(0xFFB39DFF)
+            )
             .clickable(
-                interactionSource = source,
+                interactionSource = remember { MutableInteractionSource() },
                 indication        = null,
                 role              = Role.Button,
                 onClick           = onClick
             )
+            .padding(horizontal = 32.dp, vertical = 10.dp)
     ) {
-        Column(
-            modifier            = Modifier.fillMaxWidth().padding(horizontal = 14.dp, vertical = 16.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            // Icon
-            PixelIcon(option.icon, 40.dp)
-
-            // Rarity badge
-            Text(
-                rLabel,
-                color      = rColor,
-                fontSize   = 9.sp,
-                fontWeight = FontWeight.ExtraBold,
-                letterSpacing = 1.5.sp,
-                modifier   = Modifier
-                    .background(rColor.copy(alpha = 0.15f), RoundedCornerShape(2.dp))
-                    .padding(horizontal = 6.dp, vertical = 2.dp)
-            )
-
-            // Title
-            Text(
-                option.title,
-                color      = Color.White,
-                fontSize   = 13.sp,
-                fontWeight = FontWeight.Bold,
-                textAlign  = TextAlign.Center,
-                lineHeight = 16.sp
-            )
-
-            // Description
-            Text(
-                option.description,
-                color     = Color(0xFF999999),
-                fontSize  = 11.sp,
-                textAlign = TextAlign.Center,
-                lineHeight = 14.sp
-            )
-        }
+        Text("TAKE IT", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
     }
 }
 

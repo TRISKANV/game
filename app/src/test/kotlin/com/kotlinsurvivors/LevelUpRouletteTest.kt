@@ -20,14 +20,16 @@ class LevelUpRouletteTest {
     ).flatMap { (rarity, count) -> (1..count).map { option("${rarity.name}_$it", rarity) } }
 
     @Test
-    fun wheelHasDistinctSlicesAndStopsOnTheWinner() {
-        repeat(200) { seed ->
+    fun stripHasTheRightLengthAndStopsInsideTheWinnerRange() {
+        val seen = HashSet<Int>()
+        repeat(300) { seed ->
             val spin = LevelUpRoulette.spin(pool, Random(seed))
-            assertEquals(LevelUpRoulette.SEGMENTS, spin.segments.size)
-            assertEquals("slices must be different", spin.segments.size, spin.segments.map { it.id }.toSet().size)
-            assertTrue(spin.winnerIndex in spin.segments.indices)
+            assertEquals(LevelUpRoulette.STRIP_LENGTH, spin.segments.size)
+            assertTrue(spin.winnerIndex in LevelUpRoulette.WINNER_RANGE)
             assertEquals(spin.segments[spin.winnerIndex], spin.winner)
+            seen.add(spin.winnerIndex)
         }
+        assertEquals("the stopping point varies", LevelUpRoulette.WINNER_RANGE.count(), seen.size)
     }
 
     @Test
@@ -56,11 +58,27 @@ class LevelUpRouletteTest {
     }
 
     @Test
-    fun smallPoolsStillSpin() {
+    fun smallPoolsStillFillTheStrip() {
         val one = LevelUpRoulette.spin(listOf(option("only", UpgradeRarity.COMMON)))
-        assertEquals(1, one.segments.size)
-        assertEquals("only", one.winner.id)
+        assertEquals(LevelUpRoulette.STRIP_LENGTH, one.segments.size)
+        assertTrue(one.segments.all { it.id == "only" })
         val three = LevelUpRoulette.spin(pool.take(3), Random(1))
-        assertEquals(3, three.segments.size)
+        assertEquals(LevelUpRoulette.STRIP_LENGTH, three.segments.size)
+        assertTrue(three.segments.all { it in pool.take(3) })
+    }
+
+    @Test
+    fun theStripLooksLikeTheOdds() {
+        val random = Random(99)
+        var legendary = 0; var common = 0; var total = 0
+        repeat(500) {
+            for (item in LevelUpRoulette.spin(pool, random).segments) {
+                total++
+                if (item.rarity == UpgradeRarity.LEGENDARY) legendary++
+                if (item.rarity == UpgradeRarity.COMMON) common++
+            }
+        }
+        assertEquals(70.0, 100.0 * common / total, 2.0)
+        assertTrue("legendary should be rare on the strip", 100.0 * legendary / total < 3.0)
     }
 }

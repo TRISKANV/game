@@ -370,8 +370,7 @@ class GameEngine(
                         cachedLevelUpWinner  = spin.winnerIndex
                         CrashLogger.log(
                             "LEVEL-UP offered at level ${event.newLevel}: " +
-                                cachedLevelUpOptions.joinToString { it.id } +
-                                " -> roulette lands on '${cachedLevelUpOptions[cachedLevelUpWinner].id}'"
+                                "roulette lands on '${cachedLevelUpOptions[cachedLevelUpWinner].id}'"
                         )
                         pendingLevelUp = true
                     }
