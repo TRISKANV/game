@@ -218,4 +218,50 @@ class Level1MapTest {
         val dist = kotlin.math.hypot(p.x - e.x, p.y - e.y)
         assertTrue("enemy from ($x, $y) is stuck at (${e.x}, ${e.y}), ${dist.toInt()} px away", dist < 60f)
     }
+
+    @Test
+    fun aShotIsUsedUpByTheFirstEnemyEvenWithPiercing() {
+        val world = World()
+        EntityFactory.createPlayer(world, 100f, 100f)
+        val a = EntityFactory.createEnemy(world, EnemyType.TANK, 500f, 500f)
+        val b = EntityFactory.createEnemy(world, EnemyType.TANK, 505f, 500f)
+        val shot = EntityFactory.createProjectile(
+            world, 500f, 500f, 0f, 0f, com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND, 5, 8f, 4, 5f)
+        com.kotlinsurvivors.engine.ecs.systems.CollisionSystem().update(world, 1f / 60f, mutableListOf())
+        world.flushDestroyed()
+        assertFalse("the shot flew on after hitting", world.projectiles.containsKey(shot))
+        val hurt = listOf(a, b).count { world.healths[it]!!.current < world.healths[it]!!.max }
+        assertEquals("exactly one enemy takes the hit", 1, hurt)
+    }
+
+    @Test
+    fun enemyPushedIntoAnObstacleIsPutBackOnFreeGround() {
+        val small = wallWithGap()
+        val world = World()
+        EntityFactory.createPlayer(world, 700f, 300f)
+        val movement = MovementSystem(1024f, 1024f).also { it.levelMap = small }
+        val eid = EntityFactory.createEnemy(world, EnemyType.TANK, 520f, 300f)   // inside the wall
+        movement.update(world, 1f / 60f, JoystickState())
+        val t = world.transforms[eid]!!
+        val feet = world.colliders[eid]!!.radius * MovementSystem.ENEMY_FEET_FACTOR
+        assertFalse("still inside the wall at (${t.x}, ${t.y})", small.isBlockedAt(t.x, t.y + feet))
+    }
+
+    @Test
+    fun enemiesNeverSpawnWhereThePlayerCanSeeThem() {
+        val world = World()
+        EntityFactory.createPlayer(world, Level1.SPAWN_X, Level1.SPAWN_Y)
+        val vw = 2400f; val vh = 1080f
+        val spawn = SpawnSystem(vw, vh).also { it.levelMap = map }
+        // The camera stops at the north edge, so the player sits high on the screen.
+        val camX = (Level1.SPAWN_X - vw / 2).coerceIn(0f, Level1.WORLD_SIZE - vw)
+        val camY = (Level1.SPAWN_Y - vh / 2).coerceIn(0f, Level1.WORLD_SIZE - vh)
+        repeat(60 * 300) { frame -> spawn.update(world, 1f / 60f, frame / 60f) }
+        assertTrue(world.getEnemySnapshot().isNotEmpty())
+        for (id in world.getEnemySnapshot()) {
+            val t = world.transforms[id]!!
+            val visible = t.x > camX && t.x < camX + vw && t.y > camY && t.y < camY + vh
+            assertFalse("enemy $id spawned on screen at (${t.x}, ${t.y})", visible)
+        }
+    }
 }

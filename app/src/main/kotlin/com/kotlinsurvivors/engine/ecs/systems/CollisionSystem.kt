@@ -93,7 +93,12 @@ class CollisionSystem {
                 EntityFactory.createDamageNumber(world, et.x, et.y - ec.radius, proj.damage, proj.isCritical)
                 EntityFactory.createParticleBurst(world, et.x, et.y, ParticleType.BLOOD, 4)
 
-                if (proj.piercingLeft <= 0) { world.destroyEntity(pid); break }
+                // A shot is used up by the first enemy it hits. Only the water, which acts as an
+                // area, lives on and damages everything inside it.
+                if (proj.weaponType != WeaponType.SANTA_WATER || proj.piercingLeft <= 0) {
+                    world.destroyEntity(pid)
+                    break
+                }
             }
 
             val remaining = world.projectiles[pid]?.lifetime ?: continue

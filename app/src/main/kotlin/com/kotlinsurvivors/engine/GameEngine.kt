@@ -728,7 +728,7 @@ class GameEngine(
         com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "Fires a magic bolt at the nearest enemy."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> "Throws a fast knife toward the nearest enemy."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.CROSS        -> "Flings a cross in four directions."
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND   -> "Fires a piercing flame projectile."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND   -> "Fires a flame projectile."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.AXE         -> "Hurls a heavy axe in an arc."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> "Strikes multiple nearby enemies with lightning."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC      -> "Damages enemies in an aura around you."

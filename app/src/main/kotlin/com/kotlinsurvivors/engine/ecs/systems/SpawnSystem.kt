@@ -132,9 +132,15 @@ class SpawnSystem(
     private fun pickSpawnPosition(px: Float, py: Float): Boolean {
         val map = levelMap
         if (map == null) { calcSpawnPosition(px, py); return true }
+        // The camera stops at the edge of the map, so the player is not always in the middle
+        // of the screen: work out what is really visible and never spawn inside it.
+        val camX = (px - viewportWidth  * 0.5f).coerceIn(0f, (map.worldSize - viewportWidth ).coerceAtLeast(0f))
+        val camY = (py - viewportHeight * 0.5f).coerceIn(0f, (map.worldSize - viewportHeight).coerceAtLeast(0f))
         repeat(SPAWN_TRIES) {
             calcSpawnPosition(px, py)
-            if (map.isBoxFree(spawnX, spawnY, SPAWN_CLEARANCE, SPAWN_CLEARANCE)) return true
+            val onScreen = spawnX > camX - OFFSCREEN_MARGIN && spawnX < camX + viewportWidth  + OFFSCREEN_MARGIN &&
+                           spawnY > camY - OFFSCREEN_MARGIN && spawnY < camY + viewportHeight + OFFSCREEN_MARGIN
+            if (!onScreen && map.isBoxFree(spawnX, spawnY, SPAWN_CLEARANCE, SPAWN_CLEARANCE)) return true
         }
         return false
     }
@@ -163,7 +169,8 @@ class SpawnSystem(
     }
 
     private companion object {
-        const val SPAWN_TRIES     = 12
+        const val SPAWN_TRIES     = 30
+        const val OFFSCREEN_MARGIN = 60f   // the camera lags a little behind the player
         const val SPAWN_CLEARANCE = 20f   // enough room for any enemy, bosses may squeeze out of it
     }
 

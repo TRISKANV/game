@@ -255,6 +255,7 @@ class MovementSystem(
     ): Boolean {
         // The box sits at the feet, not at the centre of the sprite: that is the part
         // that must not overlap a wall, while the head may pass in front of it.
+        ejectFromWalls(map, t, halfW, halfH, feetOffset)
         var blocked = false
         if (map.canMove(t.x, t.y + feetOffset, nx, t.y + feetOffset, halfW, halfH)) t.x = nx
         else { vel.vx = 0f; blocked = true }
@@ -263,7 +264,30 @@ class MovementSystem(
         return blocked
     }
 
+    /**
+     * Knock-backs and the separation between crowding enemies push bodies without looking at
+     * the map, so one can end up inside a wall, a pond or a car. Put it on the nearest free
+     * spot, searching in growing rings.
+     */
+    private fun ejectFromWalls(map: LevelMap, t: TransformComponent, halfW: Float, halfH: Float, feetOffset: Float) {
+        if (map.isBoxFree(t.x, t.y + feetOffset, halfW, halfH)) return
+        var radius = EJECT_STEP
+        while (radius <= EJECT_MAX_RADIUS) {
+            for (k in 0 until RING_DIRECTIONS) {
+                val a  = k * (2f * PI.toFloat() / RING_DIRECTIONS)
+                val nx = t.x + cos(a) * radius
+                val ny = t.y + sin(a) * radius
+                if (map.isBoxFree(nx, ny + feetOffset, halfW, halfH)) { t.x = nx; t.y = ny; return }
+            }
+            radius += EJECT_STEP
+        }
+    }
+
     companion object {
+        private const val EJECT_STEP       = 6f
+        private const val EJECT_MAX_RADIUS = 120f
+        private const val RING_DIRECTIONS  = 16
+
         // Half size of the box that collides with the level, in world pixels. It covers
         // only the feet (the sprite is 90 px tall and its feet are about 38 px below the
         // position), so the head can overlap lamps and trees like in any top-down game.
