@@ -35,7 +35,7 @@ class GameEngine(
         const val MAX_FRAME_TIME = 0.05f
         const val WORLD_WIDTH    = 4096f
         const val WORLD_HEIGHT   = 4096f
-        private const val RENDER_BUFFER_COUNT = 3
+        private const val RENDER_BUFFER_COUNT = 8
         private const val FACING_MIN_SPEED_SQ  = 25f   // below 5 px/s the player counts as standing still
 
         // Logging
@@ -412,9 +412,10 @@ class GameEngine(
 
     /**
      * The UI thread draws from the buffer carried by the last emitted state
-     * while the engine already writes the next frame. Rotating through three
-     * buffers keeps the one being drawn untouched for two full frames, so the
-     * renderer never reads a half-written frame.
+     * while the engine already writes the next frame. Rotating through several
+     * buffers keeps the one being drawn untouched for a number of frames, so the
+     * renderer never reads a half-written one even when the UI thread stalls for
+     * a moment (for example while a menu is being composed).
      */
     private val renderBuffers     = Array(RENDER_BUFFER_COUNT) { RenderBuffer() }
     private var renderBufferIndex = 0

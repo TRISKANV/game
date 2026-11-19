@@ -261,12 +261,6 @@ class GameRenderer(
                 canvas.drawBitmap(a.decals, srcRect, dstRect, spritePaint)
             }
         }
-
-        val vig = Color(0x66000000)
-        drawRect(vig, topLeft = Offset(0f,       0f),        size = Size(120f, vh))
-        drawRect(vig, topLeft = Offset(vw-120f,  0f),        size = Size(120f, vh))
-        drawRect(vig, topLeft = Offset(0f,       0f),        size = Size(vw, 120f))
-        drawRect(vig, topLeft = Offset(0f,       vh-120f),   size = Size(vw, 120f))
     }
 
     /** Stable pseudo-random non-negative number for a pair of cell coordinates. */

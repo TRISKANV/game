@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.IntOffset
@@ -225,6 +226,8 @@ private fun PauseButton(text: String, color: Color, onClick: () -> Unit) {
 
 // ── Level-Up Overlay ─────────────────────────────────────────────────────────
 
+private const val LEVEL_UP_FADE_MS = 400
+
 @Composable
 fun LevelUpOverlay(
     options     : List<LevelUpOption>,
@@ -239,14 +242,27 @@ fun LevelUpOverlay(
     )
     val titleImage = rememberUiImage("ui_title_levelup.png")
 
+    // The screen fades in and grows slightly instead of appearing all at once.
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, tween(LEVEL_UP_FADE_MS, easing = FastOutSlowInEasing)) }
+
     Box(
-        modifier         = Modifier.fillMaxSize().background(Color(0xCC000014)),
+        modifier         = Modifier
+            .fillMaxSize()
+            .graphicsLayer { alpha = appear.value }
+            .background(Color(0xCC000014)),
         contentAlignment = Alignment.Center
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
-            modifier            = Modifier.padding(horizontal = 20.dp)
+            modifier            = Modifier
+                .graphicsLayer {
+                    val s = 0.9f + 0.1f * appear.value
+                    scaleX = s
+                    scaleY = s
+                }
+                .padding(horizontal = 20.dp)
         ) {
             // Animated title
             if (titleImage != null) {
