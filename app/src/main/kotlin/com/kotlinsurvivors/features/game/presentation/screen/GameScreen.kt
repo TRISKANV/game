@@ -86,6 +86,9 @@ fun GameScreen(
             sprites = withContext(Dispatchers.IO) { SpriteAtlas.load(context.applicationContext) }
         }
 
+        // Overlay images are decoded now, while the game starts, not when the first one opens.
+        LaunchedEffect(context) { UiImageCache.preloadGameOverlays(context.applicationContext) }
+
         // The picture of the level, decoded the same way. Without it the old ground is drawn.
         var levelArt by remember { mutableStateOf<LevelArt?>(null) }
         LaunchedEffect(context) {

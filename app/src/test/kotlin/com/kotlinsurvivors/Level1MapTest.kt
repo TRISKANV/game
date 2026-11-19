@@ -25,7 +25,8 @@ class Level1MapTest {
         LevelMap(Level1.CELLS, Level1.CELL_SIZE, file.readBytes())
     }
 
-    private val playerHalf = 11f
+    private val playerHalf = MovementSystem.PLAYER_HALF
+    private val feet = MovementSystem.PLAYER_FEET_OFFSET
 
     @Test
     fun levelFilesMatchTheMetadata() {
@@ -53,7 +54,7 @@ class Level1MapTest {
 
     @Test
     fun playerStartsOnFreeGroundJustBelowTheDoor() {
-        assertTrue(map.isBoxFree(Level1.SPAWN_X, Level1.SPAWN_Y, playerHalf, playerHalf))
+        assertTrue(map.isBoxFree(Level1.SPAWN_X, Level1.SPAWN_Y + feet, playerHalf, playerHalf))
         assertTrue("below the door", Level1.SPAWN_Y > Level1.DOOR_Y)
         assertTrue(Level1.SPAWN_X in Level1.DOOR_LEFT..Level1.DOOR_RIGHT)
         assertTrue("near the north border", Level1.SPAWN_Y < Level1.WORLD_SIZE * 0.25f)
@@ -64,7 +65,7 @@ class Level1MapTest {
         // Flood fill over cells where the player's box (with margin) fits.
         val n = Level1.CELLS
         val c = Level1.CELL_SIZE
-        fun fits(cx: Int, cy: Int) = map.isBoxFree((cx + 0.5f) * c, (cy + 0.5f) * c, playerHalf, playerHalf)
+        fun fits(cx: Int, cy: Int) = map.isBoxFree((cx + 0.5f) * c, (cy + 0.5f) * c, playerHalf, playerHalf) // feet position
         var free = 0
         for (cy in 0 until n) for (cx in 0 until n) if (fits(cx, cy)) free++
         assertTrue("map has walkable space", free > n * n / 4)
@@ -125,8 +126,8 @@ class Level1MapTest {
         // Up and to the left, hard: the house wall stops the player and the left part slides.
         repeat(300) { movement.update(world, 1f / 60f, JoystickState(true, -0.7f, -0.7f)) }
         val t = world.transforms[pid]!!
-        assertTrue("player ended in a wall at (${t.x}, ${t.y})", map.isBoxFree(t.x, t.y, playerHalf, playerHalf))
-        assertTrue("walked through the house", t.y > Level1.DOOR_Y)
+        assertTrue("player's feet ended in a wall at (${t.x}, ${t.y})", map.isBoxFree(t.x, t.y + feet, playerHalf, playerHalf))
+        assertTrue("feet walked through the house", t.y + feet > Level1.DOOR_Y)
         assertTrue("did not slide along the wall", t.x < Level1.SPAWN_X - 40f)
     }
 
@@ -140,7 +141,8 @@ class Level1MapTest {
         val eid = EntityFactory.createEnemy(world, EnemyType.FAST, x, y)
         repeat(600) { movement.update(world, 1f / 60f, JoystickState()) }
         val t = world.transforms[eid]!!
-        assertFalse("enemy ended inside a wall at (${t.x}, ${t.y})", map.isBlockedAt(t.x, t.y))
+        val feetY = t.y + world.colliders[eid]!!.radius * MovementSystem.ENEMY_FEET_FACTOR
+        assertFalse("enemy's feet ended inside a wall at (${t.x}, $feetY)", map.isBlockedAt(t.x, feetY))
     }
 
     @Test

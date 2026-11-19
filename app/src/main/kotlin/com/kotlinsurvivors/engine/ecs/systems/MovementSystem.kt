@@ -180,7 +180,7 @@ class MovementSystem(
                     val nx = (t.x + vel.vx * dt).coerceIn(40f, worldWidth  - 40f)
                     val ny = (t.y + vel.vy * dt).coerceIn(40f, worldHeight - 40f)
                     if (map == null) { t.x = nx; t.y = ny }
-                    else moveAgainstMap(map, t, vel, nx, ny, PLAYER_HALF, PLAYER_HALF)
+                    else moveAgainstMap(map, t, vel, nx, ny, PLAYER_HALF, PLAYER_HALF, PLAYER_FEET_OFFSET)
                 }
                 else -> {
                     val nx = t.x + vel.vx * dt
@@ -189,7 +189,7 @@ class MovementSystem(
                     else {
                         val r = world.colliders[id]?.radius ?: 12f
                         val half = (r * 0.6f).coerceIn(ENEMY_HALF_MIN, ENEMY_HALF_MAX)
-                        moveAgainstMap(map, t, vel, nx, ny, half, half)
+                        moveAgainstMap(map, t, vel, nx, ny, half, half, r * ENEMY_FEET_FACTOR)
                     }
                 }
             }
@@ -203,17 +203,22 @@ class MovementSystem(
      */
     private fun moveAgainstMap(
         map: LevelMap, t: TransformComponent, vel: VelocityComponent,
-        nx: Float, ny: Float, halfW: Float, halfH: Float
+        nx: Float, ny: Float, halfW: Float, halfH: Float, feetOffset: Float
     ) {
-        if (map.canMove(t.x, t.y, nx, t.y, halfW, halfH)) t.x = nx else vel.vx = 0f
-        if (map.canMove(t.x, t.y, t.x, ny, halfW, halfH)) t.y = ny else vel.vy = 0f
+        // The box sits at the feet, not at the centre of the sprite: that is the part
+        // that must not overlap a wall, while the head may pass in front of it.
+        if (map.canMove(t.x, t.y + feetOffset, nx, t.y + feetOffset, halfW, halfH)) t.x = nx else vel.vx = 0f
+        if (map.canMove(t.x, t.y + feetOffset, t.x, ny + feetOffset, halfW, halfH)) t.y = ny else vel.vy = 0f
     }
 
-    private companion object {
-        // Half size of the box that collides with the level, in world pixels. The player's
-        // is smaller than the sprite so the head can overlap lamps and trees like in any
-        // top-down game; it fits through a two-cell (32 px) gap.
-        const val PLAYER_HALF    = 11f
+    companion object {
+        // Half size of the box that collides with the level, in world pixels. It covers
+        // only the feet (the sprite is 90 px tall and its feet are about 38 px below the
+        // position), so the head can overlap lamps and trees like in any top-down game.
+        // It fits through a two-cell (32 px) gap.
+        const val PLAYER_HALF        = 12f
+        const val PLAYER_FEET_OFFSET = 26f
+        const val ENEMY_FEET_FACTOR  = 0.8f
         const val ENEMY_HALF_MIN = 6f
         const val ENEMY_HALF_MAX = 14f
     }

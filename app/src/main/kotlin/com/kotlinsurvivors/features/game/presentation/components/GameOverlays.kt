@@ -24,6 +24,7 @@ import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.semantics.Role
@@ -249,7 +250,9 @@ fun LevelUpOverlay(
     Box(
         modifier         = Modifier
             .fillMaxSize()
-            .graphicsLayer { alpha = appear.value }
+            // ModulateAlpha fades each thing as it is drawn instead of rendering the whole
+            // screen into an extra full-size buffer first, which cost a visible hitch.
+            .graphicsLayer { alpha = appear.value; compositingStrategy = CompositingStrategy.ModulateAlpha }
             .background(Color(0xCC000014)),
         contentAlignment = Alignment.Center
     ) {
