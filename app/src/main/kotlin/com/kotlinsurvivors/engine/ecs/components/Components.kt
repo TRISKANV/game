@@ -163,7 +163,10 @@ data class EnemyComponent(
     var stateTimer: Float = 0f,
     var experienceValue: Int = 5,
     var coinDropChance: Float = 0.1f,
-    var coinDropAmount: IntRange = 1..3
+    var coinDropAmount: IntRange = 1..3,
+    /** True while the enemy is going round an obstacle by the level's flow field instead of straight at the player. */
+    var followingPath: Boolean = false,
+    var pathCheckTimer: Float = 0f
 ) : Component
 
 // ─────────────────────────────────────────────

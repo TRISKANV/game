@@ -161,4 +161,61 @@ class Level1MapTest {
             assertTrue("enemy $id spawned in a wall at (${t.x}, ${t.y})", map.isBoxFree(t.x, t.y, 20f, 20f))
         }
     }
+
+    // ── projectiles and path finding ─────────────────────────────────────────
+
+    /** 64 x 64 cells: solid border, and a vertical wall at column 32 with a gap at the bottom. */
+    private fun wallWithGap(): LevelMap {
+        val n = 64
+        val grid = ByteArray(n * n)
+        for (i in 0 until n) { grid[i] = 1; grid[(n - 1) * n + i] = 1; grid[i * n] = 1; grid[i * n + n - 1] = 1 }
+        for (y in 5..50) { grid[y * n + 32] = 1; grid[y * n + 33] = 1 }
+        return LevelMap(n, 16f, grid)
+    }
+
+    @Test
+    fun shotsAreLostAgainstWallsButFlyOverOpenGround() {
+        val small = wallWithGap()
+        val world = World()
+        EntityFactory.createPlayer(world, 100f, 100f)
+        val movement = MovementSystem(1024f, 1024f).also { it.levelMap = small }
+        val wall = EntityFactory.createProjectile(
+            world, 400f, 300f, 300f, 0f, com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND, 5, 6f, 1, 5f)
+        val open = EntityFactory.createProjectile(
+            world, 100f, 700f, 300f, 0f, com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND, 5, 6f, 1, 5f)
+        repeat(60) {                                                       // one second: 300 px
+            movement.update(world, 1f / 60f, JoystickState())
+            world.flushDestroyed()
+        }
+        assertFalse("the shot went through the wall", world.projectiles.containsKey(wall))
+        assertTrue(world.projectiles.containsKey(open))
+        assertTrue(world.transforms[open]!!.x > 350f)
+    }
+
+    @Test
+    fun enemyGoesRoundAWallToReachThePlayer() {
+        val small = wallWithGap()
+        val world = World()
+        val pid = EntityFactory.createPlayer(world, 700f, 300f)
+        val movement = MovementSystem(1024f, 1024f).also { it.levelMap = small }
+        val eid = EntityFactory.createEnemy(world, EnemyType.FAST, 300f, 300f)
+        repeat(60 * 40) { movement.update(world, 1f / 60f, JoystickState()) }
+        val p = world.transforms[pid]!!; val e = world.transforms[eid]!!
+        val dist = kotlin.math.hypot(p.x - e.x, p.y - e.y)
+        assertTrue("enemy is still stuck at (${e.x}, ${e.y}), ${dist.toInt()} px away", dist < 50f)
+    }
+
+    @Test
+    fun enemyFindsItsWayAcrossTheRealMap() {
+        val world = World()
+        val pid = EntityFactory.createPlayer(world, Level1.SPAWN_X, Level1.SPAWN_Y)
+        val movement = MovementSystem(Level1.WORLD_SIZE, Level1.WORLD_SIZE).also { it.levelMap = map }
+        // Start in the park, far to the south-west of the door, on the other side of buildings and the pond.
+        val (x, y) = freeSpotFrom(500f, 2300f, 14f)
+        val eid = EntityFactory.createEnemy(world, EnemyType.FAST, x, y)
+        repeat(60 * 120) { movement.update(world, 1f / 60f, JoystickState()) }
+        val p = world.transforms[pid]!!; val e = world.transforms[eid]!!
+        val dist = kotlin.math.hypot(p.x - e.x, p.y - e.y)
+        assertTrue("enemy from ($x, $y) is stuck at (${e.x}, ${e.y}), ${dist.toInt()} px away", dist < 60f)
+    }
 }

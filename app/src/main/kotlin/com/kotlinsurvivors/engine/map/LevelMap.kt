@@ -44,6 +44,18 @@ class LevelMap(
         return true
     }
 
+    /** True when no blocked cell lies on the straight line from (x0, y0) to (x1, y1). */
+    fun hasLineOfSight(x0: Float, y0: Float, x1: Float, y1: Float): Boolean {
+        val dx = x1 - x0
+        val dy = y1 - y0
+        val steps = (kotlin.math.max(kotlin.math.abs(dx), kotlin.math.abs(dy)) / (cellSize * 0.5f)).toInt() + 1
+        for (i in 0..steps) {
+            val f = i.toFloat() / steps
+            if (isBlockedAt(x0 + dx * f, y0 + dy * f)) return false
+        }
+        return true
+    }
+
     /**
      * Whether a body at (x, y) may move to (nx, ny). A body that is already stuck inside
      * a wall (pushed there by a knock-back, say) may move as long as its centre does not
