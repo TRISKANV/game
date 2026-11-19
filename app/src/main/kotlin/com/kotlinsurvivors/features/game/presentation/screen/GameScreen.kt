@@ -22,6 +22,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kotlinsurvivors.engine.rendering.GameRenderer
+import com.kotlinsurvivors.engine.rendering.LevelArt
 import com.kotlinsurvivors.engine.rendering.SpriteAtlas
 import com.kotlinsurvivors.features.game.domain.model.Achievement
 import com.kotlinsurvivors.features.game.domain.model.GameState
@@ -85,11 +86,18 @@ fun GameScreen(
             sprites = withContext(Dispatchers.IO) { SpriteAtlas.load(context.applicationContext) }
         }
 
+        // The picture of the level, decoded the same way. Without it the old ground is drawn.
+        var levelArt by remember { mutableStateOf<LevelArt?>(null) }
+        LaunchedEffect(context) {
+            levelArt = withContext(Dispatchers.IO) { LevelArt.loadLevel1(context.applicationContext) }
+        }
+
         // Settings that act on the game. Plain assignments, safe to repeat every frame.
         SideEffect {
             renderer.showDamageNumbers = settings.showDamageNumbers
             renderer.showFps           = settings.showFps
             renderer.atlas             = sprites
+            renderer.levelArt          = levelArt
             viewModel.joystick?.setScale(settings.joystickSize)
         }
 

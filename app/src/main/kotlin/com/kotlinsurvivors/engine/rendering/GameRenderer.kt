@@ -11,14 +11,21 @@ import android.graphics.RectF
 import android.graphics.Shader
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.TextMeasurer
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
+import com.kotlinsurvivors.engine.map.Level1
 import com.kotlinsurvivors.engine.ecs.components.RenderShape
 import com.kotlinsurvivors.engine.ecs.components.WeaponType
 import kotlin.math.*
@@ -39,6 +46,7 @@ class GameRenderer(
     // Smoothed camera position, carried from frame to frame.
     private var smoothX = 0f
     private var smoothY = 0f
+    private var cameraPlaced = false
 
     // Camera actually used for drawing this frame: smoothed position plus shake.
     private var cameraX = 0f
@@ -56,6 +64,25 @@ class GameRenderer(
      * missing) everything is drawn with the original plain shapes.
      */
     var atlas: SpriteAtlas? = null
+
+    /**
+     * The picture of the level being played. While it is null the repeating ground is
+     * drawn instead. Setting it also switches on lamp glows, rain and the camera limits.
+     */
+    var levelArt: LevelArt? = null
+
+    private var glowImage: ImageBitmap? = null
+    private var glowSource: Bitmap? = null
+    private val rainPaint = Paint().apply {
+        isAntiAlias = false
+        strokeWidth = RAIN_WIDTH
+        color       = RAIN_COLOR
+    }
+    private val rainPoints = FloatArray(RAIN_DROPS * 4)
+    private val rainSeeds  = FloatArray(RAIN_DROPS * 3).also {
+        val random = kotlin.random.Random(RAIN_SEED)
+        for (i in it.indices) it[i] = random.nextFloat()
+    }
 
     // Nearest-neighbour paints keep the pixel art crisp when it is scaled up.
     private val spritePaint = Paint().apply { isAntiAlias = false; isFilterBitmap = false }
@@ -126,8 +153,16 @@ class GameRenderer(
             screenH = size.height
 
             // Smooth camera follow
-            val targetCX = buf.cameraTargetX - viewportWidth  * 0.5f
-            val targetCY = buf.cameraTargetY - viewportHeight * 0.5f
+            var targetCX = buf.cameraTargetX - viewportWidth  * 0.5f
+            var targetCY = buf.cameraTargetY - viewportHeight * 0.5f
+            if (levelArt != null) {
+                // Never show what lies beyond the edge of the map.
+                targetCX = targetCX.coerceIn(0f, (Level1.WORLD_SIZE - viewportWidth).coerceAtLeast(0f))
+                targetCY = targetCY.coerceIn(0f, (Level1.WORLD_SIZE - viewportHeight).coerceAtLeast(0f))
+            }
+            if (!cameraPlaced) {            // first frame: start on the player instead of sweeping in from 0,0
+                smoothX = targetCX; smoothY = targetCY; cameraPlaced = true
+            }
             smoothX = lerp(smoothX, targetCX, (dt * 8f).coerceAtMost(1f))
             smoothY = lerp(smoothY, targetCY, (dt * 8f).coerceAtMost(1f))
 
@@ -180,6 +215,12 @@ class GameRenderer(
             for (i in 0 until buf.count) {
                 if (buf.kind[i] == RenderKind.PARTICLE) renderParticle(buf, i)
             }
+            // Pass 7b: lamp light and rain (level pictures only)
+            val art = levelArt
+            if (art != null) {
+                drawLampGlows(art)
+                drawRain()
+            }
             // Pass 8: Damage numbers
             if (showDamageNumbers) {
                 for (i in 0 until buf.count) {
@@ -208,6 +249,11 @@ class GameRenderer(
     // ── Background ──────────────────────────────────────────────────────────
 
     private fun DrawScope.drawBackground(vw: Float, vh: Float) {
+        val art = levelArt
+        if (art != null) {
+            drawLevel(art, vw, vh)
+            return
+        }
         val sprites = atlas
         if (sprites != null) {
             drawGround(sprites, vw, vh)
@@ -225,6 +271,78 @@ class GameRenderer(
         drawRect(vig, topLeft = Offset(0f,      0f),    size = Size(vw, 120f))
         drawRect(vig, topLeft = Offset(0f,      vh-120f), size = Size(vw, 120f))
     }
+
+    /**
+     * Draws the part of the baked level picture that is on screen. The source rectangle is
+     * cut on whole image pixels and the destination follows from it, so every image pixel
+     * becomes a crisp 2x2 block of world pixels.
+     */
+    private fun DrawScope.drawLevel(art: LevelArt, vw: Float, vh: Float) {
+        val canvas = drawContext.canvas.nativeCanvas
+        canvas.drawColor(LEVEL_BACKDROP)
+        val scale = Level1.IMAGE_SCALE
+        val bmp   = art.level
+        val camX  = floor(cameraX)
+        val camY  = floor(cameraY)
+        val left   = floor(camX / scale).toInt().coerceIn(0, bmp.width)
+        val top    = floor(camY / scale).toInt().coerceIn(0, bmp.height)
+        val right  = ceil((camX + vw) / scale).toInt().coerceIn(0, bmp.width)
+        val bottom = ceil((camY + vh) / scale).toInt().coerceIn(0, bmp.height)
+        if (right <= left || bottom <= top) return
+        srcRect.set(left, top, right, bottom)
+        dstRect.set(left * scale - camX, top * scale - camY, right * scale - camX, bottom * scale - camY)
+        canvas.drawBitmap(bmp, srcRect, dstRect, spritePaint)
+    }
+
+    /** A soft warm light on every lamp that is on screen, added on top of the picture. */
+    private fun DrawScope.drawLampGlows(art: LevelArt) {
+        if (glowSource !== art.glow) {
+            glowImage  = art.glow.asImageBitmap()
+            glowSource = art.glow
+        }
+        val glow = glowImage ?: return
+        val lamps = Level1.LAMPS
+        val now   = System.currentTimeMillis()
+        val size  = GLOW_SIZE.toInt()
+        var i = 0
+        while (i < lamps.size) {
+            val sx = lamps[i] - cameraX
+            val sy = lamps[i + 1] - cameraY
+            if (inViewport(sx, sy, GLOW_SIZE * 0.5f)) {
+                // Each lamp flickers a little, out of step with the others.
+                val flicker = GLOW_ALPHA + GLOW_FLICKER * sin(now * 0.004f + i * 1.7f)
+                drawImage(
+                    image         = glow,
+                    dstOffset     = IntOffset((sx - size / 2).toInt(), (sy - size / 2).toInt()),
+                    dstSize       = IntSize(size, size),
+                    alpha         = flicker,
+                    blendMode     = BlendMode.Plus,
+                    filterQuality = FilterQuality.Low
+                )
+            }
+            i += 2
+        }
+    }
+
+    /** Slanted rain streaks over the whole screen, computed from the clock: no allocation, no state. */
+    private fun DrawScope.drawRain() {
+        val t = System.nanoTime() / 1_000_000_000.0
+        val w = screenW
+        val h = screenH + RAIN_LENGTH
+        for (i in 0 until RAIN_DROPS) {
+            val speed = RAIN_SPEED + rainSeeds[i * 3 + 2] * RAIN_SPEED_SPREAD
+            val y = wrap(rainSeeds[i * 3 + 1] * h + (t * speed).toFloat(), h) - RAIN_LENGTH
+            val x = wrap(rainSeeds[i * 3] * w - (t * RAIN_DRIFT).toFloat(), w)
+            val o = i * 4
+            rainPoints[o]     = x
+            rainPoints[o + 1] = y
+            rainPoints[o + 2] = x - RAIN_LENGTH * RAIN_SLANT
+            rainPoints[o + 3] = y + RAIN_LENGTH
+        }
+        drawContext.canvas.nativeCanvas.drawLines(rainPoints, rainPaint)
+    }
+
+    private fun wrap(value: Float, period: Float) = value - floor(value / period) * period
 
     /** Tiled street, scattered clutter and a darkened border. */
     private fun DrawScope.drawGround(a: SpriteAtlas, vw: Float, vh: Float) {
@@ -547,6 +665,22 @@ class GameRenderer(
         const val SPIN_PERIOD_MS  = 500L
 
         // Ground: each 32px tile is drawn 3x, clutter is placed on a coarse world grid.
+        const val LEVEL_BACKDROP = 0xFF0A0A14.toInt()
+        const val GLOW_SIZE      = 300f
+        const val GLOW_ALPHA     = 0.85f
+        const val GLOW_FLICKER   = 0.08f
+
+        // Rain: sizes in screen pixels, speeds in pixels per second.
+        const val RAIN_DROPS        = 120
+        const val RAIN_SEED         = 4242
+        const val RAIN_LENGTH       = 26f
+        const val RAIN_WIDTH        = 2f
+        const val RAIN_SLANT        = 0.18f
+        const val RAIN_SPEED        = 1100f
+        const val RAIN_SPEED_SPREAD = 500f
+        const val RAIN_DRIFT        = 200f
+        const val RAIN_COLOR        = 0x55BFD8FF
+
         const val GROUND_SCALE        = 3f
         const val DECAL_CELL_WORLD    = 360f
         const val DECAL_CHANCE_PERCENT = 40

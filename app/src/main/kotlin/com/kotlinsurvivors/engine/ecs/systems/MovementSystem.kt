@@ -3,6 +3,7 @@ package com.kotlinsurvivors.engine.ecs.systems
 import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.components.*
 import com.kotlinsurvivors.engine.input.JoystickState
+import com.kotlinsurvivors.engine.map.LevelMap
 import kotlin.math.*
 import kotlin.random.Random
 
@@ -15,6 +16,9 @@ class MovementSystem(
     private val worldWidth : Float,
     private val worldHeight: Float
 ) {
+
+    /** Collision grid of the current level; null means open ground with no obstacles. */
+    var levelMap: LevelMap? = null
 
     fun update(world: World, dt: Float, joystick: JoystickState) {
         updatePlayer(world, dt, joystick)
@@ -163,6 +167,7 @@ class MovementSystem(
 
     private fun integratePositions(world: World, dt: Float) {
         val pid = world.getPlayerEntity()
+        val map = levelMap
         // ID snapshot — no Pair allocation
         for (id in world.getVelocitySnapshot()) {
             val vel = world.velocities[id] ?: continue
@@ -172,13 +177,44 @@ class MovementSystem(
                     t.x += vel.vx * dt; t.y += vel.vy * dt
                 }
                 id == pid -> {
-                    t.x = (t.x + vel.vx * dt).coerceIn(40f, worldWidth  - 40f)
-                    t.y = (t.y + vel.vy * dt).coerceIn(40f, worldHeight - 40f)
+                    val nx = (t.x + vel.vx * dt).coerceIn(40f, worldWidth  - 40f)
+                    val ny = (t.y + vel.vy * dt).coerceIn(40f, worldHeight - 40f)
+                    if (map == null) { t.x = nx; t.y = ny }
+                    else moveAgainstMap(map, t, vel, nx, ny, PLAYER_HALF, PLAYER_HALF)
                 }
                 else -> {
-                    t.x += vel.vx * dt; t.y += vel.vy * dt
+                    val nx = t.x + vel.vx * dt
+                    val ny = t.y + vel.vy * dt
+                    if (map == null) { t.x = nx; t.y = ny }
+                    else {
+                        val r = world.colliders[id]?.radius ?: 12f
+                        val half = (r * 0.6f).coerceIn(ENEMY_HALF_MIN, ENEMY_HALF_MAX)
+                        moveAgainstMap(map, t, vel, nx, ny, half, half)
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * Moves one axis at a time so a body that hits a wall slides along it instead of
+     * stopping dead. The blocked axis loses its speed, which the AI or joystick
+     * recomputes on the next tick.
+     */
+    private fun moveAgainstMap(
+        map: LevelMap, t: TransformComponent, vel: VelocityComponent,
+        nx: Float, ny: Float, halfW: Float, halfH: Float
+    ) {
+        if (map.canMove(t.x, t.y, nx, t.y, halfW, halfH)) t.x = nx else vel.vx = 0f
+        if (map.canMove(t.x, t.y, t.x, ny, halfW, halfH)) t.y = ny else vel.vy = 0f
+    }
+
+    private companion object {
+        // Half size of the box that collides with the level, in world pixels. The player's
+        // is smaller than the sprite so the head can overlap lamps and trees like in any
+        // top-down game; it fits through a two-cell (32 px) gap.
+        const val PLAYER_HALF    = 11f
+        const val ENEMY_HALF_MIN = 6f
+        const val ENEMY_HALF_MAX = 14f
     }
 }

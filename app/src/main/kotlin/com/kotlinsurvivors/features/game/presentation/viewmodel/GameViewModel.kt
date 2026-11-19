@@ -1,16 +1,19 @@
 package com.kotlinsurvivors.features.game.presentation.viewmodel
 
+import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kotlinsurvivors.core.crash.CrashLogger
 import com.kotlinsurvivors.engine.AchievementEngine
 import com.kotlinsurvivors.engine.GameEngine
+import com.kotlinsurvivors.engine.map.LevelMapLoader
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
 import com.kotlinsurvivors.features.game.domain.model.RunResult
 import com.kotlinsurvivors.features.game.domain.repository.GameRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.StateFlow
 import javax.inject.Inject
@@ -18,7 +21,8 @@ import javax.inject.Inject
 @HiltViewModel
 class GameViewModel @Inject constructor(
     private val gameRepository: GameRepository,
-    private val achievementEngine: AchievementEngine
+    private val achievementEngine: AchievementEngine,
+    @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
     companion object {
@@ -38,9 +42,11 @@ class GameViewModel @Inject constructor(
     fun initEngine(viewportWidth: Float, viewportHeight: Float) {
         if (engine != null) return
         Log.d(TAG, "Initialising engine: ${viewportWidth}x${viewportHeight}")
-        val newEngine = GameEngine(viewportWidth, viewportHeight) {
-            gameRepository.getPermanentUpgradeLevels()
-        }
+        val newEngine = GameEngine(
+            viewportWidth, viewportHeight,
+            loadPermanentLevels = { gameRepository.getPermanentUpgradeLevels() },
+            loadLevelMap        = { LevelMapLoader.loadLevel1(appContext) }
+        )
         engine = newEngine
         newEngine.start(viewModelScope)
         trackAchievements(newEngine)

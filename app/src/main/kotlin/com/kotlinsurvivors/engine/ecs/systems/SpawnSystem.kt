@@ -3,6 +3,7 @@ package com.kotlinsurvivors.engine.ecs.systems
 import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.components.EnemyType
+import com.kotlinsurvivors.engine.map.LevelMap
 import kotlin.math.*
 import kotlin.random.Random
 
@@ -39,6 +40,9 @@ class SpawnSystem(
                                      EnemyType.RANGED, EnemyType.EXPLODER)
     private val bossList   = arrayOf(EnemyType.BOSS_SHADOW, EnemyType.BOSS_GOLEM, EnemyType.BOSS_NECROMANCER)
 
+    /** Collision grid of the current level; enemies only appear on free ground. */
+    var levelMap: LevelMap? = null
+
     // Reusable spawn position — avoids Pair allocation every spawn
     private var spawnX = 0f
     private var spawnY = 0f
@@ -70,10 +74,11 @@ class SpawnSystem(
                 val burst = spawnBurstCount(elapsedTime)
                 repeat(burst) {
                     if (world.getEnemyEntities().size < maxEnemies) {
-                        calcSpawnPosition(pt.x, pt.y)
-                        val type = pickEnemyType(elapsedTime)
-                        EntityFactory.createEnemy(world, type, spawnX, spawnY, waveMultiplier(elapsedTime))
-                        result.enemiesSpawned++
+                        if (pickSpawnPosition(pt.x, pt.y)) {
+                            val type = pickEnemyType(elapsedTime)
+                            EntityFactory.createEnemy(world, type, spawnX, spawnY, waveMultiplier(elapsedTime))
+                            result.enemiesSpawned++
+                        }
                     }
                 }
             }
@@ -81,9 +86,8 @@ class SpawnSystem(
 
         // Boss spawns
         bossTimer += dt
-        if (bossTimer >= bossInterval) {
+        if (bossTimer >= bossInterval && pickSpawnPosition(pt.x, pt.y)) {
             bossTimer = 0f
-            calcSpawnPosition(pt.x, pt.y)
             val bossType = pickBossType(elapsedTime)
             val mult = (1f + elapsedTime / 180f).coerceAtMost(4f)
             EntityFactory.createEnemy(world, bossType, spawnX, spawnY, mult)
@@ -121,6 +125,21 @@ class SpawnSystem(
     private fun waveMultiplier(elapsed: Float) = 1f + (elapsed / 120f) * 0.5f
 
     /**
+     * Like [calcSpawnPosition] but, on a level with obstacles, retries a few times until the
+     * spot is free ground. False when none was found (the caller skips this spawn and tries
+     * again on the next one; the player may be standing next to the edge of the map).
+     */
+    private fun pickSpawnPosition(px: Float, py: Float): Boolean {
+        val map = levelMap
+        if (map == null) { calcSpawnPosition(px, py); return true }
+        repeat(SPAWN_TRIES) {
+            calcSpawnPosition(px, py)
+            if (map.isBoxFree(spawnX, spawnY, SPAWN_CLEARANCE, SPAWN_CLEARANCE)) return true
+        }
+        return false
+    }
+
+    /**
      * Writes spawn position into spawnX/spawnY instead of returning Pair.
      * Eliminates one Pair allocation per spawn event.
      */
@@ -141,6 +160,11 @@ class SpawnSystem(
     fun reset() {
         spawnTimer = 0f; bossTimer = 0f; waveTimer = 0f
         currentWave = 0; spawnInterval = 1.2f; maxEnemies = 50
+    }
+
+    private companion object {
+        const val SPAWN_TRIES     = 12
+        const val SPAWN_CLEARANCE = 20f   // enough room for any enemy, bosses may squeeze out of it
     }
 
     data class SpawnResult(

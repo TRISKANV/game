@@ -6,6 +6,8 @@ import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.systems.*
 import com.kotlinsurvivors.engine.input.VirtualJoystick
+import com.kotlinsurvivors.engine.map.Level1
+import com.kotlinsurvivors.engine.map.LevelMap
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
 import com.kotlinsurvivors.features.game.domain.model.UpgradeType
@@ -27,7 +29,12 @@ class GameEngine(
     private val viewportWidth : Float,
     private val viewportHeight: Float,
     /** Levels of the shop's permanent upgrades, read at the start of every run. */
-    private val loadPermanentLevels: suspend () -> Map<String, Int> = { emptyMap() }
+    private val loadPermanentLevels: suspend () -> Map<String, Int> = { emptyMap() },
+    /**
+     * Collision grid of the level to play. Null (the default) means the old open arena:
+     * no obstacles and the player starts in the middle of the world.
+     */
+    private val loadLevelMap: suspend () -> LevelMap? = { null }
 ) {
     companion object {
         const val TARGET_FPS     = 60
@@ -101,7 +108,7 @@ class GameEngine(
         engineJob = scope.launch(engineDispatcher) {
             previous?.join()
             resetState()
-            initWorld(readPermanentLevels())
+            initWorld(readPermanentLevels(), readLevelMap())
 
             var lastTime    = System.nanoTime()
             var accumulator = 0f
@@ -249,9 +256,25 @@ class GameEngine(
             emptyMap()
         }
 
-    private fun initWorld(permanentLevels: Map<String, Int>) {
+    /** A missing or broken map file must not stop the game from starting. */
+    private suspend fun readLevelMap(): LevelMap? =
+        try {
+            loadLevelMap()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            CrashLogger.logCrash("loading the level map", e)
+            null
+        }
+
+    private fun initWorld(permanentLevels: Map<String, Int>, map: LevelMap?) {
         world.clear()
-        val playerId = EntityFactory.createPlayer(world, WORLD_WIDTH / 2f, WORLD_HEIGHT / 2f)
+        movementSystem.levelMap = map
+        spawnSystem.levelMap    = map
+        // With a map the run starts just outside the house door, otherwise in the middle.
+        val startX = if (map != null) Level1.SPAWN_X else WORLD_WIDTH  / 2f
+        val startY = if (map != null) Level1.SPAWN_Y else WORLD_HEIGHT / 2f
+        val playerId = EntityFactory.createPlayer(world, startX, startY)
         val applied = PermanentBonuses.applyTo(world, playerId, permanentLevels)
         CrashLogger.log("Permanent upgrades applied: " + (if (applied.isEmpty()) "none" else applied.entries.joinToString { "${it.key}:${it.value}" }))
         CrashLogger.attachWorld(world)
