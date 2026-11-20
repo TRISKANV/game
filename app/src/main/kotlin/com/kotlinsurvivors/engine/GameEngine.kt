@@ -67,7 +67,11 @@ class GameEngine(
     private var elapsedTime    = 0f
     @Volatile private var isPaused  = false
     @Volatile private var isRunning = false
+    /** True while the level-up roulette is open; the simulation is frozen for as long as it is. */
     private var pendingLevelUp = false
+    /** Levels gained whose roulette the player has not opened yet. The game keeps running meanwhile. */
+    private var levelUpsWaiting = 0
+    @Volatile private var openRouletteRequested = false
     private val frameEvents    = mutableListOf<GameEvent>()
     private var frameCount     = 0L
     private var hitCount       = 0
@@ -79,6 +83,7 @@ class GameEngine(
     private var hasEmitted                = false
     private var lastEmittedPaused         = false
     private var lastEmittedPendingLevelUp = false
+    private var lastEmittedLevelUpsWaiting = 0
     private var cachedLevelUpOptions: List<LevelUpOption> = emptyList()
     private var cachedLevelUpWinner = 0
 
@@ -127,6 +132,7 @@ class GameEngine(
 
                     while (accumulator >= FIXED_DT) {
                         drainLevelUpChoices()
+                        openRouletteIfRequested()
                         if (!isPaused && !pendingLevelUp) {
                             tick(FIXED_DT)
                         }
@@ -189,6 +195,14 @@ class GameEngine(
         engineDispatcher.close()
     }
 
+    /**
+     * The player tapped the level-up button: open the roulette for one of the levels waiting.
+     * Ignored when none is waiting or the roulette is already open.
+     */
+    fun openLevelUp() {
+        openRouletteRequested = true
+    }
+
     fun applyLevelUpChoice(option: LevelUpOption) {
         Log.d(TAG, "LevelUp choice queued: id=${option.id} type=${option.type}")
         levelUpChannel.trySend(option)
@@ -213,6 +227,7 @@ class GameEngine(
                     CrashLogger.log("LEVEL-UP choice '${option.id}' (${option.type}) -> ${loadoutSummary(pid)}")
                 }
                 pendingLevelUp       = false
+                levelUpsWaiting      = (levelUpsWaiting - 1).coerceAtLeast(0)
                 cachedLevelUpOptions = emptyList()
                 cachedLevelUpWinner  = 0
             } else {
@@ -220,6 +235,27 @@ class GameEngine(
             }
             result = levelUpChannel.tryReceive()
         }
+    }
+
+    /**
+     * Draws the roulette when the player asked for it. The prizes are worked out now, not
+     * when the level was gained, so they match the weapons the player has at this moment.
+     */
+    private fun openRouletteIfRequested() {
+        if (!openRouletteRequested) return
+        openRouletteRequested = false
+        if (pendingLevelUp || levelUpsWaiting <= 0) return
+        val pid = world.getPlayerEntity()
+        if (pid == -1 || world.healths[pid]?.isDead == true) return
+        val spin = try {
+            LevelUpRoulette.spin(levelUpPool(world, pid))
+        } catch (e: Exception) {
+            CrashLogger.logCrash("level-up roulette", e); throw e
+        }
+        cachedLevelUpOptions = spin.segments
+        cachedLevelUpWinner  = spin.winnerIndex
+        pendingLevelUp       = true
+        CrashLogger.log("LEVEL-UP opened ($levelUpsWaiting waiting): roulette lands on '${spin.winner.id}'")
     }
 
     /** One-line description of what the player currently owns, for the log. */
@@ -236,6 +272,8 @@ class GameEngine(
         elapsedTime          = 0f
         isPaused             = false
         pendingLevelUp       = false
+        levelUpsWaiting      = 0
+        openRouletteRequested = false
         frameCount           = 0L
         cachedLevelUpOptions = emptyList()
         cachedLevelUpWinner  = 0
@@ -357,23 +395,9 @@ class GameEngine(
             when (event) {
                 is GameEvent.LevelUp -> {
                     Log.d(TAG, "LEVEL UP → level ${event.newLevel} at ${elapsedTime.toInt()}s")
-                    if (!pendingLevelUp) {
-                        // Generate options ONCE on the engine thread and cache them.
-                        // emitState() will reuse the cache — no regeneration per frame.
-                        val pid = world.getPlayerEntity()
-                        val spin = try {
-                            LevelUpRoulette.spin(levelUpPool(world, pid))
-                        } catch (e: Exception) {
-                            CrashLogger.logCrash("level-up roulette", e); throw e
-                        }
-                        cachedLevelUpOptions = spin.segments
-                        cachedLevelUpWinner  = spin.winnerIndex
-                        CrashLogger.log(
-                            "LEVEL-UP offered at level ${event.newLevel}: " +
-                                "roulette lands on '${cachedLevelUpOptions[cachedLevelUpWinner].id}'"
-                        )
-                        pendingLevelUp = true
-                    }
+                    // Only counted: the roulette opens when the player taps the level-up button.
+                    levelUpsWaiting++
+                    CrashLogger.log("LEVEL-UP gained: level ${event.newLevel}, $levelUpsWaiting waiting")
                 }
                 is GameEvent.PlayerHit -> {
                     hitCount++
@@ -394,12 +418,14 @@ class GameEngine(
         // drawing from being recycled by frames that would look identical.
         val flagsChanged = !hasEmitted ||
             isPaused != lastEmittedPaused ||
-            pendingLevelUp != lastEmittedPendingLevelUp
+            pendingLevelUp != lastEmittedPendingLevelUp ||
+            levelUpsWaiting != lastEmittedLevelUpsWaiting
         if (!tickedSinceEmit && !flagsChanged) return
         tickedSinceEmit           = false
         hasEmitted                = true
         lastEmittedPaused         = isPaused
         lastEmittedPendingLevelUp = pendingLevelUp
+        lastEmittedLevelUpsWaiting = levelUpsWaiting
 
         val pid    = world.getPlayerEntity()
         val player = world.players[pid]
@@ -418,6 +444,7 @@ class GameEngine(
             isPaused         = isPaused,
             isGameOver       = health?.isDead ?: false,
             isPendingLevelUp = pendingLevelUp,
+            levelUpsWaiting  = levelUpsWaiting,
             levelUpOptions   = cachedLevelUpOptions,  // reuse cached, never regenerate per frame
             levelUpWinner    = cachedLevelUpWinner,
             elapsedTime      = elapsedTime,
@@ -599,7 +626,8 @@ class GameEngine(
                     type = UpgradeType.WEAPON_UPGRADE,
                     weaponType = weapon.type,
                     icon = weaponIcon(weapon.type),
-                    rarity = rarity
+                    rarity = rarity,
+                    level = weapon.level + 1
                 ))
             }
         }
@@ -761,10 +789,8 @@ class GameEngine(
     }
     private fun weaponUpgradeTitle(type: com.kotlinsurvivors.engine.ecs.components.WeaponType, lvl: Int) = "${weaponName(type)} Lv.$lvl"
     private fun weaponUpgradeDesc(lvl: Int) = when {
-        lvl % 4 == 0 -> "+1 Projectile, +Damage"
-        lvl % 3 == 0 -> "+1 Pierce, +Speed"
-        lvl % 2 == 0 -> "+Area, -Cooldown"
-        else -> "+Damage"
+        lvl % 3 == 0 -> "+1 Projectile, +Damage, +Area"   // matches levelUpWeapon()
+        else         -> "+Damage, +Area, -Cooldown"
     }
     private fun weaponIcon(type: com.kotlinsurvivors.engine.ecs.components.WeaponType) = when (type) {
         com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "wand"

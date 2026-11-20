@@ -1,5 +1,6 @@
 package com.kotlinsurvivors
 
+import android.content.Context
 import android.os.Bundle
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
@@ -10,6 +11,7 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import com.kotlinsurvivors.core.presentation.language.AppLanguage
 import com.kotlinsurvivors.core.presentation.theme.KotlinSurvivorsTheme
 import com.kotlinsurvivors.features.navigation.AppNavigation
 import dagger.hilt.android.AndroidEntryPoint
@@ -21,6 +23,11 @@ import dagger.hilt.android.AndroidEntryPoint
  */
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    /** Puts the language chosen in Settings on every resource the activity reads. */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(AppLanguage.wrap(newBase))
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()

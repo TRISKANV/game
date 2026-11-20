@@ -3,10 +3,13 @@ package com.kotlinsurvivors.features.settings.presentation.screen
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
+import android.app.Activity
+import android.content.ContextWrapper
 import android.content.Intent
 import android.os.SystemClock
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
@@ -22,8 +25,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -32,7 +37,9 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kotlinsurvivors.R
 import com.kotlinsurvivors.core.crash.CrashLogger
+import com.kotlinsurvivors.core.presentation.language.AppLanguage
 import com.kotlinsurvivors.features.settings.presentation.viewmodel.SettingsViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -57,6 +64,7 @@ fun SettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     var showLogViewer by remember { mutableStateOf(false) }
     var tapCount      by remember { mutableIntStateOf(0) }
@@ -67,7 +75,7 @@ fun SettingsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "SETTINGS",
+                        stringResource(R.string.settings_title),
                         fontWeight    = FontWeight.ExtraBold,
                         letterSpacing = 3.sp,
                         color         = Color(0xFFAAAAAA)
@@ -75,7 +83,7 @@ fun SettingsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, "Back", tint = Color(0xFFAAAAAA))
+                        Icon(Icons.Filled.ArrowBack, stringResource(R.string.cd_back), tint = Color(0xFFAAAAAA))
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color(0xFF0A0A14))
@@ -93,27 +101,27 @@ fun SettingsScreen(
         ) {
             Spacer(Modifier.height(8.dp))
 
-            SettingsSection("GAMEPLAY")
+            SettingsSection(stringResource(R.string.settings_section_gameplay))
 
             SettingsToggle(
-                label    = "Screen Shake",
-                sublabel = "Shake screen when taking damage",
+                label    = stringResource(R.string.settings_screen_shake),
+                sublabel = stringResource(R.string.settings_screen_shake_sub),
                 checked  = settings.screenShake,
                 onToggle = { viewModel.setScreenShake(it) }
             )
 
             SettingsToggle(
-                label    = "Vibration",
-                sublabel = "Vibrate on hit and level-up",
+                label    = stringResource(R.string.settings_vibration),
+                sublabel = stringResource(R.string.settings_vibration_sub),
                 checked  = settings.vibration,
                 onToggle = { viewModel.setVibration(it) }
             )
 
             Spacer(Modifier.height(8.dp))
-            SettingsSection("CONTROLS")
+            SettingsSection(stringResource(R.string.settings_section_controls))
 
             SettingsSlider(
-                label    = "Joystick Size",
+                label    = stringResource(R.string.settings_joystick),
                 sublabel = "%.0f%%".format(settings.joystickSize * 100f),
                 value    = settings.joystickSize,
                 onValue  = { viewModel.setJoystickSize(it) },
@@ -121,30 +129,40 @@ fun SettingsScreen(
             )
 
             Spacer(Modifier.height(8.dp))
-            SettingsSection("DISPLAY")
+            SettingsSection(stringResource(R.string.settings_section_display))
 
             SettingsToggle(
-                label    = "Show FPS",
-                sublabel = "Display frames per second counter",
+                label    = stringResource(R.string.settings_show_fps),
+                sublabel = stringResource(R.string.settings_show_fps_sub),
                 checked  = settings.showFps,
                 onToggle = { viewModel.setShowFps(it) }
             )
 
             SettingsToggle(
-                label    = "Show Damage Numbers",
-                sublabel = "Show floating damage values",
+                label    = stringResource(R.string.settings_damage_numbers),
+                sublabel = stringResource(R.string.settings_damage_numbers_sub),
                 checked  = settings.showDamageNumbers,
                 onToggle = { viewModel.setShowDamageNumbers(it) }
             )
 
             Spacer(Modifier.height(8.dp))
-            SettingsSection("ABOUT")
+            SettingsSection(stringResource(R.string.settings_section_language))
 
-            SettingsInfoRow("Version", "1.0.0")
-            SettingsInfoRow("Engine",  "Custom ECS / Compose Canvas")
+            LanguageRow(
+                label    = stringResource(R.string.settings_language),
+                sublabel = stringResource(R.string.settings_language_sub),
+                current  = AppLanguage.of(LocalContext.current),
+                onPick   = { tag -> context.findActivity()?.let { AppLanguage.change(it, tag) } }
+            )
+
+            Spacer(Modifier.height(8.dp))
+            SettingsSection(stringResource(R.string.settings_section_about))
+
+            SettingsInfoRow(stringResource(R.string.settings_about_version), "1.0.0")
+            SettingsInfoRow(stringResource(R.string.settings_about_engine), "Custom ECS / Compose Canvas")
             SettingsInfoRow(
-                label   = "License",
-                value   = "MIT Open Source",
+                label   = stringResource(R.string.settings_about_license),
+                value   = stringResource(R.string.settings_about_license_value),
                 onClick = {
                     val now = SystemClock.elapsedRealtime()
                     // Taps must be close together, otherwise the counter restarts.
@@ -409,5 +427,46 @@ private fun SettingsInfoRow(
     ) {
         Text(label, color = Color(0xFF888888), fontSize = 13.sp)
         Text(value, color = Color(0xFFAAAAAA), fontSize = 13.sp)
+    }
+}
+
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity       -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else              -> null
+}
+
+/** Two options side by side: the language names are always written in their own language. */
+@Composable
+private fun LanguageRow(
+    label    : String,
+    sublabel : String,
+    current  : String,
+    onPick   : (String) -> Unit
+) {
+    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp)) {
+        Text(label,    color = Color(0xFFE0E0E0), fontSize = 14.sp, fontWeight = FontWeight.Medium)
+        Text(sublabel, color = Color(0xFF666666), fontSize = 12.sp)
+        Spacer(Modifier.height(8.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            LanguageChip("English", current == AppLanguage.ENGLISH) { onPick(AppLanguage.ENGLISH) }
+            LanguageChip("Español", current == AppLanguage.SPANISH) { onPick(AppLanguage.SPANISH) }
+        }
+    }
+}
+
+@Composable
+private fun LanguageChip(name: String, selected: Boolean, onClick: () -> Unit) {
+    val green = Color(0xFF7CE04A)
+    Box(
+        modifier = Modifier
+            .clip(RoundedCornerShape(8.dp))
+            .background(if (selected) green.copy(alpha = 0.25f) else Color(0xFF222233))
+            .border(1.dp, if (selected) green else Color(0xFF444455), RoundedCornerShape(8.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 22.dp, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(name, color = if (selected) green else Color(0xFFAAAAAA), fontSize = 14.sp, fontWeight = FontWeight.Bold)
     }
 }

@@ -88,6 +88,11 @@ class GameViewModel @Inject constructor(
         engine?.restart(viewModelScope)
     }
 
+    fun openLevelUp() {
+        Log.d(TAG, "openLevelUp()")
+        engine?.openLevelUp()
+    }
+
     fun applyLevelUpChoice(option: LevelUpOption) {
         Log.d(TAG, "applyLevelUpChoice: ${option.id}")
         engine?.applyLevelUpChoice(option)

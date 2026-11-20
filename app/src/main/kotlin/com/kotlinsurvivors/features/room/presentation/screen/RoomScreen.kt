@@ -1,5 +1,7 @@
 package com.kotlinsurvivors.features.room.presentation.screen
 
+import androidx.compose.ui.res.stringResource
+import com.kotlinsurvivors.R
 import android.graphics.Bitmap
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -145,7 +147,7 @@ fun RoomScreen(onExit: () -> Unit) {
 
         if (showHint) {
             Text(
-                text       = "Explore the room. The door is at the bottom.",
+                text       = stringResource(R.string.room_hint),
                 color      = Color(0xFFE0E0E0),
                 fontSize   = 13.sp,
                 fontWeight = FontWeight.SemiBold,

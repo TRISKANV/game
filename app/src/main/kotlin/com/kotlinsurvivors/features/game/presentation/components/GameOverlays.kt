@@ -1,5 +1,11 @@
 package com.kotlinsurvivors.features.game.presentation.components
 
+import androidx.compose.ui.res.stringResource
+import com.kotlinsurvivors.R
+import com.kotlinsurvivors.core.presentation.language.localTitle
+import com.kotlinsurvivors.core.presentation.language.localDescription
+import com.kotlinsurvivors.core.presentation.language.rarityText
+import com.kotlinsurvivors.core.presentation.language.languageSuffix
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
@@ -59,13 +65,6 @@ private fun rarityColor(rarity: UpgradeRarity) = when (rarity) {
     UpgradeRarity.RARE      -> Color(0xFF4FC3F7)
     UpgradeRarity.EPIC      -> Color(0xFFCE93D8)
     UpgradeRarity.LEGENDARY -> Color(0xFFFFD740)
-}
-
-private fun rarityLabel(rarity: UpgradeRarity) = when (rarity) {
-    UpgradeRarity.COMMON    -> "COMMON"
-    UpgradeRarity.RARE      -> "RARE"
-    UpgradeRarity.EPIC      -> "EPIC"
-    UpgradeRarity.LEGENDARY -> "LEGENDARY"
 }
 
 // ── Virtual Joystick ─────────────────────────────────────────────────────────
@@ -153,7 +152,7 @@ fun PauseMenuOverlay(
     onMainMenu : () -> Unit
 ) {
     val panel = rememberUiImage("ui_panel_pause.png")
-    val title = rememberUiImage("ui_title_paused.png")
+    val title = rememberUiImage("ui_title_paused${languageSuffix()}.png")
     if (panel == null || title == null) {
         PlainPauseMenu(onResume, onRestart, onMainMenu)
         return
@@ -170,13 +169,13 @@ fun PauseMenuOverlay(
                 modifier            = Modifier.padding(top = unit * PAUSE_TITLE_TOP),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                PixelImage(title, "Paused", targetWidth = unit * title.width)
+                PixelImage(title, stringResource(R.string.pause_title), targetWidth = unit * title.width)
                 Spacer(Modifier.height(unit * PAUSE_TITLE_GAP))
-                PixelButton("resume",   "Resume",    unit * PAUSE_BUTTON_WIDTH, onResume)   { PauseButton("Resume",    Color(0xFF7CE04A), onResume) }
+                PixelButton("resume",   stringResource(R.string.pause_resume), unit * PAUSE_BUTTON_WIDTH, onResume)   { PauseButton(stringResource(R.string.pause_resume), Color(0xFF7CE04A), onResume) }
                 Spacer(Modifier.height(unit * PAUSE_BUTTON_GAP))
-                PixelButton("restart",  "Restart",   unit * PAUSE_BUTTON_WIDTH, onRestart)  { PauseButton("Restart",   Color(0xFFFFCA28), onRestart) }
+                PixelButton("restart",  stringResource(R.string.pause_restart), unit * PAUSE_BUTTON_WIDTH, onRestart)  { PauseButton(stringResource(R.string.pause_restart), Color(0xFFFFCA28), onRestart) }
                 Spacer(Modifier.height(unit * PAUSE_BUTTON_GAP))
-                PixelButton("mainmenu", "Main menu", unit * PAUSE_BUTTON_WIDTH, onMainMenu) { PauseButton("Main Menu", Color(0xFFEF5350), onMainMenu) }
+                PixelButton("mainmenu", stringResource(R.string.pause_main_menu), unit * PAUSE_BUTTON_WIDTH, onMainMenu) { PauseButton(stringResource(R.string.pause_main_menu), Color(0xFFEF5350), onMainMenu) }
             }
         }
     }
@@ -209,12 +208,12 @@ private fun PlainPauseMenu(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
-                Text("PAUSED", color = Color(0xFF7CE04A), fontSize = 28.sp,
+                Text(stringResource(R.string.pause_title), color = Color(0xFF7CE04A), fontSize = 28.sp,
                     fontWeight = FontWeight.ExtraBold, letterSpacing = 4.sp)
                 HorizontalDivider(color = Color(0xFF7CE04A).copy(alpha = 0.2f))
-                PauseButton("Resume",    Color(0xFF7CE04A), onResume)
-                PauseButton("Restart",   Color(0xFFFFCA28), onRestart)
-                PauseButton("Main Menu", Color(0xFFEF5350), onMainMenu)
+                PauseButton(stringResource(R.string.pause_resume), Color(0xFF7CE04A), onResume)
+                PauseButton(stringResource(R.string.pause_restart), Color(0xFFFFCA28), onRestart)
+                PauseButton(stringResource(R.string.pause_main_menu), Color(0xFFEF5350), onMainMenu)
             }
         }
     }
@@ -259,7 +258,7 @@ fun LevelUpOverlay(
         animationSpec = infiniteRepeatable(tween(700, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label         = "glowPulse"
     )
-    val titleImage = rememberUiImage("ui_title_levelup.png")
+    val titleImage = rememberUiImage("ui_title_levelup${languageSuffix()}.png")
 
     // The screen fades in and grows slightly instead of appearing all at once.
     val appear = remember { Animatable(0f) }
@@ -320,10 +319,10 @@ fun LevelUpOverlay(
                 .widthIn(max = REEL_MAX_WIDTH)
         ) {
             if (titleImage != null) {
-                PixelImage(titleImage, "Level up", targetWidth = 200.dp, modifier = Modifier.graphicsLayer { alpha = pulse.value })
+                PixelImage(titleImage, stringResource(R.string.level_up_title), targetWidth = 200.dp, modifier = Modifier.graphicsLayer { alpha = pulse.value })
             } else {
                 Text(
-                    "LEVEL UP!",
+                    stringResource(R.string.level_up_title),
                     color         = Color(0xFFFFD740),
                     fontSize      = 28.sp,
                     fontWeight    = FontWeight.ExtraBold,
@@ -335,7 +334,7 @@ fun LevelUpOverlay(
                 val rColor = rarityColor(winner.rarity)
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
-                        rarityLabel(winner.rarity),
+                        rarityText(winner.rarity),
                         color         = rColor,
                         fontSize      = 10.sp,
                         fontWeight    = FontWeight.ExtraBold,
@@ -344,10 +343,10 @@ fun LevelUpOverlay(
                             .background(rColor.copy(alpha = 0.15f), RoundedCornerShape(2.dp))
                             .padding(horizontal = 6.dp, vertical = 2.dp)
                     )
-                    Text(winner.title, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                    Text(winner.localTitle(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 }
             } else {
-                Text("Level $playerLevel — Opening...", color = Color(0xFFBBBBBB), fontSize = 13.sp)
+                Text(stringResource(R.string.level_up_opening, playerLevel), color = Color(0xFFBBBBBB), fontSize = 13.sp)
             }
 
             // The strip, with the marker in the middle.
@@ -404,10 +403,10 @@ fun LevelUpOverlay(
                 modifier            = Modifier.fillMaxWidth().heightIn(min = RESULT_MIN_HEIGHT)
             ) {
                 if (landed) {
-                    Text(winner.description, color = Color(0xFFBBBBBB), fontSize = 13.sp, textAlign = TextAlign.Center)
+                    Text(winner.localDescription(), color = Color(0xFFBBBBBB), fontSize = 13.sp, textAlign = TextAlign.Center)
                     TakeButton(onClick = { onChoice(winner) })
                 } else {
-                    Text("Tap to skip", color = Color(0xFF777777), fontSize = 11.sp)
+                    Text(stringResource(R.string.level_up_skip), color = Color(0xFF777777), fontSize = 11.sp)
                 }
             }
         }
@@ -443,7 +442,7 @@ private fun ReelTile(option: LevelUpOption) {
         ) {
             PixelIcon(option.icon, 36.dp)
             Text(
-                option.title,
+                option.localTitle(),
                 color      = Color.White,
                 fontSize   = 10.sp,
                 fontWeight = FontWeight.Bold,
@@ -474,7 +473,7 @@ private fun TakeButton(onClick: () -> Unit) {
             )
             .padding(horizontal = 32.dp, vertical = 10.dp)
     ) {
-        Text("TAKE IT", color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+        Text(stringResource(R.string.level_up_take), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
     }
 }
 
@@ -486,7 +485,7 @@ fun GameOverOverlay(
     onRestart  : () -> Unit,
     onMainMenu : () -> Unit
 ) {
-    val titleImage = rememberUiImage("ui_title_gameover.png")
+    val titleImage = rememberUiImage("ui_title_gameover${languageSuffix()}.png")
 
     Box(
         modifier         = Modifier.fillMaxSize().background(Color(0xDD000000)),
@@ -500,10 +499,10 @@ fun GameOverOverlay(
                 .padding(32.dp)
         ) {
             if (titleImage != null) {
-                PixelImage(titleImage, "Game over", targetWidth = 280.dp)
+                PixelImage(titleImage, stringResource(R.string.game_over_title), targetWidth = 280.dp)
             } else {
                 Text(
-                    "GAME OVER",
+                    stringResource(R.string.game_over_title),
                     color       = Color(0xFFEF5350),
                     fontSize    = 38.sp,
                     fontWeight  = FontWeight.ExtraBold,
@@ -528,7 +527,7 @@ fun GameOverOverlay(
             ) {
                 // Header
                 Text(
-                    "RUN SUMMARY",
+                    stringResource(R.string.game_over_summary),
                     color         = Color(0xFF7CE04A),
                     fontSize      = 11.sp,
                     fontWeight    = FontWeight.ExtraBold,
@@ -536,10 +535,10 @@ fun GameOverOverlay(
                 )
                 HorizontalDivider(color = Color(0xFF7CE04A).copy(alpha = 0.2f))
 
-                StatRow("clock", "Survived",       gameState.formattedTime)
-                StatRow("skull", "Kills",          gameState.killCount.toString())
-                StatRow("star",  "Level Reached",  gameState.playerLevel.toString())
-                StatRow("coin",  "Coins Earned",   gameState.playerCoins.toString())
+                StatRow("clock", stringResource(R.string.game_over_survived), gameState.formattedTime)
+                StatRow("skull", stringResource(R.string.game_over_kills), gameState.killCount.toString())
+                StatRow("star",  stringResource(R.string.game_over_level), gameState.playerLevel.toString())
+                StatRow("coin",  stringResource(R.string.game_over_coins), gameState.playerCoins.toString())
 
                 // Performance rating
                 HorizontalDivider(color = Color(0xFF333355))
@@ -549,7 +548,7 @@ fun GameOverOverlay(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment     = Alignment.CenterVertically
                 ) {
-                    Text("Performance", color = Color(0xFFBBBBBB), fontSize = 13.sp)
+                    Text(stringResource(R.string.game_over_performance), color = Color(0xFFBBBBBB), fontSize = 13.sp)
                     Text(
                         rating.first,
                         color      = rating.second,
@@ -561,37 +560,38 @@ fun GameOverOverlay(
 
             Spacer(Modifier.height(4.dp))
 
-            PixelButton("playagain", "Play again", 220.dp, onRestart) {
+            PixelButton("playagain", stringResource(R.string.game_over_play_again), 220.dp, onRestart) {
                 Button(
                     onClick  = onRestart,
                     modifier = Modifier.fillMaxWidth(0.6f),
                     colors   = ButtonDefaults.buttonColors(containerColor = Color(0xFF7CE04A)),
                     shape    = RoundedCornerShape(3.dp)
                 ) {
-                    Text("Play Again", fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
+                    Text(stringResource(R.string.game_over_play_again), fontWeight = FontWeight.Bold, fontSize = 16.sp, color = Color.Black)
                 }
             }
 
-            PixelButton("mainmenu", "Main menu", 220.dp, onMainMenu) {
+            PixelButton("mainmenu", stringResource(R.string.game_over_main_menu), 220.dp, onMainMenu) {
                 OutlinedButton(
                     onClick  = onMainMenu,
                     modifier = Modifier.fillMaxWidth(0.6f),
                     border   = BorderStroke(1.dp, Color(0xFFAAAAAA)),
                     shape    = RoundedCornerShape(3.dp)
                 ) {
-                    Text("Main Menu", color = Color(0xFFAAAAAA), fontSize = 15.sp)
+                    Text(stringResource(R.string.game_over_main_menu), color = Color(0xFFAAAAAA), fontSize = 15.sp)
                 }
             }
         }
     }
 }
 
+@Composable
 private fun runRating(state: GameState): Pair<String, Color> = when {
-    state.elapsedTime >= 600f || state.killCount >= 500 -> Pair("S  LEGENDARY", Color(0xFFFFD740))
-    state.elapsedTime >= 300f || state.killCount >= 200 -> Pair("A  EXCELLENT",  Color(0xFFCE93D8))
-    state.elapsedTime >= 120f || state.killCount >= 100 -> Pair("B  GREAT",      Color(0xFF7CE04A))
-    state.elapsedTime >= 60f  || state.killCount >= 50  -> Pair("C  GOOD",       Color(0xFF66BB6A))
-    else                                                 -> Pair("D  KEEP GOING", Color(0xFFAAAAAA))
+    state.elapsedTime >= 600f || state.killCount >= 500 -> Pair("S  " + stringResource(R.string.rank_s), Color(0xFFFFD740))
+    state.elapsedTime >= 300f || state.killCount >= 200 -> Pair("A  " + stringResource(R.string.rank_a), Color(0xFFCE93D8))
+    state.elapsedTime >= 120f || state.killCount >= 100 -> Pair("B  " + stringResource(R.string.rank_b), Color(0xFF7CE04A))
+    state.elapsedTime >= 60f  || state.killCount >= 50  -> Pair("C  " + stringResource(R.string.rank_c), Color(0xFF66BB6A))
+    else                                                 -> Pair("D  " + stringResource(R.string.rank_d), Color(0xFFAAAAAA))
 }
 
 @Composable

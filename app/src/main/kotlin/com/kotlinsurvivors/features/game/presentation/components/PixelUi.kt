@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import com.kotlinsurvivors.core.presentation.language.languageSuffix
 import com.kotlinsurvivors.engine.rendering.SpriteAtlas
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -64,7 +65,7 @@ fun PixelImage(
 }
 
 /**
- * A button drawn from ui_btn_<art>.png, with ui_btn_<art>_down.png while it is pressed.
+ * A button drawn from ui_btn_<art>.png (ui_btn_<art>_es.png in Spanish), with the same name plus _down while it is pressed.
  * While the images load, or if they are missing, [fallback] is shown instead.
  */
 @Composable
@@ -75,8 +76,9 @@ fun PixelButton(
     onClick     : () -> Unit,
     fallback    : @Composable () -> Unit
 ) {
-    val normal = rememberUiImage("ui_btn_$art.png")
-    val down   = rememberUiImage("ui_btn_${art}_down.png")
+    val lang   = languageSuffix()
+    val normal = rememberUiImage("ui_btn_$art$lang.png")
+    val down   = rememberUiImage("ui_btn_$art${lang}_down.png")
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val image = if (pressed) (down ?: normal) else normal

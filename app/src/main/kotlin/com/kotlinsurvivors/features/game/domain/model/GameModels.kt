@@ -17,7 +17,10 @@ data class GameState(
     val isRunning        : Boolean        = false,
     val isPaused         : Boolean        = false,
     val isGameOver       : Boolean        = false,
+    /** True while the level-up roulette is open (the game is frozen). */
     val isPendingLevelUp : Boolean        = false,
+    /** Level-ups gained and not opened yet; the game keeps running while they wait. */
+    val levelUpsWaiting  : Int            = 0,
     val levelUpOptions   : List<LevelUpOption> = emptyList(),
     /** Which of [levelUpOptions] the level-up roulette lands on. */
     val levelUpWinner    : Int            = 0,
@@ -65,6 +68,7 @@ data class GameState(
             isPaused == other.isPaused &&
             isGameOver == other.isGameOver &&
             isPendingLevelUp == other.isPendingLevelUp &&
+            levelUpsWaiting == other.levelUpsWaiting &&
             levelUpOptions == other.levelUpOptions &&
             levelUpWinner == other.levelUpWinner &&
             elapsedTime == other.elapsedTime &&
@@ -120,7 +124,9 @@ data class LevelUpOption(
     val type        : UpgradeType,
     val weaponType  : WeaponType? = null,
     val icon        : String = "star",
-    val rarity      : com.kotlinsurvivors.engine.UpgradeRarity = com.kotlinsurvivors.engine.UpgradeRarity.COMMON
+    val rarity      : com.kotlinsurvivors.engine.UpgradeRarity = com.kotlinsurvivors.engine.UpgradeRarity.COMMON,
+    /** For a weapon upgrade: the level the weapon reaches. The screen needs it to word the title in any language. */
+    val level       : Int = 0
 )
 
 data class RunResult(

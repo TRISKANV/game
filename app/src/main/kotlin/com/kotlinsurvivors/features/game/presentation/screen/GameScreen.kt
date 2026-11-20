@@ -182,6 +182,25 @@ fun GameScreen(
             )
         }
 
+        // ── Level-up waiting: a button the player opens when ready ───────────
+        val canShowBadge = !gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp
+        if (canShowBadge && gameState.levelUpsWaiting > 0) {
+            LevelUpBadge(
+                count    = gameState.levelUpsWaiting,
+                onOpen   = { viewModel.openLevelUp() },
+                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp)
+            )
+        }
+        var lastWaiting by remember { mutableIntStateOf(0) }
+        LaunchedEffect(gameState.levelUpsWaiting) {
+            val grew = gameState.levelUpsWaiting > lastWaiting
+            lastWaiting = gameState.levelUpsWaiting
+            if (grew && settings.vibration) {
+                vibrator?.takeIf { it.hasVibrator() }
+                    ?.vibrate(VibrationEffect.createOneShot(LEVEL_UP_VIBRATION_MS, VibrationEffect.DEFAULT_AMPLITUDE))
+            }
+        }
+
         // ── Virtual Joystick ──────────────────────────────────────────────
         if (!gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp) {
             VirtualJoystickOverlay(viewModel = viewModel)
@@ -218,6 +237,7 @@ fun GameScreen(
 }
 
 private const val HIT_VIBRATION_MS = 40L
+private const val LEVEL_UP_VIBRATION_MS = 70L
 private const val ACHIEVEMENT_BANNER_MS = 3000L
 
 private fun Modifier.joystickInput(

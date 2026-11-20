@@ -21,6 +21,8 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.rendering.SpriteAtlas
+import androidx.compose.ui.res.stringResource
+import com.kotlinsurvivors.R
 import com.kotlinsurvivors.features.game.presentation.components.PixelButton
 import com.kotlinsurvivors.features.game.presentation.components.PixelImage
 import com.kotlinsurvivors.features.game.presentation.components.rememberUiImage
@@ -107,25 +109,25 @@ fun MainMenuScreen(
                 )
             }
             Text(
-                text     = "Survive the endless night",
+                text     = stringResource(R.string.menu_subtitle),
                 color    = Color(0xFFA5B3A0),
                 fontSize = 13.sp
             )
 
             Spacer(modifier = Modifier.height(20.dp))
 
-            MenuButton("START GAME",  Accent,            "start",        onClick = onStartGame,    isPrimary = true)
+            MenuButton(stringResource(R.string.menu_start_game),  Accent,            "start",        onClick = onStartGame,    isPrimary = true)
             Spacer(Modifier.height(8.dp))
-            MenuButton("SHOP",        Color(0xFFFFD740), "shop",         onClick = onOpenShop)
+            MenuButton(stringResource(R.string.menu_shop),  Color(0xFFFFD740), "shop",         onClick = onOpenShop)
             Spacer(Modifier.height(8.dp))
-            MenuButton("ACHIEVEMENTS", Color(0xFF80CBC4), "achievements", onClick = onOpenAchievements)
+            MenuButton(stringResource(R.string.menu_achievements), Color(0xFF80CBC4), "achievements", onClick = onOpenAchievements)
             Spacer(Modifier.height(8.dp))
-            MenuButton("SETTINGS",    Color(0xFFB0B8B0), "settings",     onClick = onOpenSettings)
+            MenuButton(stringResource(R.string.menu_settings),  Color(0xFFB0B8B0), "settings",     onClick = onOpenSettings)
 
             Spacer(modifier = Modifier.height(14.dp))
 
             Text(
-                "v1.0.0 · Open Source",
+                stringResource(R.string.menu_version),
                 color    = Color(0xFF55605A),
                 fontSize = 11.sp
             )

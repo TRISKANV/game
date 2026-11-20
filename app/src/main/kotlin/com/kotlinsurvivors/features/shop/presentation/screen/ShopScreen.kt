@@ -1,5 +1,10 @@
 package com.kotlinsurvivors.features.shop.presentation.screen
 
+import androidx.compose.ui.res.stringResource
+import com.kotlinsurvivors.R
+import com.kotlinsurvivors.core.presentation.language.localName
+import com.kotlinsurvivors.core.presentation.language.localDescription
+import com.kotlinsurvivors.core.presentation.language.localEffect
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -43,7 +48,7 @@ fun ShopScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "UPGRADE SHOP",
+                        stringResource(R.string.shop_title),
                         fontWeight    = FontWeight.ExtraBold,
                         letterSpacing = 3.sp,
                         color         = Color(0xFFFFD740)
@@ -51,7 +56,7 @@ fun ShopScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, "Back", tint = Color(0xFFAAAAAA))
+                        Icon(Icons.Filled.ArrowBack, stringResource(R.string.cd_back), tint = Color(0xFFAAAAAA))
                     }
                 },
                 actions = {
@@ -139,9 +144,9 @@ private fun ShopUpgradeCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment     = Alignment.Top
             ) {
-                Text(upgrade.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
+                Text(upgrade.localName(), color = Color.White, fontWeight = FontWeight.Bold, fontSize = 13.sp)
                 if (upgrade.isMaxed) {
-                    Text("MAX", color = Color(0xFFFFD740), fontSize = 10.sp,
+                    Text(stringResource(R.string.shop_max), color = Color(0xFFFFD740), fontSize = 10.sp,
                         fontWeight = FontWeight.ExtraBold,
                         modifier   = Modifier
                             .background(Color(0xFFFFD740).copy(alpha = 0.15f), RoundedCornerShape(4.dp))
@@ -149,7 +154,7 @@ private fun ShopUpgradeCard(
                     )
                 } else {
                     Text(
-                        "Lv ${upgrade.currentLevel}/${upgrade.maxLevel}",
+                        stringResource(R.string.shop_level, upgrade.currentLevel, upgrade.maxLevel),
                         color    = Color(0xFF888888),
                         fontSize = 11.sp
                     )
@@ -158,7 +163,7 @@ private fun ShopUpgradeCard(
 
             // Description
             Text(
-                upgrade.description,
+                upgrade.localDescription(),
                 color    = Color(0xFF888888),
                 fontSize = 11.sp,
                 lineHeight = 15.sp
@@ -166,7 +171,7 @@ private fun ShopUpgradeCard(
 
             // Per-level effect
             Text(
-                upgrade.effectPerLevel,
+                upgrade.localEffect(),
                 color      = Color(0xFF7CE04A),
                 fontSize   = 11.sp,
                 fontWeight = FontWeight.SemiBold
@@ -226,7 +231,7 @@ private fun ShopUpgradeCard(
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         PixelIcon("sparkle", 16.dp)
-                        Text("MAXED", color = Color(0xFFFFD740), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
+                        Text(stringResource(R.string.shop_maxed), color = Color(0xFFFFD740), fontSize = 12.sp, fontWeight = FontWeight.ExtraBold)
                         PixelIcon("sparkle", 16.dp)
                     }
                 }

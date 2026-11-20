@@ -1,5 +1,10 @@
 package com.kotlinsurvivors.features.achievements.presentation.screen
 
+import androidx.compose.ui.res.stringResource
+import com.kotlinsurvivors.R
+import com.kotlinsurvivors.core.presentation.language.localName
+import com.kotlinsurvivors.core.presentation.language.localDescription
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -41,7 +46,7 @@ fun AchievementsScreen(
             TopAppBar(
                 title = {
                     Text(
-                        "ACHIEVEMENTS",
+                        stringResource(R.string.achievements_title),
                         fontWeight    = FontWeight.ExtraBold,
                         letterSpacing = 3.sp,
                         color         = Color(0xFF66BB6A)
@@ -49,7 +54,7 @@ fun AchievementsScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Filled.ArrowBack, "Back", tint = Color(0xFFAAAAAA))
+                        Icon(Icons.Filled.ArrowBack, stringResource(R.string.cd_back), tint = Color(0xFFAAAAAA))
                     }
                 },
                 actions = {
@@ -118,21 +123,21 @@ private fun AchievementCard(achievement: Achievement) {
             // Text column
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
-                    achievement.name,
+                    achievement.localName(),
                     color      = Color.White.copy(alpha = alpha),
                     fontWeight = FontWeight.Bold,
                     fontSize   = 14.sp
                 )
                 Text(
-                    achievement.description,
+                    achievement.localDescription(),
                     color    = Color(0xFF888888).copy(alpha = alpha),
                     fontSize = 12.sp
                 )
                 if (achievement.isUnlocked && achievement.unlockedAt > 0L) {
-                    val date = java.text.SimpleDateFormat("MMM dd, yyyy", java.util.Locale.getDefault())
+                    val date = java.text.SimpleDateFormat("MMM dd, yyyy", LocalConfiguration.current.locales[0])
                         .format(java.util.Date(achievement.unlockedAt))
                     Text(
-                        "Unlocked $date",
+                        stringResource(R.string.achievements_unlocked_on, date),
                         color    = Color(0xFF66BB6A).copy(alpha = 0.8f),
                         fontSize = 10.sp
                     )

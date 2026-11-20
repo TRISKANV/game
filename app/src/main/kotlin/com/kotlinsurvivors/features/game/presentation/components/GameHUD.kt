@@ -1,5 +1,8 @@
 package com.kotlinsurvivors.features.game.presentation.components
 
+import androidx.compose.ui.res.stringResource
+import com.kotlinsurvivors.R
+import com.kotlinsurvivors.core.presentation.language.localName
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -16,6 +19,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.Image
 import androidx.compose.ui.graphics.BlendMode
@@ -83,7 +87,7 @@ fun GameHUD(
             // HP Bar
             StatBar(
                 art       = "hp",
-                label     = "HP",
+                label     = stringResource(R.string.hud_hp),
                 current   = hp,
                 max       = maxHp,
                 percent   = if (maxHp > 0) hp.toFloat() / maxHp else 0f,
@@ -94,7 +98,7 @@ fun GameHUD(
             // XP Bar
             StatBar(
                 art       = "xp",
-                label     = "XP",
+                label     = stringResource(R.string.hud_xp),
                 current   = xp,
                 max       = xpToNext,
                 percent   = if (xpToNext > 0) xp.toFloat() / xpToNext else 0f,
@@ -158,14 +162,14 @@ fun GameHUD(
                 if (pauseIcon != null) {
                     Image(
                         bitmap             = pauseIcon,
-                        contentDescription = "Pause",
+                        contentDescription = stringResource(R.string.cd_pause),
                         modifier           = Modifier.size(20.dp),
                         colorFilter        = ColorFilter.tint(Color(0xFFE0E0E0), BlendMode.Modulate)
                     )
                 } else {
                     Icon(
                         imageVector = Icons.Filled.Pause,
-                        contentDescription = "Pause",
+                        contentDescription = stringResource(R.string.cd_pause),
                         tint = Color(0xFFE0E0E0)
                     )
                 }
@@ -190,13 +194,13 @@ fun AchievementBanner(achievement: Achievement, modifier: Modifier = Modifier) {
         PixelIcon(achievement.icon, 24.dp)
         Column {
             Text(
-                "Achievement unlocked",
+                stringResource(R.string.hud_achievement_unlocked),
                 color      = Color(0xFFFFD740),
                 fontSize   = 11.sp,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                achievement.name,
+                achievement.localName(),
                 color      = Color(0xFFE0E0E0),
                 fontSize   = 15.sp,
                 fontWeight = FontWeight.SemiBold
@@ -333,5 +337,51 @@ private fun HUDChip(label: String, color: Color, iconKey: String? = null) {
             fontSize   = 13.sp,
             fontWeight = FontWeight.SemiBold
         )
+    }
+}
+
+/**
+ * Tells the player that a level-up is waiting, without stopping the game. It pulses at
+ * the bottom of the screen until the player taps it; the roulette opens only then.
+ * [count] is how many level-ups are waiting ("x2", "x3"...).
+ */
+@Composable
+fun LevelUpBadge(count: Int, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+    val gold   = Color(0xFFFFD740)
+    val pulse  = rememberInfiniteTransition(label = "levelUpBadge")
+    val glow   by pulse.animateFloat(
+        initialValue  = 0.35f,
+        targetValue   = 1f,
+        animationSpec = infiniteRepeatable(tween(650, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label         = "badgeGlow"
+    )
+    val scale  by pulse.animateFloat(
+        initialValue  = 0.96f,
+        targetValue   = 1.04f,
+        animationSpec = infiniteRepeatable(tween(650, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label         = "badgeScale"
+    )
+    val label = if (count > 1) "${stringResource(R.string.hud_level_up_ready)}  x$count"
+                else stringResource(R.string.hud_level_up_ready)
+
+    Row(
+        modifier = modifier
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .background(Color(0xE61A1A2E), RoundedCornerShape(3.dp))
+            .border(2.dp, gold.copy(alpha = glow), RoundedCornerShape(3.dp))
+            .clickable(role = Role.Button, onClick = onOpen)
+            .padding(horizontal = 22.dp, vertical = 12.dp),
+        verticalAlignment     = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        PixelIcon("star", 22.dp)
+        Text(
+            label,
+            color         = gold,
+            fontSize      = 16.sp,
+            fontWeight    = FontWeight.ExtraBold,
+            letterSpacing = 2.sp
+        )
+        PixelIcon("star", 22.dp)
     }
 }

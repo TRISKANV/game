@@ -1,6 +1,7 @@
 package com.kotlinsurvivors.features.game.presentation.components
 
 import android.content.Context
+import com.kotlinsurvivors.core.presentation.language.AppLanguage
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
@@ -51,13 +52,16 @@ object UiImageCache {
 
     /** Warms the cache with the images the in-game overlays use. */
     suspend fun preloadGameOverlays(context: Context) {
-        for (name in GAME_OVERLAY_IMAGES) load(context, name)
+        val lang = if (AppLanguage.effective(context) == AppLanguage.SPANISH) "_es" else ""
+        for (name in gameOverlayImages(lang)) load(context, name)
     }
 
-    private val GAME_OVERLAY_IMAGES = listOf(
-        "ui_title_levelup.png", "ui_title_paused.png", "ui_title_gameover.png", "ui_panel_pause.png",
-        "ui_btn_resume.png", "ui_btn_resume_down.png", "ui_btn_restart.png", "ui_btn_restart_down.png",
-        "ui_btn_mainmenu.png", "ui_btn_mainmenu_down.png", "ui_btn_playagain.png", "ui_btn_playagain_down.png",
-        "ui_icon_pause.png", "ui_joystick_pad.png", "ui_joystick_nub.png"
-    )
+    private fun gameOverlayImages(lang: String): List<String> {
+        val buttons = listOf("resume", "restart", "mainmenu", "playagain")
+            .flatMap { listOf("ui_btn_$it$lang.png", "ui_btn_$it${lang}_down.png") }
+        return listOf(
+            "ui_title_levelup$lang.png", "ui_title_paused$lang.png", "ui_title_gameover$lang.png",
+            "ui_panel_pause.png", "ui_icon_pause.png", "ui_joystick_pad.png", "ui_joystick_nub.png"
+        ) + buttons
+    }
 }
