@@ -20,7 +20,9 @@ import com.kotlinsurvivors.features.game.domain.model.UpgradeType
 private fun text(name: String, fallback: String, vararg args: Any): String {
     val context = LocalContext.current
     val id = remember(name, context) { context.resources.getIdentifier(name, "string", context.packageName) }
-    return if (id != 0) context.getString(id, *args) else fallback
+    if (id == 0) return fallback
+    // Without arguments the text must not go through String.format: "+15% de daño" would read "% d" as a placeholder.
+    return if (args.isEmpty()) context.getString(id) else context.getString(id, *args)
 }
 
 private fun WeaponType.key() = name.lowercase()
