@@ -588,7 +588,7 @@ class GameEngine(
                 val owner = world.transforms[world.getPlayerEntity()] ?: t
                 renderBuffer.write(
                     kindOrdinal = RenderKind.PARTICLE,
-                    ex = owner.x, ey = owner.y, eRotation = if (p.vx >= 0f) 0f else Math.PI.toFloat(),
+                    ex = owner.x, ey = owner.y, eRotation = Math.atan2(p.vy.toDouble(), p.vx.toDouble()).toFloat(),
                     eWidth = p.size, eHeight = p.size,
                     eLifetime = p.lifetime, eMaxLifetime = p.maxLifetime,
                     eSpriteId = RenderBuffer.SPRITE_WHIP_LASH
@@ -797,7 +797,7 @@ class GameEngine(
         com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> "Zaps multiple nearby enemies through the cable."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC      -> "Scans and damages enemies around you."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "Drops a trap that burns everything inside."
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "Lashes enemies on both sides with a network cable."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "Cracks a network cable at enemies in front of you, in any of four directions."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "Hacked laptops orbit you and destroy nearby enemies."
     }
     private fun weaponUpgradeTitle(type: com.kotlinsurvivors.engine.ecs.components.WeaponType, lvl: Int) = "${weaponName(type)} Lv.$lvl"

@@ -116,7 +116,7 @@
     <string name="weapon_santa_water_name">Honeypot</string>
     <string name="weapon_santa_water_desc">Deja una trampa que quema todo lo que entra.</string>
     <string name="weapon_whip_name">Látigo Ethernet</string>
-    <string name="weapon_whip_desc">Azota a los enemigos de ambos lados con un cable de red.</string>
+    <string name="weapon_whip_desc">Azota con un cable de red a los enemigos que tengas enfrente, en las cuatro direcciones.</string>
     <string name="weapon_bible_name">Laptop pirata</string>
     <string name="weapon_bible_desc">Laptops hackeadas giran a tu alrededor y destruyen enemigos cercanos.</string>
     <string name="ach_first_kill_name">Primera sangre</string>

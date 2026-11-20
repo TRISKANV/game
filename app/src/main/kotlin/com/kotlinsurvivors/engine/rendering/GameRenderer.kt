@@ -605,47 +605,61 @@ class GameRenderer(
     // ── Whip: the network cable ─────────────────────────────────────────────
 
     /**
-     * One lash of the cable. It shoots out to the side, snaps straight, and is pulled
-     * back, with a wave running along it. [RenderBuffer.width] is how far it reaches,
-     * [RenderBuffer.rotation] is 0 for the right side and PI for the left, and the
-     * time left minus [WHIP_LASH_SECONDS] is the delay before it starts.
+     * One crack of the cable. It flies out along its lane with a smooth bend that
+     * straightens as it reaches full length, snaps (a small flash at the tip), and is
+     * pulled back bending the other way. The cable is thick at the hand and thin at the
+     * tip, like a real whip. [RenderBuffer.width] is the reach and [RenderBuffer.rotation]
+     * the direction in radians. The time left minus [WHIP_LASH_SECONDS] is the delay
+     * before it starts.
      */
     private fun DrawScope.renderWhipLash(buf: RenderBuffer, i: Int, ox: Float, oy: Float) {
         val elapsed = buf.maxLifetime[i] - buf.lifetime[i]
         val delay   = buf.maxLifetime[i] - WHIP_LASH_SECONDS
-        val t = ((elapsed - delay) / WHIP_LASH_SECONDS).coerceIn(0f, 1f)
         if (elapsed < delay) return
+        val t = ((elapsed - delay) / WHIP_LASH_SECONDS).coerceIn(0f, 1f)
 
-        val dir    = if (buf.rotation[i] == 0f) 1f else -1f
-        val reach  = buf.width[i]
-        // out fast (first 40%), pulled back (last 40%)
+        val angle = buf.rotation[i]
+        val dx = cos(angle); val dy = sin(angle)
+        val nx = -dy;        val ny = dx                       // perpendicular, the side the cable bends to
+
+        val out    = t < WHIP_OUT_END
         val extend = when {
-            t < 0.4f -> t / 0.4f
-            t < 0.6f -> 1f
-            else     -> 1f - (t - 0.6f) / 0.4f
+            t < WHIP_OUT_END  -> t / WHIP_OUT_END
+            t < WHIP_HOLD_END -> 1f
+            else              -> 1f - (t - WHIP_HOLD_END) / (1f - WHIP_HOLD_END)
         }
-        val length = reach * extend
-        if (length < 4f) return
-        val slack  = (1f - extend) * 0.6f + 0.15f      // a loose cable waves more than a taut one
-        val amp    = 26f * slack
-        val phase  = t * 14f
-        val startY = oy - WHIP_HAND_HEIGHT
+        val length = buf.width[i] * extend
+        if (length < 6f) return
+        val bend = (WHIP_BEND * (1f - extend)).coerceAtMost(length * 0.4f) * (if (out) 1f else -0.6f)
 
-        var px = ox + dir * 14f
-        var py = startY
+        val handX = ox + dx * 12f
+        val handY = oy + dy * 12f - WHIP_HAND_HEIGHT
+        var px = handX; var py = handY
         for (k in 1..WHIP_SEGMENTS) {
-            val f  = k / WHIP_SEGMENTS.toFloat()
-            val nx = ox + dir * (14f + (length - 14f).coerceAtLeast(0f) * f)
-            val ny = startY + sin(f * 6.2832f * 1.5f - phase) * amp * f
-            drawLine(Color(0xFF0D2A57), Offset(px, py), Offset(nx, ny), strokeWidth = WHIP_WIDTH + 3f)
-            drawLine(Color(0xFF1E88E5), Offset(px, py), Offset(nx, ny), strokeWidth = WHIP_WIDTH)
-            drawLine(Color(0xFF90CAF9), Offset(px, py - 1f), Offset(nx, ny - 1f), strokeWidth = 1.5f)
-            px = nx; py = ny
+            val f   = k / WHIP_SEGMENTS.toFloat()
+            val off = bend * sin(f * 3.14159f)
+            val x   = handX + dx * length * f + nx * off
+            val y   = handY + dy * length * f + ny * off
+            val w   = WHIP_WIDTH_HAND + (WHIP_WIDTH_TIP - WHIP_WIDTH_HAND) * f
+            drawLine(Color(0xFF0D2A57), Offset(px, py), Offset(x, y), strokeWidth = w + 3f)
+            drawLine(Color(0xFF1E88E5), Offset(px, py), Offset(x, y), strokeWidth = w)
+            if (w > 2.5f) drawLine(Color(0xFF90CAF9), Offset(px - 1f, py - 1f), Offset(x - 1f, y - 1f), strokeWidth = 1.2f)
+            px = x; py = y
         }
-        // RJ45 plug at the tip
-        drawRect(Color(0xFF120A12), Offset(px - 6f + dir * 3f, py - 6f), Size(12f, 12f))
-        drawRect(Color(0xFFCFD8DC), Offset(px - 5f + dir * 3f, py - 5f), Size(10f, 10f))
-        drawRect(Color(0xFFFFC107), Offset(px - 3f + dir * 3f, py - 3f), Size(6f, 2f))
+        // RJ45 plug at the tip, turned the way the cable points
+        val plugAngle = Math.toDegrees(kotlin.math.atan2(py - handY, px - handX).toDouble()).toFloat()
+        val canvas = drawContext.canvas.nativeCanvas
+        canvas.save()
+        canvas.rotate(plugAngle, px, py)
+        drawRect(Color(0xFF120A12), Offset(px - 2f, py - 6f), Size(13f, 12f))
+        drawRect(Color(0xFFCFD8DC), Offset(px - 1f, py - 5f), Size(11f, 10f))
+        drawRect(Color(0xFFFFC107), Offset(px + 6f, py - 3f), Size(3f, 6f))
+        canvas.restore()
+        // the crack: a flash while the cable is fully stretched
+        if (t in WHIP_OUT_END..WHIP_HOLD_END) {
+            drawCircle(Color(0xCCFFF59D), 9f, Offset(px + dx * 8f, py + dy * 8f))
+            drawCircle(Color(0xFFFFFFFF), 4f, Offset(px + dx * 8f, py + dy * 8f))
+        }
     }
 
     // ── Damage number ───────────────────────────────────────────────────────
@@ -712,7 +726,11 @@ class GameRenderer(
         const val SPIN_PERIOD_MS  = 500L
         const val WHIP_LASH_SECONDS = com.kotlinsurvivors.engine.ecs.EntityFactory.WHIP_LASH_SECONDS
         const val WHIP_SEGMENTS     = 14
-        const val WHIP_WIDTH        = 4f
+        const val WHIP_WIDTH_HAND   = 6f
+        const val WHIP_WIDTH_TIP    = 2f
+        const val WHIP_BEND         = 46f
+        const val WHIP_OUT_END      = 0.35f
+        const val WHIP_HOLD_END     = 0.55f
         const val WHIP_HAND_HEIGHT  = 6f
 
         // Ground: each 32px tile is drawn 3x, clutter is placed on a coarse world grid.

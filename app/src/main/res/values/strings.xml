@@ -116,7 +116,7 @@
     <string name="weapon_santa_water_name">Honeypot</string>
     <string name="weapon_santa_water_desc">Drops a trap that burns everything inside.</string>
     <string name="weapon_whip_name">Ethernet Whip</string>
-    <string name="weapon_whip_desc">Lashes enemies on both sides with a network cable.</string>
+    <string name="weapon_whip_desc">Cracks a network cable at enemies in front of you, in any of four directions.</string>
     <string name="weapon_bible_name">Rogue Laptop</string>
     <string name="weapon_bible_desc">Hacked laptops orbit you and destroy nearby enemies.</string>
     <string name="ach_first_kill_name">First Blood</string>

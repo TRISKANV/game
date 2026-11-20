@@ -20,7 +20,11 @@ class WeaponSystem {
     private val toDestroy = ArrayList<Int>(128)
 
     private companion object {
-        const val WHIP_SECOND_LASH_DELAY = 0.1f
+        const val WHIP_LASH_GAP     = 0.08f   // seconds between lashes in different directions
+        const val WHIP_REACH        = 130f
+        const val WHIP_HALF_WIDTH   = 40f
+        const val WHIP_BEHIND       = 20f     // an enemy touching the player still counts as being in front
+        val WHIP_ANGLES = floatArrayOf(0f, (PI / 2).toFloat(), PI.toFloat(), (3 * PI / 2).toFloat())  // right, down, left, up
     }
 
     fun update(world: World, dt: Float) {
@@ -39,6 +43,10 @@ class WeaponSystem {
         for (weapon in weapons) {
             weapon.timer -= dt
             if (weapon.timer > 0f) continue
+            // The whip only cracks when somebody is in reach; it stays ready until then.
+            val whipDirections = if (weapon.type == WeaponType.WHIP)
+                whipDirectionsWithEnemies(world, pt.x, pt.y, weapon.area * player.areaMultiplier) else 0
+            if (weapon.type == WeaponType.WHIP && whipDirections == 0) { weapon.timer = 0f; continue }
             weapon.timer = weapon.cooldown / player.attackSpeedMultiplier
 
             val dmg      = (weapon.damage * player.damageMultiplier).toInt()
@@ -58,7 +66,7 @@ class WeaponSystem {
                 WeaponType.LIGHTNING   -> fireLightning(world, pt.x, pt.y, finalDmg, weapon, area)
                 WeaponType.GARLIC      -> { }
                 WeaponType.SANTA_WATER -> fireSantaWater(world, pt.x, pt.y, finalDmg, size, weapon, area)
-                WeaponType.WHIP        -> fireWhip(world, pt.x, pt.y, finalDmg, size, weapon, area)
+                WeaponType.WHIP        -> fireWhip(world, pt.x, pt.y, finalDmg, whipDirections, area)
                 WeaponType.BIBLE       -> { }
             }
         }
@@ -162,23 +170,50 @@ class WeaponSystem {
         }
     }
 
-    private fun fireWhip(world: World, ox: Float, oy: Float, dmg: Int,
-                          size: Float, w: WeaponComponent, area: Float) {
-        val halfW = 120f * area; val halfH = 40f * area
-        // The cable lashes to the right first and then to the left, like a quick double crack.
-        EntityFactory.createWhipLash(world, ox, oy, direction =  1f, reach = halfW, delay = 0f)
-        EntityFactory.createWhipLash(world, ox, oy, direction = -1f, reach = halfW, delay = WHIP_SECOND_LASH_DELAY)
+    /**
+     * Bit k is set when an enemy stands inside the whip's lane in direction k
+     * (0 right, 1 down, 2 left, 3 up). A lane is [WHIP_REACH] long and
+     * 2 x [WHIP_HALF_WIDTH] wide, both scaled by [area].
+     */
+    private fun whipDirectionsWithEnemies(world: World, ox: Float, oy: Float, area: Float): Int {
+        var mask = 0
+        for (eid in world.getEnemySnapshot()) {
+            val t = world.transforms[eid] ?: continue
+            if (world.healths[eid]?.isDead != false) continue
+            mask = mask or whipLanesOf(t.x - ox, t.y - oy, area)
+            if (mask == 0b1111) break
+        }
+        return mask
+    }
+
+    private fun whipLanesOf(dx: Float, dy: Float, area: Float): Int {
+        val reach = WHIP_REACH * area; val half = WHIP_HALF_WIDTH * area; val behind = WHIP_BEHIND
+        var lanes = 0
+        if (dx > -behind && dx < reach  && abs(dy) < half) lanes = lanes or 0b0001   // right
+        if (dy > -behind && dy < reach  && abs(dx) < half) lanes = lanes or 0b0010   // down
+        if (dx < behind  && dx > -reach && abs(dy) < half) lanes = lanes or 0b0100   // left
+        if (dy < behind  && dy > -reach && abs(dx) < half) lanes = lanes or 0b1000   // up
+        return lanes
+    }
+
+    /** Cracks the cable in every lane in [directions] and hurts whoever stands in them. */
+    private fun fireWhip(world: World, ox: Float, oy: Float, dmg: Int, directions: Int, area: Float) {
+        var order = 0
+        for (k in 0 until 4) {
+            if (directions and (1 shl k) == 0) continue
+            EntityFactory.createWhipLash(world, ox, oy, WHIP_ANGLES[k], WHIP_REACH * area, order * WHIP_LASH_GAP)
+            order++
+        }
         for (eid in world.getEnemySnapshot()) {
             val t      = world.transforms[eid] ?: continue
             val health = world.healths[eid]    ?: continue
             if (health.isDead) continue
-            if (abs(t.x - ox) < halfW && abs(t.y - oy) < halfH) {
-                health.current = (health.current - dmg).coerceAtLeast(0)
-                world.renders[eid]?.flashTimer = 0.1f
-                EntityFactory.createDamageNumber(world, t.x, t.y, dmg, false)
-                EntityFactory.createParticleBurst(world, t.x, t.y, ParticleType.BLOOD, 2)
-                if (health.current <= 0 && !health.isDead) health.isDead = true
-            }
+            if (whipLanesOf(t.x - ox, t.y - oy, area) and directions == 0) continue
+            health.current = (health.current - dmg).coerceAtLeast(0)
+            world.renders[eid]?.flashTimer = 0.1f
+            EntityFactory.createDamageNumber(world, t.x, t.y, dmg, false)
+            EntityFactory.createParticleBurst(world, t.x, t.y, ParticleType.BLOOD, 2)
+            if (health.current <= 0 && !health.isDead) health.isDead = true
         }
     }
 

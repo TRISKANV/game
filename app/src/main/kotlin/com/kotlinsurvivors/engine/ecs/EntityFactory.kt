@@ -270,11 +270,12 @@ object EntityFactory {
 
     /**
      * The cable lashing out to one side of the player. It only draws; the damage is
-     * dealt by the weapon system the moment the whip fires. [direction] is +1 for
-     * right and -1 for left, [reach] how far the cable gets, and [delay] how long
-     * it waits before it starts (the second lash follows the first).
+     * dealt by the weapon system the moment the whip fires. [angle] is where the
+     * cable goes, in radians (0 = right, PI/2 = down), [reach] how far it gets, and
+     * [delay] how long it waits before it starts (lashes in several directions follow
+     * one another).
      */
-    fun createWhipLash(world: World, x: Float, y: Float, direction: Float, reach: Float, delay: Float) {
+    fun createWhipLash(world: World, x: Float, y: Float, angle: Float, reach: Float, delay: Float) {
         val id = world.createEntity()
         val life = WHIP_LASH_SECONDS + delay
         world.transforms[id] = TransformComponent(x = x, y = y)
@@ -282,8 +283,8 @@ object EntityFactory {
             type        = ParticleType.LASH,
             lifetime    = life,
             maxLifetime = life,
-            vx          = direction,
-            vy          = 0f,
+            vx          = cos(angle),
+            vy          = sin(angle),
             size        = reach,
             color       = 0xFF42A5F5,
             drag        = 1f
