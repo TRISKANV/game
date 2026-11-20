@@ -16,6 +16,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.kotlinsurvivors.engine.ecs.components.ParticleType
 import com.kotlinsurvivors.engine.rendering.RenderBuffer
 import com.kotlinsurvivors.engine.rendering.RenderKind
 import com.kotlinsurvivors.engine.rendering.RenderSnapshot
@@ -582,6 +583,18 @@ class GameEngine(
         for (pId in world.getParticleSnapshot()) {
             val t = world.transforms[pId] ?: continue
             val p = world.particles[pId]  ?: continue
+            if (p.type == ParticleType.LASH) {
+                // The cable stays attached to the player while it lashes.
+                val owner = world.transforms[world.getPlayerEntity()] ?: t
+                renderBuffer.write(
+                    kindOrdinal = RenderKind.PARTICLE,
+                    ex = owner.x, ey = owner.y, eRotation = if (p.vx >= 0f) 0f else Math.PI.toFloat(),
+                    eWidth = p.size, eHeight = p.size,
+                    eLifetime = p.lifetime, eMaxLifetime = p.maxLifetime,
+                    eSpriteId = RenderBuffer.SPRITE_WHIP_LASH
+                )
+                continue
+            }
             renderBuffer.write(
                 kindOrdinal = RenderKind.PARTICLE,
                 ex = t.x, ey = t.y, eColor = p.color,
@@ -764,28 +777,28 @@ class GameEngine(
         )
 
     private fun weaponName(type: com.kotlinsurvivors.engine.ecs.components.WeaponType) = when (type) {
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "Magic Wand"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> "Throwing Knife"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.CROSS        -> "Cross"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND   -> "Fire Wand"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.AXE         -> "Axe"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> "Lightning Ring"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC      -> "Garlic"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "Santa Water"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "Whip"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "King Bible"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "Ping Packet"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> "SQL Injection"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.CROSS        -> "Crosshair"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND   -> "Firewall"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.AXE         -> "USB Drop"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> "Ethernet Surge"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC      -> "Antivirus"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "Honeypot"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "Ethernet Whip"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "Rogue Laptop"
     }
     private fun weaponDescription(type: com.kotlinsurvivors.engine.ecs.components.WeaponType) = when (type) {
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "Fires a magic bolt at the nearest enemy."
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> "Throws a fast knife toward the nearest enemy."
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.CROSS        -> "Flings a cross in four directions."
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND   -> "Fires a flame projectile."
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.AXE         -> "Hurls a heavy axe in an arc."
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> "Strikes multiple nearby enemies with lightning."
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC      -> "Damages enemies in an aura around you."
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "Drops holy water that burns everything."
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "Lashes enemies in a wide horizontal arc."
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "Holy books orbit and destroy nearby enemies."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "Sends a data packet at the nearest enemy."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> "Fires a fast syringe at the nearest enemy."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.CROSS        -> "Locks on and fires in four directions."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND   -> "Launches a burning wall that pierces enemies."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.AXE         -> "Throws an infected USB stick in an arc."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> "Zaps multiple nearby enemies through the cable."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC      -> "Scans and damages enemies around you."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "Drops a trap that burns everything inside."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "Lashes enemies on both sides with a network cable."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "Hacked laptops orbit you and destroy nearby enemies."
     }
     private fun weaponUpgradeTitle(type: com.kotlinsurvivors.engine.ecs.components.WeaponType, lvl: Int) = "${weaponName(type)} Lv.$lvl"
     private fun weaponUpgradeDesc(lvl: Int) = when {
@@ -793,16 +806,16 @@ class GameEngine(
         else         -> "+Damage, +Area, -Cooldown"
     }
     private fun weaponIcon(type: com.kotlinsurvivors.engine.ecs.components.WeaponType) = when (type) {
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "wand"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> "knife"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.CROSS        -> "cross"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND   -> "fire"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.AXE         -> "axe"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> "bolt"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC      -> "garlic"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "water"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "whip"
-        com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "bible"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "w_packet"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE        -> "w_syringe"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.CROSS        -> "w_crosshair"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.FIRE_WAND   -> "w_firewall"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.AXE         -> "w_usb"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> "w_plug"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC      -> "w_antivirus"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "w_honeypot"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "w_cable"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "w_laptop"
     }
 }
 

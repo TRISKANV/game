@@ -265,7 +265,9 @@ data class DamageNumberComponent(
 // ─────────────────────────────────────────────
 
 enum class ParticleType {
-    BLOOD, EXPLOSION, SPARK, EXPERIENCE, COIN, LEVEL_UP, HEAL
+    BLOOD, EXPLOSION, SPARK, EXPERIENCE, COIN, LEVEL_UP, HEAL,
+    /** Not a spark: the picture of the network cable lashing out, see [com.kotlinsurvivors.engine.ecs.EntityFactory.createWhipLash]. */
+    LASH
 }
 
 /**

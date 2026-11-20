@@ -39,5 +39,15 @@ val UI_ICON_KEYS: List<String> = listOf(
     "check",
     "cart",
     "gear",
-    "invader"
+    "invader",
+    "w_packet",
+    "w_usb",
+    "w_syringe",
+    "w_crosshair",
+    "w_firewall",
+    "w_plug",
+    "w_antivirus",
+    "w_honeypot",
+    "w_cable",
+    "w_laptop"
 )

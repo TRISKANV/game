@@ -595,10 +595,57 @@ class GameRenderer(
 
     private fun DrawScope.renderParticle(buf: RenderBuffer, i: Int) {
         val sx = buf.x[i] - cameraX; val sy = buf.y[i] - cameraY
+        if (buf.spriteId[i] == RenderBuffer.SPRITE_WHIP_LASH) { renderWhipLash(buf, i, sx, sy); return }
         if (!inViewport(sx, sy, buf.width[i] * 2f)) return
         val lifeRatio = if (buf.maxLifetime[i] > 0f)
             (buf.lifetime[i] / buf.maxLifetime[i]).coerceIn(0f, 1f) else 0f
         drawCircle(Color(buf.getColor(i)).copy(alpha = lifeRatio), buf.width[i] * lifeRatio, Offset(sx, sy))
+    }
+
+    // ── Whip: the network cable ─────────────────────────────────────────────
+
+    /**
+     * One lash of the cable. It shoots out to the side, snaps straight, and is pulled
+     * back, with a wave running along it. [RenderBuffer.width] is how far it reaches,
+     * [RenderBuffer.rotation] is 0 for the right side and PI for the left, and the
+     * time left minus [WHIP_LASH_SECONDS] is the delay before it starts.
+     */
+    private fun DrawScope.renderWhipLash(buf: RenderBuffer, i: Int, ox: Float, oy: Float) {
+        val elapsed = buf.maxLifetime[i] - buf.lifetime[i]
+        val delay   = buf.maxLifetime[i] - WHIP_LASH_SECONDS
+        val t = ((elapsed - delay) / WHIP_LASH_SECONDS).coerceIn(0f, 1f)
+        if (elapsed < delay) return
+
+        val dir    = if (buf.rotation[i] == 0f) 1f else -1f
+        val reach  = buf.width[i]
+        // out fast (first 40%), pulled back (last 40%)
+        val extend = when {
+            t < 0.4f -> t / 0.4f
+            t < 0.6f -> 1f
+            else     -> 1f - (t - 0.6f) / 0.4f
+        }
+        val length = reach * extend
+        if (length < 4f) return
+        val slack  = (1f - extend) * 0.6f + 0.15f      // a loose cable waves more than a taut one
+        val amp    = 26f * slack
+        val phase  = t * 14f
+        val startY = oy - WHIP_HAND_HEIGHT
+
+        var px = ox + dir * 14f
+        var py = startY
+        for (k in 1..WHIP_SEGMENTS) {
+            val f  = k / WHIP_SEGMENTS.toFloat()
+            val nx = ox + dir * (14f + (length - 14f).coerceAtLeast(0f) * f)
+            val ny = startY + sin(f * 6.2832f * 1.5f - phase) * amp * f
+            drawLine(Color(0xFF0D2A57), Offset(px, py), Offset(nx, ny), strokeWidth = WHIP_WIDTH + 3f)
+            drawLine(Color(0xFF1E88E5), Offset(px, py), Offset(nx, ny), strokeWidth = WHIP_WIDTH)
+            drawLine(Color(0xFF90CAF9), Offset(px, py - 1f), Offset(nx, ny - 1f), strokeWidth = 1.5f)
+            px = nx; py = ny
+        }
+        // RJ45 plug at the tip
+        drawRect(Color(0xFF120A12), Offset(px - 6f + dir * 3f, py - 6f), Size(12f, 12f))
+        drawRect(Color(0xFFCFD8DC), Offset(px - 5f + dir * 3f, py - 5f), Size(10f, 10f))
+        drawRect(Color(0xFFFFC107), Offset(px - 3f + dir * 3f, py - 3f), Size(6f, 2f))
     }
 
     // ── Damage number ───────────────────────────────────────────────────────
@@ -663,6 +710,10 @@ class GameRenderer(
         const val PLAYER_FRAME_MS = 110L
         const val ENEMY_FRAME_MS  = 220L
         const val SPIN_PERIOD_MS  = 500L
+        const val WHIP_LASH_SECONDS = com.kotlinsurvivors.engine.ecs.EntityFactory.WHIP_LASH_SECONDS
+        const val WHIP_SEGMENTS     = 14
+        const val WHIP_WIDTH        = 4f
+        const val WHIP_HAND_HEIGHT  = 6f
 
         // Ground: each 32px tile is drawn 3x, clutter is placed on a coarse world grid.
         const val LEVEL_BACKDROP = 0xFF0A0A14.toInt()

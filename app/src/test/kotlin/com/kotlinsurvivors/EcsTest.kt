@@ -184,11 +184,11 @@ class EntityFactoryTest {
     }
 
     @Test
-    fun `createPlayer starts with magic wand`() {
+    fun `createPlayer starts with the ethernet whip`() {
         val pid = EntityFactory.createPlayer(world, 0f, 0f)
         val weapons = world.weapons[pid]!!
         assertEquals(1, weapons.size)
-        assertEquals(WeaponType.MAGIC_WAND, weapons[0].type)
+        assertEquals(WeaponType.WHIP, weapons[0].type)
     }
 
     @Test

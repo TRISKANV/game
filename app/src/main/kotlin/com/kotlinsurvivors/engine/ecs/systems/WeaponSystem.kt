@@ -19,6 +19,10 @@ class WeaponSystem {
 
     private val toDestroy = ArrayList<Int>(128)
 
+    private companion object {
+        const val WHIP_SECOND_LASH_DELAY = 0.1f
+    }
+
     fun update(world: World, dt: Float) {
         val pid = world.getPlayerEntity()
         if (pid == -1) return
@@ -161,6 +165,9 @@ class WeaponSystem {
     private fun fireWhip(world: World, ox: Float, oy: Float, dmg: Int,
                           size: Float, w: WeaponComponent, area: Float) {
         val halfW = 120f * area; val halfH = 40f * area
+        // The cable lashes to the right first and then to the left, like a quick double crack.
+        EntityFactory.createWhipLash(world, ox, oy, direction =  1f, reach = halfW, delay = 0f)
+        EntityFactory.createWhipLash(world, ox, oy, direction = -1f, reach = halfW, delay = WHIP_SECOND_LASH_DELAY)
         for (eid in world.getEnemySnapshot()) {
             val t      = world.transforms[eid] ?: continue
             val health = world.healths[eid]    ?: continue

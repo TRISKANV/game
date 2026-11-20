@@ -38,9 +38,9 @@ object EntityFactory {
         // Starting weapon
         world.weapons[id] = mutableListOf(
             WeaponComponent(
-                type = WeaponType.MAGIC_WAND,
-                damage = 10,
-                cooldown = 1.0f,
+                type = WeaponType.WHIP,
+                damage = 14,
+                cooldown = 1.1f,
                 projectileSpeed = 380f,
                 projectileSize = 14f,
                 piercing = 1,
@@ -265,6 +265,31 @@ object EntityFactory {
         }
     }
 
+    /** How long one lash of the cable is on screen, in seconds. */
+    const val WHIP_LASH_SECONDS = 0.28f
+
+    /**
+     * The cable lashing out to one side of the player. It only draws; the damage is
+     * dealt by the weapon system the moment the whip fires. [direction] is +1 for
+     * right and -1 for left, [reach] how far the cable gets, and [delay] how long
+     * it waits before it starts (the second lash follows the first).
+     */
+    fun createWhipLash(world: World, x: Float, y: Float, direction: Float, reach: Float, delay: Float) {
+        val id = world.createEntity()
+        val life = WHIP_LASH_SECONDS + delay
+        world.transforms[id] = TransformComponent(x = x, y = y)
+        world.particles[id]  = ParticleComponent(
+            type        = ParticleType.LASH,
+            lifetime    = life,
+            maxLifetime = life,
+            vx          = direction,
+            vy          = 0f,
+            size        = reach,
+            color       = 0xFF42A5F5,
+            drag        = 1f
+        )
+    }
+
     private data class ParticleCfg(
         val color: Long, val minSize: Float, val maxSize: Float,
         val minSpeed: Float, val maxSpeed: Float, val lifetime: Float
@@ -278,6 +303,7 @@ object EntityFactory {
         ParticleType.COIN       -> ParticleCfg(0xFFFFD740, 3f, 6f, 50f, 140f, 0.5f)
         ParticleType.LEVEL_UP   -> ParticleCfg(0xFFCE93D8, 4f, 12f, 60f, 200f, 0.8f)
         ParticleType.HEAL       -> ParticleCfg(0xFFA5D6A7, 3f, 8f, 30f, 100f, 0.7f)
+        ParticleType.LASH       -> ParticleCfg(0xFF42A5F5, 0f, 0f, 0f, 0f, WHIP_LASH_SECONDS)
     }
 
     // ── Aura Weapon ────────────────────────────────────────────────────────
