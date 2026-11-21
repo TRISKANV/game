@@ -87,6 +87,30 @@ object EntityFactory {
         return id
     }
 
+    /**
+     * A mini-boss: an ordinary [type] grown into something much tougher that gives a lot of
+     * experience, always drops coins and sometimes leaves a chest. It is drawn with a gold ring.
+     */
+    fun createMiniBoss(world: World, type: EnemyType, x: Float, y: Float, waveMultiplier: Float = 1f): Int {
+        val id = createEnemy(world, type, x, y, waveMultiplier)
+        world.healths[id]?.let {
+            it.max = it.max * MINI_BOSS_HP_FACTOR
+            it.current = it.max
+        }
+        world.colliders[id]?.let { it.radius *= MINI_BOSS_SIZE_FACTOR }
+        world.renders[id]?.let {
+            it.width  *= MINI_BOSS_SIZE_FACTOR
+            it.height *= MINI_BOSS_SIZE_FACTOR
+        }
+        world.enemies[id]?.let {
+            it.isMiniBoss      = true
+            it.attackDamage    = (it.attackDamage * MINI_BOSS_DAMAGE_FACTOR).toInt().coerceAtLeast(1)
+            it.experienceValue = MINI_BOSS_XP
+            it.coinDropChance  = 1f
+        }
+        return id
+    }
+
     private data class EnemyCfg(
         val hp: Int, val radius: Float, val damage: Int,
         val xp: Int, val coinChance: Float,
@@ -171,6 +195,12 @@ object EntityFactory {
 
     /** How long a boss chest stays on the floor waiting for the player. */
     const val CHEST_WAIT_SECONDS = 120f
+
+    // Mini-boss: how much bigger and tougher it is than the enemy it is built from.
+    const val MINI_BOSS_HP_FACTOR     = 8
+    const val MINI_BOSS_SIZE_FACTOR   = 1.7f
+    const val MINI_BOSS_DAMAGE_FACTOR = 1.5f
+    const val MINI_BOSS_XP            = 40
 
     fun createPickup(world: World, type: PickupType, x: Float, y: Float): Int {
         val id = world.createEntity()

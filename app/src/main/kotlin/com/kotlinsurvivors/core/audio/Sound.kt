@@ -30,6 +30,11 @@ enum class Sound(val file: String, val minGapMs: Long = 0L, val volume: Float = 
     BOSS_DIE      ("boss_die",       0,   1f),
     PLAYER_HURT   ("player_hurt",    150, 0.9f),
 
+    // Events
+    EVENT_WAVE    ("event_wave",     0,   0.9f),
+    EVENT_MINIBOSS("event_miniboss", 0,   1f),
+    WAVE_CLEAR    ("wave_clear",     0,   0.9f),
+
     // Pickups
     PICKUP_XP     ("pickup_xp",      40,  0.4f),
     PICKUP_COIN   ("pickup_coin",    60,  0.5f),

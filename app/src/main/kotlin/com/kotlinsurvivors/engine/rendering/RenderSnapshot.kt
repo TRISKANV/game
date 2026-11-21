@@ -91,6 +91,7 @@ class RenderBuffer {
         const val FLAG_IS_CRITICAL = 8
         const val FLAG_IS_BOSS     = 16
         const val FLAG_MOVING      = 32
+        const val FLAG_IS_MINI_BOSS = 64
 
         /** [spriteId] of a particle that is the whip cable instead of a dot. */
         const val SPRITE_WHIP_LASH = 100

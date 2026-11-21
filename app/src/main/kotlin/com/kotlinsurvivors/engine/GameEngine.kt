@@ -52,6 +52,7 @@ class GameEngine(
         const val WORLD_HEIGHT   = 4096f
         const val MAX_WEAPON_LEVEL = 8
         private const val CHEST_BANNER_SECONDS = 4f
+        private const val EVENT_BANNER_SECONDS = 3.5f
         private const val RENDER_BUFFER_COUNT = 8
         private const val FACING_MIN_SPEED_SQ  = 25f   // below 5 px/s the player counts as standing still
 
@@ -67,6 +68,7 @@ class GameEngine(
     private val weaponSystem     = WeaponSystem(sounds)
     private val spawnSystem      = SpawnSystem(viewportWidth, viewportHeight)
     private val experienceSystem = ExperienceSystem()
+    private val eventDirector    = EventDirector(spawnSystem, WORLD_WIDTH, viewportWidth, viewportHeight)
 
     val joystick = VirtualJoystick()
 
@@ -84,6 +86,11 @@ class GameEngine(
     // The weapon a boss chest just gave, shown in a banner for CHEST_BANNER_SECONDS.
     private var chestBannerWeapon: WeaponType? = null
     private var chestBannerTimer = 0f
+
+    // The event (special wave, mini-boss) just announced, shown for EVENT_BANNER_SECONDS.
+    private var eventBanner: EventKind? = null
+    private var eventBannerTimer = 0f
+    private val directorEvents = mutableListOf<GameEvent>()
     @Volatile private var openRouletteRequested = false
     private val frameEvents    = mutableListOf<GameEvent>()
     private var frameCount     = 0L
@@ -288,6 +295,10 @@ class GameEngine(
         levelUpsWaiting      = 0
         chestBannerWeapon    = null
         chestBannerTimer     = 0f
+        eventBanner          = null
+        eventBannerTimer     = 0f
+        directorEvents.clear()
+        eventDirector.reset()
         openRouletteRequested = false
         frameCount           = 0L
         cachedLevelUpOptions = emptyList()
@@ -346,6 +357,10 @@ class GameEngine(
             chestBannerTimer -= dt
             if (chestBannerTimer <= 0f) chestBannerWeapon = null
         }
+        if (eventBannerTimer > 0f) {
+            eventBannerTimer -= dt
+            if (eventBannerTimer <= 0f) eventBanner = null
+        }
         tickedSinceEmit = true
         frameEvents.clear()
 
@@ -399,6 +414,8 @@ class GameEngine(
 
         try {
             if (spawnSystem.update(world, dt, elapsedTime).bossSpawned) sounds.play(Sound.BOSS_APPEAR)
+            eventDirector.update(world, dt, elapsedTime, directorEvents)
+            announceEvents()
         } catch (e: Exception) {
             Log.e(TAG, "CRASH in spawnSystem.update (frame $frameCount)", e)
             Log.e(TAG, world.getDiagnosticString()); throw e
@@ -437,12 +454,33 @@ class GameEngine(
         }
     }
 
+    /** Shows the banner and plays the sound for every event the director started this frame. */
+    private fun announceEvents() {
+        if (directorEvents.isEmpty()) return
+        for (event in directorEvents) {
+            when (event) {
+                is GameEvent.EventStarted -> {
+                    eventBanner = event.kind; eventBannerTimer = EVENT_BANNER_SECONDS
+                    sounds.play(if (event.kind == EventKind.MINI_BOSS) Sound.EVENT_MINIBOSS else Sound.EVENT_WAVE)
+                    CrashLogger.log("EVENT started: ${event.kind} at ${elapsedTime.toInt()}s, ${world.enemies.size} enemies")
+                }
+                is GameEvent.WaveCleared -> {
+                    eventBanner = EventKind.WAVE_CLEARED; eventBannerTimer = EVENT_BANNER_SECONDS
+                    sounds.play(Sound.WAVE_CLEAR)
+                    CrashLogger.log("EVENT wave cleared at ${elapsedTime.toInt()}s")
+                }
+                else -> Unit
+            }
+        }
+        directorEvents.clear()
+    }
+
     /** Sounds for what happened in the collision step: kills, pickups and hits on the player. */
     private fun playEventSounds(events: List<GameEvent>) {
         for (event in events) {
             when (event) {
                 is GameEvent.EnemyKilled -> sounds.play(when {
-                    event.type.isBoss                -> Sound.BOSS_DIE
+                    event.type.isBoss || event.miniBoss -> Sound.BOSS_DIE
                     event.type == EnemyType.EXPLODER -> Sound.ENEMY_BLAST
                     else                             -> Sound.ENEMY_DIE
                 })
@@ -497,6 +535,7 @@ class GameEngine(
             levelUpOptions   = cachedLevelUpOptions,  // reuse cached, never regenerate per frame
             levelUpWinner    = cachedLevelUpWinner,
             chestWeapon      = chestBannerWeapon,
+            eventBanner      = eventBanner,
             elapsedTime      = elapsedTime,
             playerHp         = health?.current ?: 0,
             playerMaxHp      = health?.max ?: 100,
@@ -554,8 +593,10 @@ class GameEngine(
             val isBoss = world.bosses.containsKey(eid)
             var f = 0
             if (r.flashTimer > 0f) f = f or RenderBuffer.FLAG_FLASHING
-            if (h.percentage < 1f) f = f or RenderBuffer.FLAG_SHOW_HP_BAR
+            val isMini = world.enemies[eid]?.isMiniBoss == true
+            if (h.percentage < 1f || isMini) f = f or RenderBuffer.FLAG_SHOW_HP_BAR
             if (isBoss)            f = f or RenderBuffer.FLAG_IS_BOSS
+            if (isMini)            f = f or RenderBuffer.FLAG_IS_MINI_BOSS
             renderBuffer.write(
                 kindOrdinal  = if (isBoss) RenderKind.BOSS else RenderKind.ENEMY,
                 ex = t.x, ey = t.y, eRotation = t.rotation,

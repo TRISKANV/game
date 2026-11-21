@@ -1,5 +1,6 @@
 package com.kotlinsurvivors.features.game.domain.model
 
+import com.kotlinsurvivors.engine.ecs.systems.EventKind
 import com.kotlinsurvivors.engine.rendering.RenderSnapshot
 import com.kotlinsurvivors.engine.ecs.systems.GameEvent
 import com.kotlinsurvivors.engine.ecs.components.WeaponType
@@ -26,6 +27,8 @@ data class GameState(
     val levelUpWinner    : Int            = 0,
     /** The exclusive weapon a boss chest just gave, shown as a banner for a few seconds; null otherwise. */
     val chestWeapon      : WeaponType?    = null,
+    /** The special wave or mini-boss that was just announced, shown as a banner for a few seconds; null otherwise. */
+    val eventBanner      : EventKind?     = null,
 
     // Time
     val elapsedTime      : Float          = 0f,
@@ -74,6 +77,7 @@ data class GameState(
             levelUpOptions == other.levelUpOptions &&
             levelUpWinner == other.levelUpWinner &&
             chestWeapon == other.chestWeapon &&
+            eventBanner == other.eventBanner &&
             elapsedTime == other.elapsedTime &&
             playerHp == other.playerHp &&
             playerMaxHp == other.playerMaxHp &&

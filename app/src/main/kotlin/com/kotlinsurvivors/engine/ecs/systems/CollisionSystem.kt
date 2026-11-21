@@ -153,7 +153,7 @@ class CollisionSystem {
             if (enemy.type == EnemyType.EXPLODER) {
                 EntityFactory.createParticleBurst(world, et.x, et.y, ParticleType.EXPLOSION, 8)
                 world.destroyEntity(eid)
-                events.add(GameEvent.EnemyKilled(eid, enemy.type, enemy.experienceValue, enemy.coinDropChance))
+                events.add(GameEvent.EnemyKilled(eid, enemy.type, enemy.experienceValue, enemy.coinDropChance, enemy.isMiniBoss))
             }
         }
     }
@@ -239,7 +239,7 @@ class CollisionSystem {
             val type       = enemy?.type           ?: EnemyType.BASIC
             val xp         = enemy?.experienceValue ?: 5
             val coinChance = enemy?.coinDropChance  ?: 0.1f
-            events.add(GameEvent.EnemyKilled(eid, type, xp, coinChance))
+            events.add(GameEvent.EnemyKilled(eid, type, xp, coinChance, enemy?.isMiniBoss ?: false))
         }
     }
 }

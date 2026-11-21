@@ -57,6 +57,14 @@
     <string name="settings_section_about">ACERCA DE</string>
     <string name="settings_screen_shake">Temblor de pantalla</string>
     <string name="settings_screen_shake_sub">La pantalla tiembla al recibir daño</string>
+    <string name="event_swarm">¡LLEGA UN ENJAMBRE!</string>
+    <string name="event_drones">¡ATAQUE DE DRONES!</string>
+    <string name="event_siege">¡TE ESTÁN CERCANDO!</string>
+    <string name="event_miniboss">¡MINI-JEFE!</string>
+    <string name="event_wave_sub">Acabá con todos para ganar experiencia extra</string>
+    <string name="event_miniboss_sub">Aguanta mucho y puede soltar un cofre</string>
+    <string name="event_cleared">¡OLEADA SUPERADA!</string>
+    <string name="event_cleared_sub">Experiencia y monedas de premio</string>
     <string name="settings_close">VOLVER</string>
     <string name="settings_sound_effects">Efectos de sonido</string>
     <string name="settings_sound_effects_sub">Disparos, golpes, objetos y sonidos del menú</string>

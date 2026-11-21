@@ -188,6 +188,11 @@ fun GameScreen(
             )
         }
 
+        // ── A special wave or a mini-boss was just announced ──────────────────
+        gameState.eventBanner?.let { kind ->
+            EventBanner(kind = kind, modifier = Modifier.align(Alignment.TopCenter).padding(top = 96.dp))
+        }
+
         // ── A boss chest just gave an exclusive weapon ────────────────────────
         gameState.chestWeapon?.let { weapon ->
             ChestWeaponBanner(

@@ -512,6 +512,7 @@ class GameRenderer(
         val typeId     = buf.spriteId[i]
         if (sprites != null && typeId >= 0 && typeId < sprites.enemies.size) {
             renderEnemySprite(sprites, buf, i, typeId, sx, sy, isFlashing)
+            if (buf.hasFlag(i, RenderBuffer.FLAG_IS_MINI_BOSS)) drawMiniBossRing(sx, sy, buf.width[i] * 0.5f * ENEMY_SPRITE_SCALE)
             return
         }
         val drawColor  = if (isFlashing) Color.White else Color(buf.getColor(i))
@@ -539,6 +540,13 @@ class GameRenderer(
             drawCircle(Color(0x88FF6B6B), buf.width[i] * 0.5f + 6f, Offset(sx, sy),
                 style = Stroke(width = 3f))
         }
+    }
+
+    /** The gold ring that marks a mini-boss; it breathes slowly so it stands out from ordinary enemies. */
+    private fun DrawScope.drawMiniBossRing(sx: Float, sy: Float, radius: Float) {
+        val pulse = 0.5f + 0.5f * sin(System.currentTimeMillis() * 0.006f)
+        drawCircle(Color(0x22FFC107), radius * 1.15f, Offset(sx, sy))
+        drawCircle(Color(red = 1f, green = 0.757f, blue = 0.027f, alpha = 0.4f + 0.35f * pulse), radius * (1.0f + 0.08f * pulse), Offset(sx, sy), style = Stroke(width = 3f))
     }
 
     private fun DrawScope.renderEnemySprite(

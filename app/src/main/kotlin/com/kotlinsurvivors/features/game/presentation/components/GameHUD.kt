@@ -1,5 +1,6 @@
 package com.kotlinsurvivors.features.game.presentation.components
 
+import com.kotlinsurvivors.engine.ecs.systems.EventKind
 import com.kotlinsurvivors.core.audio.Sound
 import com.kotlinsurvivors.core.audio.LocalSoundEffects
 import com.kotlinsurvivors.core.presentation.language.weaponName
@@ -424,5 +425,37 @@ fun ChestWeaponBanner(weapon: WeaponType, modifier: Modifier = Modifier) {
                 fontWeight = FontWeight.ExtraBold
             )
         }
+    }
+}
+
+/** Announces a special wave, a mini-boss or a cleared wave for a few seconds. */
+@Composable
+fun EventBanner(kind: EventKind, modifier: Modifier = Modifier) {
+    val accent = when (kind) {
+        EventKind.SWARM_RUSH, EventKind.DRONE_RAID, EventKind.SIEGE -> Color(0xFFFF7043)
+        EventKind.MINI_BOSS    -> Color(0xFFFFC107)
+        EventKind.WAVE_CLEARED -> Color(0xFF7CE04A)
+    }
+    val title = when (kind) {
+        EventKind.SWARM_RUSH   -> stringResource(R.string.event_swarm)
+        EventKind.DRONE_RAID   -> stringResource(R.string.event_drones)
+        EventKind.SIEGE        -> stringResource(R.string.event_siege)
+        EventKind.MINI_BOSS    -> stringResource(R.string.event_miniboss)
+        EventKind.WAVE_CLEARED -> stringResource(R.string.event_cleared)
+    }
+    val sub = when (kind) {
+        EventKind.MINI_BOSS    -> stringResource(R.string.event_miniboss_sub)
+        EventKind.WAVE_CLEARED -> stringResource(R.string.event_cleared_sub)
+        else                   -> stringResource(R.string.event_wave_sub)
+    }
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = modifier
+            .background(Color(0xE61A1020), RoundedCornerShape(3.dp))
+            .border(2.dp, accent, RoundedCornerShape(3.dp))
+            .padding(horizontal = 22.dp, vertical = 8.dp)
+    ) {
+        Text(title, color = accent, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+        Text(sub, color = Color(0xFFCCCCCC), fontSize = 11.sp)
     }
 }

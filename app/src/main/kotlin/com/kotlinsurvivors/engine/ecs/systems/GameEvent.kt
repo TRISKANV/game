@@ -13,7 +13,8 @@ sealed class GameEvent {
         val entityId  : Int,
         val type      : EnemyType,
         val xp        : Int,
-        val coinChance: Float
+        val coinChance: Float,
+        val miniBoss  : Boolean = false
     ) : GameEvent()
 
     data class PlayerHit(val damage: Int) : GameEvent()
@@ -29,6 +30,12 @@ sealed class GameEvent {
     data class LevelUp(val newLevel: Int) : GameEvent()
 
     object BossSpawned : GameEvent()
+
+    /** A special wave or a mini-boss just started; the HUD announces [kind]. */
+    data class EventStarted(val kind: EventKind) : GameEvent()
+
+    /** The player wiped out a special wave and gets a reward. */
+    object WaveCleared : GameEvent()
 
     /** A boss left a chest on the ground. */
     object ChestDropped : GameEvent()

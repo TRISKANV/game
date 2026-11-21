@@ -43,6 +43,17 @@ class SpawnSystem(
     /** Collision grid of the current level; enemies only appear on free ground. */
     var levelMap: LevelMap? = null
 
+    /**
+     * Looks for a free spot just outside the screen around the player, for the special events.
+     * On success [spawnPointX] / [spawnPointY] hold it.
+     */
+    fun findSpawnPoint(px: Float, py: Float): Boolean = pickSpawnPosition(px, py)
+    val spawnPointX: Float get() = spawnX
+    val spawnPointY: Float get() = spawnY
+
+    /** How much stronger enemies are [elapsed] seconds into the run. */
+    fun difficultyAt(elapsed: Float): Float = waveMultiplier(elapsed)
+
     // Reusable spawn position — avoids Pair allocation every spawn
     private var spawnX = 0f
     private var spawnY = 0f

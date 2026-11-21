@@ -57,6 +57,14 @@
     <string name="settings_section_about">ABOUT</string>
     <string name="settings_screen_shake">Screen Shake</string>
     <string name="settings_screen_shake_sub">Shake screen when taking damage</string>
+    <string name="event_swarm">SWARM INCOMING!</string>
+    <string name="event_drones">DRONE RAID!</string>
+    <string name="event_siege">THEY\'RE SURROUNDING YOU!</string>
+    <string name="event_miniboss">MINI-BOSS!</string>
+    <string name="event_wave_sub">Wipe them out for bonus XP</string>
+    <string name="event_miniboss_sub">Tough, and it may drop a chest</string>
+    <string name="event_cleared">WAVE CLEARED!</string>
+    <string name="event_cleared_sub">Bonus XP and coins</string>
     <string name="settings_close">BACK</string>
     <string name="settings_sound_effects">Sound effects</string>
     <string name="settings_sound_effects_sub">Shots, hits, pickups and menu sounds</string>

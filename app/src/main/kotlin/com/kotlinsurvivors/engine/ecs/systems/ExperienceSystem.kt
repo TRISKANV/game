@@ -24,6 +24,9 @@ class ExperienceSystem {
 
         /** Chance that a dead boss leaves a chest. */
         const val BOSS_CHEST_CHANCE = 0.5f
+
+        /** Chance that a dead mini-boss leaves a chest. */
+        const val MINI_BOSS_CHEST_CHANCE = 0.3f
         private const val TAG = "KS_XP"
     }
 
@@ -92,7 +95,7 @@ class ExperienceSystem {
             val health = world.healths[id] ?: continue
             if (!health.isDead) continue
             if (id in world.destroyedTags || id in reportedKills) continue
-            events.add(GameEvent.EnemyKilled(id, enemy.type, enemy.experienceValue, enemy.coinDropChance))
+            events.add(GameEvent.EnemyKilled(id, enemy.type, enemy.experienceValue, enemy.coinDropChance, enemy.isMiniBoss))
         }
     }
 
@@ -124,10 +127,15 @@ class ExperienceSystem {
 
             EntityFactory.createParticleBurst(world, t.x, t.y, ParticleType.BLOOD, 5)
 
-            if (event.type.isBoss && Random.nextFloat() < BOSS_CHEST_CHANCE) {
+            val chestChance = when {
+                event.type.isBoss -> BOSS_CHEST_CHANCE
+                event.miniBoss    -> MINI_BOSS_CHEST_CHANCE
+                else              -> 0f
+            }
+            if (chestChance > 0f && Random.nextFloat() < chestChance) {
                 EntityFactory.createPickup(world, PickupType.CHEST, t.x, t.y)
                 output.add(GameEvent.ChestDropped)
-                Log.d(TAG, "Boss ${event.type} dropped a chest")
+                Log.d(TAG, "${event.type} dropped a chest (mini-boss: ${event.miniBoss})")
             }
         } else {
             Log.w(TAG, "handleEnemyKilled: entity $eid has no transform — already removed?")

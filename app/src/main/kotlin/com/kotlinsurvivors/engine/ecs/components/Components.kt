@@ -170,7 +170,11 @@ data class EnemyComponent(
     var coinDropAmount: IntRange = 1..3,
     /** True while the enemy is going round an obstacle by the level's flow field instead of straight at the player. */
     var followingPath: Boolean = false,
-    var pathCheckTimer: Float = 0f
+    var pathCheckTimer: Float = 0f,
+    /** A tougher enemy that appears between bosses; it can leave a chest. */
+    var isMiniBoss: Boolean = false,
+    /** Which special wave this enemy belongs to (0 = none); the wave ends when none with its tag is left. */
+    var waveTag: Int = 0
 ) : Component
 
 // ─────────────────────────────────────────────
