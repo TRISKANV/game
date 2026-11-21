@@ -1,5 +1,6 @@
 package com.kotlinsurvivors.engine
 
+import com.kotlinsurvivors.engine.ecs.systems.ComboTracker
 import com.kotlinsurvivors.core.audio.Sound
 import com.kotlinsurvivors.engine.ecs.components.PickupType
 import com.kotlinsurvivors.engine.ecs.components.EnemyType
@@ -46,6 +47,8 @@ class GameEngine(
 ) {
     companion object {
         const val TARGET_FPS     = 60
+        /** Sound for reaching each combo tier, indexed by tier (tier 0 never sounds). */
+        private val COMBO_SOUNDS = arrayOf(Sound.UI_CLICK, Sound.COMBO_1, Sound.COMBO_2, Sound.COMBO_3, Sound.COMBO_4)
         const val FIXED_DT       = 1f / TARGET_FPS
         const val MAX_FRAME_TIME = 0.05f
         const val WORLD_WIDTH    = 4096f
@@ -91,6 +94,7 @@ class GameEngine(
     private var eventBanner: EventKind? = null
     private var eventBannerTimer = 0f
     private val directorEvents = mutableListOf<GameEvent>()
+    private val combo = ComboTracker()
     @Volatile private var openRouletteRequested = false
     private val frameEvents    = mutableListOf<GameEvent>()
     private var frameCount     = 0L
@@ -299,6 +303,7 @@ class GameEngine(
         eventBannerTimer     = 0f
         directorEvents.clear()
         eventDirector.reset()
+        combo.reset()
         openRouletteRequested = false
         frameCount           = 0L
         cachedLevelUpOptions = emptyList()
@@ -402,6 +407,8 @@ class GameEngine(
         }
 
         playEventSounds(frameEvents)
+        combo.update(dt)
+        world.players[world.getPlayerEntity()]?.let(combo::applyTo)
 
         val processed: List<GameEvent>
         try {
@@ -477,6 +484,7 @@ class GameEngine(
 
     /** Sounds for what happened in the collision step: kills, pickups and hits on the player. */
     private fun playEventSounds(events: List<GameEvent>) {
+        var kills = 0
         for (event in events) {
             when (event) {
                 is GameEvent.EnemyKilled -> sounds.play(when {
@@ -496,7 +504,9 @@ class GameEngine(
                 is GameEvent.PlayerHit -> sounds.play(Sound.PLAYER_HURT)
                 else -> Unit
             }
+            if (event is GameEvent.EnemyKilled) kills++
         }
+        if (combo.onKills(kills)) sounds.play(COMBO_SOUNDS[combo.tier])
     }
 
     private fun emitState() {
@@ -536,6 +546,9 @@ class GameEngine(
             levelUpWinner    = cachedLevelUpWinner,
             chestWeapon      = chestBannerWeapon,
             eventBanner      = eventBanner,
+            comboCount       = if (combo.isVisible) combo.count else 0,
+            comboTier        = combo.tier,
+            comboFraction    = if (combo.isVisible) (combo.fraction * 20f).toInt() / 20f else 0f,
             elapsedTime      = elapsedTime,
             playerHp         = health?.current ?: 0,
             playerMaxHp      = health?.max ?: 100,

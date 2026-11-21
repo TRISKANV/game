@@ -177,7 +177,10 @@ fun GameScreen(
                 enemies        = gameState.enemyCount,
                 coins          = gameState.playerCoins,
                 elapsedSeconds = gameState.elapsedSeconds,
-                onPause        = onPause
+                onPause        = onPause,
+                comboCount     = gameState.comboCount,
+                comboTier      = gameState.comboTier,
+                comboFraction  = gameState.comboFraction
             )
         }
 

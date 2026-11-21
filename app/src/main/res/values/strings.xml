@@ -57,6 +57,7 @@
     <string name="settings_section_about">ABOUT</string>
     <string name="settings_screen_shake">Screen Shake</string>
     <string name="settings_screen_shake_sub">Shake screen when taking damage</string>
+    <string name="hud_combo">COMBO x%1$d</string>
     <string name="event_swarm">SWARM INCOMING!</string>
     <string name="event_drones">DRONE RAID!</string>
     <string name="event_siege">THEY\'RE SURROUNDING YOU!</string>

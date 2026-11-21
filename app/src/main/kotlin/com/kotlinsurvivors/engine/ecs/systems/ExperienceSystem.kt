@@ -168,7 +168,7 @@ class ExperienceSystem {
             PickupType.EXPERIENCE_LARGE -> {
                 val xpBefore = player.experience
                 val levelBefore = player.level
-                player.experience += (event.value * player.xpMultiplier).roundToInt()
+                player.experience += (event.value * player.xpMultiplier * player.comboXpMultiplier).roundToInt()
 
                 var levelsThisFrame = 0
                 while (

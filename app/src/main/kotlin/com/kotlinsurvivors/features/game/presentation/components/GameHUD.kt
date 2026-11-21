@@ -73,7 +73,10 @@ fun GameHUD(
     enemies        : Int,
     coins          : Int,
     elapsedSeconds : Int,
-    onPause        : () -> Unit
+    onPause        : () -> Unit,
+    comboCount     : Int   = 0,
+    comboTier      : Int   = 0,
+    comboFraction  : Float = 0f
 ) {
     val pauseIcon   = rememberUiImage("ui_icon_pause.png")
     val pauseSource = remember { MutableInteractionSource() }
@@ -182,6 +185,8 @@ fun GameHUD(
             }
 
             HUDChip(label = remember(coins) { "$coins" }, color = Color(0xFFFFD740), iconKey = "coin")
+
+            if (comboCount > 0) ComboMeter(comboCount, comboTier, comboFraction)
         }
     }
 }
@@ -457,5 +462,39 @@ fun EventBanner(kind: EventKind, modifier: Modifier = Modifier) {
     ) {
         Text(title, color = accent, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
         Text(sub, color = Color(0xFFCCCCCC), fontSize = 11.sp)
+    }
+}
+
+/** The kill streak: its count, colored by tier, over a bar that empties as the streak runs out. */
+@Composable
+fun ComboMeter(count: Int, tier: Int, fraction: Float) {
+    val color = when (tier) {
+        0    -> Color(0xFFB0BEC5)
+        1    -> Color(0xFF66BB6A)
+        2    -> Color(0xFF26C6DA)
+        3    -> Color(0xFFAB47BC)
+        else -> Color(0xFFFFC107)
+    }
+    Column(
+        horizontalAlignment = Alignment.End,
+        modifier = Modifier
+            .background(Color(0xCC0A0A14), RoundedCornerShape(3.dp))
+            .border(1.dp, color, RoundedCornerShape(3.dp))
+            .padding(horizontal = 10.dp, vertical = 4.dp)
+    ) {
+        Text(
+            text       = stringResource(R.string.hud_combo, count),
+            color      = color,
+            fontSize   = (14 + tier * 2).sp,
+            fontWeight = FontWeight.ExtraBold
+        )
+        Box(
+            modifier = Modifier
+                .width(80.dp)
+                .height(4.dp)
+                .background(Color(0xFF2A2A3A))
+        ) {
+            Box(modifier = Modifier.fillMaxWidth(fraction.coerceIn(0f, 1f)).fillMaxHeight().background(color))
+        }
     }
 }

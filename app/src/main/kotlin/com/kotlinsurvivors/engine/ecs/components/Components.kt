@@ -129,7 +129,11 @@ data class PlayerComponent(
     var survivalTime: Float = 0f,
     var bossKills: Int = 0,
     var xpMultiplier: Float = 1f,
-    var coinDropMultiplier: Float = 1f
+    var coinDropMultiplier: Float = 1f,
+    // Temporary bonuses from the kill streak (see ComboTracker); 1 = none.
+    var comboXpMultiplier: Float = 1f,
+    var comboAttackSpeedMultiplier: Float = 1f,
+    var comboMagnetMultiplier: Float = 1f
 ) : Component
 
 // ─────────────────────────────────────────────

@@ -60,7 +60,7 @@ class WeaponSystem(private val sounds: SoundEffects = SoundEffects.None) {
             if (weapon.type.isChestOnly && !hasChestWeaponTarget(world, weapon, pt.x, pt.y, weapon.area * player.areaMultiplier)) {
                 weapon.timer = 0f; continue
             }
-            weapon.timer = weapon.cooldown / player.attackSpeedMultiplier
+            weapon.timer = weapon.cooldown / (player.attackSpeedMultiplier * player.comboAttackSpeedMultiplier)
 
             val dmg      = (weapon.damage * player.damageMultiplier).toInt()
             val speed    = weapon.projectileSpeed * player.projectileSpeedMultiplier

@@ -35,6 +35,12 @@ enum class Sound(val file: String, val minGapMs: Long = 0L, val volume: Float = 
     EVENT_MINIBOSS("event_miniboss", 0,   1f),
     WAVE_CLEAR    ("wave_clear",     0,   0.9f),
 
+    // Kill streak: one blip per tier, each higher than the last
+    COMBO_1       ("combo_1",        0,   0.7f),
+    COMBO_2       ("combo_2",        0,   0.75f),
+    COMBO_3       ("combo_3",        0,   0.8f),
+    COMBO_4       ("combo_4",        0,   0.9f),
+
     // Pickups
     PICKUP_XP     ("pickup_xp",      40,  0.4f),
     PICKUP_COIN   ("pickup_coin",    60,  0.5f),

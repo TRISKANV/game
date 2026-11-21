@@ -165,8 +165,9 @@ class CollisionSystem {
         val pc    = world.colliders[playerId]   ?: return
         val pComp = world.players[playerId]     ?: return
 
+        val magnetRadius = pComp.magnetRadius * pComp.comboMagnetMultiplier   // the kill streak can widen it for a while
         queryResult.clear()
-        grid.query(pt.x, pt.y, pComp.magnetRadius, queryResult)
+        grid.query(pt.x, pt.y, magnetRadius, queryResult)
 
         for (qi in 0 until queryResult.size) {
             val pkId = queryResult[qi]
@@ -179,10 +180,10 @@ class CollisionSystem {
             val dx = pt.x - pkt.x; val dy = pt.y - pkt.y
             val distSq = dx * dx + dy * dy
 
-            if (!isChest && distSq < pComp.magnetRadius * pComp.magnetRadius) {
+            if (!isChest && distSq < magnetRadius * magnetRadius) {
                 pickup.magnetized = true
                 val dist = sqrt(distSq).coerceAtLeast(0.001f)
-                pickup.magnetSpeed = (pComp.magnetRadius - dist) / pComp.magnetRadius * 400f + 80f
+                pickup.magnetSpeed = (magnetRadius - dist) / magnetRadius * 400f + 80f
                 world.velocities[pkId]?.let {
                     it.vx += (dx / dist) * pickup.magnetSpeed * 0.16f
                     it.vy += (dy / dist) * pickup.magnetSpeed * 0.16f

@@ -29,6 +29,10 @@ data class GameState(
     val chestWeapon      : WeaponType?    = null,
     /** The special wave or mini-boss that was just announced, shown as a banner for a few seconds; null otherwise. */
     val eventBanner      : EventKind?     = null,
+    /** Kills in the current streak (shown from 3), its tier (0..4) and the share of the countdown left (0..1, in steps of 0.05). */
+    val comboCount       : Int            = 0,
+    val comboTier        : Int            = 0,
+    val comboFraction    : Float          = 0f,
 
     // Time
     val elapsedTime      : Float          = 0f,
@@ -78,6 +82,9 @@ data class GameState(
             levelUpWinner == other.levelUpWinner &&
             chestWeapon == other.chestWeapon &&
             eventBanner == other.eventBanner &&
+            comboCount == other.comboCount &&
+            comboTier == other.comboTier &&
+            comboFraction == other.comboFraction &&
             elapsedTime == other.elapsedTime &&
             playerHp == other.playerHp &&
             playerMaxHp == other.playerMaxHp &&

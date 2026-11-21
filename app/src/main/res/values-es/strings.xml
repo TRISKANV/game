@@ -57,6 +57,7 @@
     <string name="settings_section_about">ACERCA DE</string>
     <string name="settings_screen_shake">Temblor de pantalla</string>
     <string name="settings_screen_shake_sub">La pantalla tiembla al recibir daño</string>
+    <string name="hud_combo">COMBO x%1$d</string>
     <string name="event_swarm">¡LLEGA UN ENJAMBRE!</string>
     <string name="event_drones">¡ATAQUE DE DRONES!</string>
     <string name="event_siege">¡TE ESTÁN CERCANDO!</string>
