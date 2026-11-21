@@ -1,5 +1,7 @@
 package com.kotlinsurvivors.features.game.presentation.screen
 
+import com.kotlinsurvivors.core.audio.Sound
+import com.kotlinsurvivors.core.audio.LocalSoundEffects
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.awaitEachGesture
@@ -134,8 +136,10 @@ fun GameScreen(
 
         // Banner for achievements unlocked during the run, one at a time.
         var unlockedBanner by remember { mutableStateOf<Achievement?>(null) }
+        val sounds = LocalSoundEffects.current
         LaunchedEffect(viewModel) {
             viewModel.newAchievements.collect { achievement ->
+                sounds.play(Sound.ACHIEVEMENT)
                 unlockedBanner = achievement
                 delay(ACHIEVEMENT_BANNER_MS)
                 unlockedBanner = null

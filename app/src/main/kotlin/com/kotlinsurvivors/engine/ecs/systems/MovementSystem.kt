@@ -228,7 +228,11 @@ class MovementSystem(
                 else -> {
                     val nx = t.x + vel.vx * dt
                     val ny = t.y + vel.vy * dt
-                    if (map == null) { t.x = nx; t.y = ny }
+                    if (world.enemies[id]?.type?.isFlying == true) {
+                        // Over the rooftops: no collision with the map, only the edge of the world.
+                        t.x = nx.coerceIn(0f, worldWidth)
+                        t.y = ny.coerceIn(0f, worldHeight)
+                    } else if (map == null) { t.x = nx; t.y = ny }
                     else {
                         val r = world.colliders[id]?.radius ?: 12f
                         val half = (r * 0.6f).coerceIn(ENEMY_HALF_MIN, ENEMY_HALF_MAX)

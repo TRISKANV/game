@@ -57,6 +57,8 @@
     <string name="settings_section_about">ABOUT</string>
     <string name="settings_screen_shake">Screen Shake</string>
     <string name="settings_screen_shake_sub">Shake screen when taking damage</string>
+    <string name="settings_sound_effects">Sound effects</string>
+    <string name="settings_sound_effects_sub">Shots, hits, pickups and menu sounds</string>
     <string name="settings_vibration">Vibration</string>
     <string name="settings_vibration_sub">Vibrate on hit and level-up</string>
     <string name="settings_joystick">Joystick Size</string>

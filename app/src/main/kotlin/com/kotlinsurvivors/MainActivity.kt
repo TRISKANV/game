@@ -1,5 +1,8 @@
 package com.kotlinsurvivors
 
+import javax.inject.Inject
+import com.kotlinsurvivors.core.audio.LocalSoundEffects
+import com.kotlinsurvivors.core.audio.SoundManager
 import android.content.Context
 import android.os.Bundle
 import android.view.WindowManager
@@ -24,6 +27,8 @@ import dagger.hilt.android.AndroidEntryPoint
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
 
+    @Inject lateinit var soundManager: SoundManager
+
     /** Puts the language chosen in Settings on every resource the activity reads. */
     override fun attachBaseContext(newBase: Context) {
         super.attachBaseContext(AppLanguage.wrap(newBase))
@@ -47,8 +52,10 @@ class MainActivity : ComponentActivity() {
         hideSystemBars()
 
         setContent {
-            KotlinSurvivorsTheme {
-                AppNavigation()
+            CompositionLocalProvider(LocalSoundEffects provides soundManager) {
+                KotlinSurvivorsTheme {
+                    AppNavigation()
+                }
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.kotlinsurvivors.features.settings.presentation.viewmodel
 
+import com.kotlinsurvivors.core.audio.SoundManager
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
@@ -25,7 +26,8 @@ data class GameSettings(
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val soundManager: SoundManager
 ) : ViewModel() {
 
     private object Keys {
@@ -47,6 +49,10 @@ class SettingsViewModel @Inject constructor(
             )
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), GameSettings())
+
+    /** Sound effects on or off; kept by [SoundManager] so the whole app sees it at once. */
+    val soundEffects: StateFlow<Boolean> = soundManager.enabled
+    fun setSoundEffects(value: Boolean) = soundManager.setEnabled(value)
 
     fun setScreenShake(value: Boolean) = save { it[Keys.SCREEN_SHAKE] = value }
     fun setVibration(value: Boolean)   = save { it[Keys.VIBRATION]    = value }

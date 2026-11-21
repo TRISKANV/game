@@ -57,6 +57,8 @@
     <string name="settings_section_about">ACERCA DE</string>
     <string name="settings_screen_shake">Temblor de pantalla</string>
     <string name="settings_screen_shake_sub">La pantalla tiembla al recibir daño</string>
+    <string name="settings_sound_effects">Efectos de sonido</string>
+    <string name="settings_sound_effects_sub">Disparos, golpes, objetos y sonidos del menú</string>
     <string name="settings_vibration">Vibración</string>
     <string name="settings_vibration_sub">Vibra al recibir golpes y al subir de nivel</string>
     <string name="settings_joystick">Tamaño del joystick</string>

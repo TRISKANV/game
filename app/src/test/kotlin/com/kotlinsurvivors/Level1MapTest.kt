@@ -138,7 +138,7 @@ class Level1MapTest {
         EntityFactory.createPlayer(world, 200f, 200f)
         val movement = MovementSystem(Level1.WORLD_SIZE, Level1.WORLD_SIZE).also { it.levelMap = map }
         val (x, y) = freeSpotFrom(600f, 700f, 14f)
-        val eid = EntityFactory.createEnemy(world, EnemyType.FAST, x, y)
+        val eid = EntityFactory.createEnemy(world, EnemyType.BASIC, x, y)
         repeat(600) { movement.update(world, 1f / 60f, JoystickState()) }
         val t = world.transforms[eid]!!
         val feetY = t.y + world.colliders[eid]!!.radius * MovementSystem.ENEMY_FEET_FACTOR
@@ -198,7 +198,7 @@ class Level1MapTest {
         val world = World()
         val pid = EntityFactory.createPlayer(world, 700f, 300f)
         val movement = MovementSystem(1024f, 1024f).also { it.levelMap = small }
-        val eid = EntityFactory.createEnemy(world, EnemyType.FAST, 300f, 300f)
+        val eid = EntityFactory.createEnemy(world, EnemyType.BASIC, 300f, 300f)
         repeat(60 * 40) { movement.update(world, 1f / 60f, JoystickState()) }
         val p = world.transforms[pid]!!; val e = world.transforms[eid]!!
         val dist = kotlin.math.hypot(p.x - e.x, p.y - e.y)
@@ -212,7 +212,7 @@ class Level1MapTest {
         val movement = MovementSystem(Level1.WORLD_SIZE, Level1.WORLD_SIZE).also { it.levelMap = map }
         // Start in the park, far to the south-west of the door, on the other side of buildings and the pond.
         val (x, y) = freeSpotFrom(500f, 2300f, 14f)
-        val eid = EntityFactory.createEnemy(world, EnemyType.FAST, x, y)
+        val eid = EntityFactory.createEnemy(world, EnemyType.BASIC, x, y)
         repeat(60 * 120) { movement.update(world, 1f / 60f, JoystickState()) }
         val p = world.transforms[pid]!!; val e = world.transforms[eid]!!
         val dist = kotlin.math.hypot(p.x - e.x, p.y - e.y)
@@ -276,7 +276,7 @@ class Level1MapTest {
         val world = World()
         val pid = EntityFactory.createPlayer(world, 32f, 760f)
         val movement = MovementSystem(1024f, 1024f).also { it.levelMap = narrow }
-        val eid = EntityFactory.createEnemy(world, EnemyType.FAST, 600f, 400f)
+        val eid = EntityFactory.createEnemy(world, EnemyType.SWARM, 600f, 400f)
         repeat(60 * 60) { movement.update(world, 1f / 60f, JoystickState()) }
         val p = world.transforms[pid]!!; val e = world.transforms[eid]!!
         val dist = kotlin.math.hypot(p.x - e.x, p.y - e.y)

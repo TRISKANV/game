@@ -30,6 +30,9 @@ sealed class GameEvent {
 
     object BossSpawned : GameEvent()
 
+    /** A boss left a chest on the ground. */
+    object ChestDropped : GameEvent()
+
     /** The chest finished opening at ([x], [y]); the engine decides what it gives. */
     data class ChestOpened(val x: Float, val y: Float) : GameEvent()
 }

@@ -1,5 +1,7 @@
 package com.kotlinsurvivors.features.game.presentation.components
 
+import com.kotlinsurvivors.core.audio.Sound
+import com.kotlinsurvivors.core.audio.LocalSoundEffects
 import androidx.compose.ui.res.stringResource
 import com.kotlinsurvivors.R
 import com.kotlinsurvivors.core.presentation.language.localTitle
@@ -291,15 +293,26 @@ fun LevelUpOverlay(
         val scroll    = remember { Animatable(0f) }
         val landed by remember { derivedStateOf { viewportPx > 0 && scroll.value >= targetNow - 0.5f } }
         val scope = rememberCoroutineScope()
+        val sounds = LocalSoundEffects.current
 
         // The strip is a lazy list scrolled by hand: only the tiles in view are ever composed.
+        // A tick sounds every time a new tile passes under the marker.
         LaunchedEffect(listState) {
             var applied = 0f
+            var lastTile = -1
             snapshotFlow { scroll.value }.collect { value ->
                 listState.dispatchRawDelta(value - applied)
                 applied = value
+                if (tilePx > 0f && viewportPx > 0) {
+                    val tile = ((value + viewportPx / 2f) / tilePx).toInt()
+                    if (tile != lastTile) {
+                        if (lastTile != -1) sounds.play(Sound.ROULETTE_TICK)
+                        lastTile = tile
+                    }
+                }
             }
         }
+        LaunchedEffect(landed) { if (landed) sounds.play(Sound.ROULETTE_WIN) }
         LaunchedEffect(viewportPx) {
             if (viewportPx == 0) return@LaunchedEffect
             delay(LEVEL_UP_FADE_MS.toLong())
@@ -456,6 +469,7 @@ private fun ReelTile(option: LevelUpOption) {
 
 @Composable
 private fun TakeButton(onClick: () -> Unit) {
+    val sounds = LocalSoundEffects.current
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
@@ -469,7 +483,7 @@ private fun TakeButton(onClick: () -> Unit) {
                 interactionSource = remember { MutableInteractionSource() },
                 indication        = null,
                 role              = Role.Button,
-                onClick           = onClick
+                onClick           = { sounds.play(Sound.LEVEL_CHOOSE); onClick() }
             )
             .padding(horizontal = 32.dp, vertical = 10.dp)
     ) {

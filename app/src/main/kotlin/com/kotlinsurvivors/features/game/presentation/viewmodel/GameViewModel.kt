@@ -1,5 +1,6 @@
 package com.kotlinsurvivors.features.game.presentation.viewmodel
 
+import com.kotlinsurvivors.core.audio.SoundManager
 import android.content.Context
 import android.util.Log
 import androidx.lifecycle.ViewModel
@@ -22,6 +23,7 @@ import javax.inject.Inject
 class GameViewModel @Inject constructor(
     private val gameRepository: GameRepository,
     private val achievementEngine: AchievementEngine,
+    private val soundManager: SoundManager,
     @ApplicationContext private val appContext: Context
 ) : ViewModel() {
 
@@ -45,7 +47,8 @@ class GameViewModel @Inject constructor(
         val newEngine = GameEngine(
             viewportWidth, viewportHeight,
             loadPermanentLevels = { gameRepository.getPermanentUpgradeLevels() },
-            loadLevelMap        = { LevelMapLoader.loadLevel1(appContext) }
+            loadLevelMap        = { LevelMapLoader.loadLevel1(appContext) },
+            sounds              = soundManager
         )
         engine = newEngine
         newEngine.start(viewModelScope)

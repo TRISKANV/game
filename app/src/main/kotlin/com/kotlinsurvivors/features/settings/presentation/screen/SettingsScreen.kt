@@ -103,6 +103,14 @@ fun SettingsScreen(
 
             SettingsSection(stringResource(R.string.settings_section_gameplay))
 
+            val soundOn by viewModel.soundEffects.collectAsState()
+            SettingsToggle(
+                label    = stringResource(R.string.settings_sound_effects),
+                sublabel = stringResource(R.string.settings_sound_effects_sub),
+                checked  = soundOn,
+                onToggle = { viewModel.setSoundEffects(it) }
+            )
+
             SettingsToggle(
                 label    = stringResource(R.string.settings_screen_shake),
                 sublabel = stringResource(R.string.settings_screen_shake_sub),

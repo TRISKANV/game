@@ -1,5 +1,9 @@
 package com.kotlinsurvivors.engine
 
+import com.kotlinsurvivors.core.audio.Sound
+import com.kotlinsurvivors.engine.ecs.components.PickupType
+import com.kotlinsurvivors.engine.ecs.components.EnemyType
+import com.kotlinsurvivors.core.audio.SoundEffects
 import android.util.Log
 import com.kotlinsurvivors.core.crash.CrashLogger
 import com.kotlinsurvivors.engine.ecs.EntityFactory
@@ -36,7 +40,9 @@ class GameEngine(
      * Collision grid of the level to play. Null (the default) means the old open arena:
      * no obstacles and the player starts in the middle of the world.
      */
-    private val loadLevelMap: suspend () -> LevelMap? = { null }
+    private val loadLevelMap: suspend () -> LevelMap? = { null },
+    /** Where the sound effects go. Silent by default, so tests and tools need no audio. */
+    private val sounds: SoundEffects = SoundEffects.None
 ) {
     companion object {
         const val TARGET_FPS     = 60
@@ -58,7 +64,7 @@ class GameEngine(
 
     private val movementSystem   = MovementSystem(WORLD_WIDTH, WORLD_HEIGHT)
     private val collisionSystem  = CollisionSystem()
-    private val weaponSystem     = WeaponSystem()
+    private val weaponSystem     = WeaponSystem(sounds)
     private val spawnSystem      = SpawnSystem(viewportWidth, viewportHeight)
     private val experienceSystem = ExperienceSystem()
 
@@ -380,6 +386,8 @@ class GameEngine(
             Log.e(TAG, world.getDiagnosticString()); throw e
         }
 
+        playEventSounds(frameEvents)
+
         val processed: List<GameEvent>
         try {
             processed = experienceSystem.processEvents(world, frameEvents, dt)
@@ -390,7 +398,7 @@ class GameEngine(
         }
 
         try {
-            spawnSystem.update(world, dt, elapsedTime)
+            if (spawnSystem.update(world, dt, elapsedTime).bossSpawned) sounds.play(Sound.BOSS_APPEAR)
         } catch (e: Exception) {
             Log.e(TAG, "CRASH in spawnSystem.update (frame $frameCount)", e)
             Log.e(TAG, world.getDiagnosticString()); throw e
@@ -407,21 +415,48 @@ class GameEngine(
         for (event in processed) {
             when (event) {
                 is GameEvent.LevelUp -> {
+                    sounds.play(Sound.LEVEL_READY)
                     Log.d(TAG, "LEVEL UP → level ${event.newLevel} at ${elapsedTime.toInt()}s")
                     // Only counted: the roulette opens when the player taps the level-up button.
                     levelUpsWaiting++
                     CrashLogger.log("LEVEL-UP gained: level ${event.newLevel}, $levelUpsWaiting waiting")
                 }
-                is GameEvent.ChestOpened -> grantChestWeapon()
+                is GameEvent.ChestDropped -> sounds.play(Sound.CHEST_APPEAR)
+                is GameEvent.ChestOpened -> { sounds.play(Sound.CHEST_OPEN); grantChestWeapon() }
                 is GameEvent.PlayerHit -> {
                     hitCount++
                     lastHitTime = elapsedTime
                 }
                 is GameEvent.PlayerDied -> {
+                    sounds.play(Sound.GAME_OVER)
                     Log.d(TAG, "PLAYER DIED at ${elapsedTime.toInt()}s kills=${world.players[world.getPlayerEntity()]?.killCount}")
                     isPaused = true
                 }
                 else -> {}
+            }
+        }
+    }
+
+    /** Sounds for what happened in the collision step: kills, pickups and hits on the player. */
+    private fun playEventSounds(events: List<GameEvent>) {
+        for (event in events) {
+            when (event) {
+                is GameEvent.EnemyKilled -> sounds.play(when {
+                    event.type.isBoss                -> Sound.BOSS_DIE
+                    event.type == EnemyType.EXPLODER -> Sound.ENEMY_BLAST
+                    else                             -> Sound.ENEMY_DIE
+                })
+                is GameEvent.PickupCollected -> when (event.type) {
+                    PickupType.EXPERIENCE_SMALL, PickupType.EXPERIENCE_MEDIUM,
+                    PickupType.EXPERIENCE_LARGE -> sounds.play(Sound.PICKUP_XP)
+                    PickupType.COIN, PickupType.COIN_BAG -> sounds.play(Sound.PICKUP_COIN)
+                    PickupType.HEALTH_SMALL, PickupType.HEALTH_LARGE -> sounds.play(Sound.PICKUP_HEAL)
+                    PickupType.MAGNET -> sounds.play(Sound.PICKUP_MAGNET)
+                    PickupType.BOMB   -> sounds.play(Sound.ENEMY_BLAST)
+                    PickupType.CHEST  -> Unit   // sounds when it finishes opening
+                }
+                is GameEvent.PlayerHit -> sounds.play(Sound.PLAYER_HURT)
+                else -> Unit
             }
         }
     }

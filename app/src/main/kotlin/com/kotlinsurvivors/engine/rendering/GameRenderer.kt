@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.map.Level1
 import com.kotlinsurvivors.engine.ecs.EntityFactory
+import com.kotlinsurvivors.engine.ecs.components.EnemyType
 import com.kotlinsurvivors.engine.ecs.components.PickupType
 import com.kotlinsurvivors.engine.ecs.components.RenderShape
 import com.kotlinsurvivors.engine.ecs.components.WeaponType
@@ -551,11 +552,54 @@ class GameRenderer(
         val frame   = ((System.currentTimeMillis() / ENEMY_FRAME_MS) and 1L).toInt()
         val bob     = if (frame == 1) -h * 0.04f else 0f
 
+        if (typeId == EnemyType.FAST.ordinal) { renderDrone(a, buf, i, sx, sy, flashing); return }
+
         drawShadow(sx, sy + h * 0.5f, w * 0.8f)
         drawCell(sheet, frame, 0, frameW, sheet.height, sx, sy + bob, w, h, if (flashing) flashPaint else spritePaint)
 
         if (buf.hasFlag(i, RenderBuffer.FLAG_SHOW_HP_BAR))
             drawHealthBar(sx, sy - h * 0.5f - 10f, w * 0.85f, buf.hpPercent[i])
+    }
+
+    /**
+     * The drone hovers above the ground: its shadow stays on the floor while the body bobs
+     * in the air, and its four rotors spin all the time (drawn here, not in the picture,
+     * so they turn smoothly instead of flipping between two frames).
+     */
+    private fun DrawScope.renderDrone(
+        a: SpriteAtlas, buf: RenderBuffer, i: Int, sx: Float, sy: Float, flashing: Boolean
+    ) {
+        val sheet  = a.enemies[EnemyType.FAST.ordinal]
+        val frameW = a.enemyFrameWidth(EnemyType.FAST.ordinal)
+        val h      = buf.width[i] * ENEMY_SPRITE_SCALE
+        val scale  = h / sheet.height
+        val w      = frameW * scale
+        val now    = System.currentTimeMillis()
+        val frame  = ((now / DRONE_LED_MS) and 1L).toInt()
+        val hover  = sin(now * 0.007f + i * 1.7f) * h * 0.05f
+        val lift   = h * DRONE_LIFT + hover
+        val bodyY  = sy - lift
+
+        // The higher it flies the smaller and paler its shadow.
+        drawShadow(sx, sy + h * 0.5f, w * 0.55f)
+        drawCell(sheet, frame, 0, frameW, sheet.height, sx, bodyY, w, h, if (flashing) flashPaint else spritePaint)
+
+        val bladeR = DRONE_ROTOR_RADIUS * scale
+        for (k in DRONE_ROTOR_HUBS.indices) {
+            val hub = DRONE_ROTOR_HUBS[k]
+            val cx  = sx + (hub[0] - frameW * 0.5f) * scale
+            val cy  = bodyY + (hub[1] - sheet.height * 0.5f) * scale
+            drawCircle(Color(0x30DDEEF4), bladeR, Offset(cx, cy))                  // the blur of the blades
+            val dir = if (k % 2 == 0) 1f else -1f                                  // neighbours turn opposite ways
+            val ang = dir * now * DRONE_ROTOR_SPEED + k * 0.9f
+            for (blade in 0..1) {
+                val b = ang + blade * (PI.toFloat() / 2f)
+                val dx = cos(b) * bladeR; val dy = sin(b) * bladeR
+                drawLine(Color(0xCCECEFF1), Offset(cx - dx, cy - dy), Offset(cx + dx, cy + dy), strokeWidth = (scale * 0.7f).coerceAtLeast(1.5f))
+            }
+        }
+        if (buf.hasFlag(i, RenderBuffer.FLAG_SHOW_HP_BAR))
+            drawHealthBar(sx, bodyY - h * 0.5f - 10f, w * 0.85f, buf.hpPercent[i])
     }
 
     private fun DrawScope.drawHealthBar(cx: Float, topY: Float, width: Float, pct: Float) {
@@ -809,6 +853,12 @@ class GameRenderer(
         const val ENEMY_FRAME_MS  = 220L
         const val SPIN_PERIOD_MS  = 500L
         const val CHEST_DRAW_SIZE      = 48f
+        const val DRONE_LED_MS         = 300L
+        const val DRONE_LIFT           = 0.45f      // how high above its shadow, in sprite heights
+        const val DRONE_ROTOR_RADIUS   = 3.4f       // in sprite pixels
+        const val DRONE_ROTOR_SPEED    = 0.05f      // radians per millisecond
+        /** Centres of the four motor hubs in a drone frame, in sprite pixels (same as ROTOR_HUBS in gen_drone.py). */
+        val DRONE_ROTOR_HUBS = arrayOf(floatArrayOf(4f, 4f), floatArrayOf(19f, 4f), floatArrayOf(4f, 11f), floatArrayOf(19f, 11f))
         const val CHEST_IDLE_FRAME_MS  = 260L
         const val WHIP_LASH_SECONDS = com.kotlinsurvivors.engine.ecs.EntityFactory.WHIP_LASH_SECONDS
         const val WHIP_SEGMENTS     = 14

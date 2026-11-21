@@ -141,6 +141,10 @@ enum class EnemyType {
 
     val isBoss: Boolean
         get() = this == BOSS_SHADOW || this == BOSS_GOLEM || this == BOSS_NECROMANCER
+
+    /** Drones fly: buildings, trees and cars are no obstacle to them. */
+    val isFlying: Boolean
+        get() = this == FAST
 }
 
 enum class AIState {

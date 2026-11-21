@@ -1,5 +1,7 @@
 package com.kotlinsurvivors.features.game.presentation.components
 
+import com.kotlinsurvivors.core.audio.Sound
+import com.kotlinsurvivors.core.audio.LocalSoundEffects
 import com.kotlinsurvivors.core.presentation.language.weaponName
 import com.kotlinsurvivors.engine.ecs.components.WeaponType
 import androidx.compose.ui.res.stringResource
@@ -74,6 +76,7 @@ fun GameHUD(
 ) {
     val pauseIcon   = rememberUiImage("ui_icon_pause.png")
     val pauseSource = remember { MutableInteractionSource() }
+    val sounds = LocalSoundEffects.current
     val pausePressed by pauseSource.collectIsPressedAsState()
 
     Box(modifier = Modifier.fillMaxSize()) {
@@ -158,7 +161,7 @@ fun GameHUD(
                         interactionSource = pauseSource,
                         indication        = null,
                         role              = Role.Button,
-                        onClick           = onPause
+                        onClick           = { sounds.play(Sound.UI_CLICK); onPause() }
                     )
             ) {
                 if (pauseIcon != null) {
@@ -363,6 +366,7 @@ fun LevelUpBadge(count: Int, onOpen: () -> Unit, modifier: Modifier = Modifier) 
         animationSpec = infiniteRepeatable(tween(650, easing = FastOutSlowInEasing), RepeatMode.Reverse),
         label         = "badgeScale"
     )
+    val sounds = LocalSoundEffects.current
     val label = if (count > 1) "${stringResource(R.string.hud_level_up_ready)}  x$count"
                 else stringResource(R.string.hud_level_up_ready)
 
@@ -371,7 +375,7 @@ fun LevelUpBadge(count: Int, onOpen: () -> Unit, modifier: Modifier = Modifier) 
             .graphicsLayer { scaleX = scale; scaleY = scale }
             .background(Color(0xE61A1A2E), RoundedCornerShape(3.dp))
             .border(2.dp, gold.copy(alpha = glow), RoundedCornerShape(3.dp))
-            .clickable(role = Role.Button, onClick = onOpen)
+            .clickable(role = Role.Button, onClick = { sounds.play(Sound.UI_CLICK); onOpen() })
             .padding(horizontal = 22.dp, vertical = 12.dp),
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)

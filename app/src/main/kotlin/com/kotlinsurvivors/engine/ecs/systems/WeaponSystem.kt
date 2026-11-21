@@ -1,5 +1,7 @@
 package com.kotlinsurvivors.engine.ecs.systems
 
+import com.kotlinsurvivors.core.audio.Sound
+import com.kotlinsurvivors.core.audio.SoundEffects
 import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.components.*
@@ -15,7 +17,7 @@ import kotlin.random.Random
  *  3. updateProjectileLifetimes reuses a pre-allocated destroy list.
  *  4. Particle burst counts reduced to stay within memory budget.
  */
-class WeaponSystem {
+class WeaponSystem(private val sounds: SoundEffects = SoundEffects.None) {
 
     private val toDestroy = ArrayList<Int>(128)
 
@@ -83,6 +85,7 @@ class WeaponSystem {
                 WeaponType.ZERO_DAY    -> fireZeroDay(world, pt.x, pt.y, finalDmg, crit, weapon, area)
                 WeaponType.LOGIC_BOMB  -> fireLogicBomb(world, pt.x, pt.y, finalDmg, crit, weapon, area)
             }
+            fireSound(weapon.type)?.let(sounds::play)
         }
 
         updateBlasts(world, dt)
@@ -91,6 +94,22 @@ class WeaponSystem {
         updateProjectileLifetimes(world, dt)
         updateRenderTimers(world, dt)
         updateEnemyIFrames(world, dt)
+    }
+
+    /** The sound a shot of [type] makes. The auras (garlic, bible) hit continuously and stay silent. */
+    private fun fireSound(type: WeaponType): Sound? = when (type) {
+        WeaponType.MAGIC_WAND  -> Sound.SHOT_PACKET
+        WeaponType.KNIFE       -> Sound.SHOT_SYRINGE
+        WeaponType.CROSS       -> Sound.SHOT_CROSSHAIR
+        WeaponType.FIRE_WAND   -> Sound.SHOT_FIREWALL
+        WeaponType.AXE         -> Sound.SHOT_USB
+        WeaponType.LIGHTNING   -> Sound.SHOT_ZAP
+        WeaponType.SANTA_WATER -> Sound.SHOT_HONEYPOT
+        WeaponType.WHIP        -> Sound.SHOT_WHIP
+        WeaponType.DDOS        -> Sound.SHOT_DDOS
+        WeaponType.ZERO_DAY    -> Sound.SHOT_ZERO_DAY
+        WeaponType.LOGIC_BOMB  -> Sound.BOMB_DROP
+        WeaponType.GARLIC, WeaponType.BIBLE -> null
     }
 
     // ── Weapon firing ─────────────────────────────────────────────────────
@@ -431,6 +450,7 @@ class WeaponSystem {
             val t = world.transforms[id] ?: continue
             EntityFactory.createEffect(world, ParticleType.RING, t.x, t.y, 0f, blast.radius)
             EntityFactory.createParticleBurst(world, t.x, t.y, ParticleType.EXPLOSION, 6)
+            sounds.play(Sound.BOMB_BLAST)
             for (eid in findEnemiesInRadius(world, t.x, t.y, blast.radius)) {
                 hurtEnemy(world, eid, blast.damage, blast.isCritical, ParticleType.EXPLOSION)
             }

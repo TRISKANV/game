@@ -123,6 +123,7 @@ class ExperienceSystem {
 
             if (event.type.isBoss && Random.nextFloat() < BOSS_CHEST_CHANCE) {
                 EntityFactory.createPickup(world, PickupType.CHEST, t.x, t.y)
+                output.add(GameEvent.ChestDropped)
                 Log.d(TAG, "Boss ${event.type} dropped a chest")
             }
         } else {

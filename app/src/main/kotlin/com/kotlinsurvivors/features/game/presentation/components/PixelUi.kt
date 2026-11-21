@@ -1,5 +1,7 @@
 package com.kotlinsurvivors.features.game.presentation.components
 
+import com.kotlinsurvivors.core.audio.Sound
+import com.kotlinsurvivors.core.audio.LocalSoundEffects
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.clickable
@@ -82,6 +84,7 @@ fun PixelButton(
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val image = if (pressed) (down ?: normal) else normal
+    val sounds = LocalSoundEffects.current
 
     if (image == null) {
         fallback()
@@ -95,7 +98,7 @@ fun PixelButton(
             interactionSource = source,
             indication        = null,
             role              = Role.Button,
-            onClick           = onClick
+            onClick           = { sounds.play(if (art == "mainmenu") Sound.UI_BACK else Sound.UI_CLICK); onClick() }
         )
     )
 }
