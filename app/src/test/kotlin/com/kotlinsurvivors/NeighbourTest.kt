@@ -10,7 +10,6 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 import javax.imageio.ImageIO
-import kotlin.math.hypot
 
 /** The neighbour of Level 1: his picture, his place on the pavement, his solid body and his lines. */
 class NeighbourTest {
@@ -22,14 +21,21 @@ class NeighbourTest {
 
     @Test fun hisPictureIsThere() {
         val picture = ImageIO.read(File(assets, "npc_leek.png"))
-        assertEquals(Level1Npc.SPRITE_HEIGHT.toInt(), picture.height)
-        assertTrue("the picture is narrower than tall", picture.width in 30..70)
+        assertEquals(Level1Npc.FRAME_H, picture.height)
+        assertEquals(Level1Npc.FRAME_W * Level1Npc.FRAMES, picture.width)
+        for (f in 0 until Level1Npc.FRAMES) {
+            var painted = 0
+            for (y in 0 until picture.height) for (x in 0 until Level1Npc.FRAME_W)
+                if ((picture.getRGB(f * Level1Npc.FRAME_W + x, y) ushr 24) > 0) painted++
+            assertTrue("frame $f has a drawing", painted > 400)
+        }
         assertTrue("transparent corner", (picture.getRGB(0, 0) ushr 24) == 0)
     }
 
-    @Test fun heStandsAFewStepsFromTheDoorOnFreeGround() {
-        val door = hypot(Level1Npc.X - Level1.SPAWN_X, Level1Npc.FEET_Y - Level1.SPAWN_Y)
-        assertTrue("distance from the spawn point: $door", door in 150f..600f)
+    @Test fun heStandsInFrontOfTheCarOnFreeGround() {
+        // the car's body is x 896..1032, y 744..810; he is just south of it, not far from its front end
+        assertTrue("x ${Level1Npc.X}", Level1Npc.X in 940f..1080f)
+        assertTrue("y ${Level1Npc.FEET_Y}", Level1Npc.FEET_Y in 820f..880f)
         val free = LevelMap(Level1.CELLS, Level1.CELL_SIZE, grid())
         assertFalse("the ground under him is free in the original grid", free.isBlockedAt(Level1Npc.X, Level1Npc.FEET_Y))
         assertTrue(free.isBoxFree(Level1Npc.X, Level1Npc.FEET_Y, 30f, 12f))
@@ -45,7 +51,7 @@ class NeighbourTest {
         // the player can still go round him, above and below, and the spawn point is untouched
         val half = MovementSystem.PLAYER_HALF
         val feet = MovementSystem.PLAYER_FEET_OFFSET
-        assertTrue("above him", map.isBoxFree(Level1Npc.X, Level1Npc.FEET_Y - 40f, half, half))
+        assertTrue("east of him", map.isBoxFree(Level1Npc.X + 70f, Level1Npc.FEET_Y + feet - 26f, half, half))
         assertTrue("below him", map.isBoxFree(Level1Npc.X, Level1Npc.FEET_Y + 40f, half, half))
         assertTrue("spawn", map.isBoxFree(Level1.SPAWN_X, Level1.SPAWN_Y + feet, half, half))
         // only a handful of cells changed

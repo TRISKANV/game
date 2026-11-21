@@ -2,10 +2,12 @@ package com.kotlinsurvivors.engine.rendering
 
 import android.graphics.Paint
 import android.graphics.Path
+import android.graphics.Rect
 import android.graphics.RectF
 import android.graphics.Typeface
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.nativeCanvas
@@ -54,6 +56,7 @@ class NeighbourRenderer {
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
     }
     private val box  = RectF()
+    private val src  = Rect()
     private val tail = Path()
 
     /** Decides whether he is talking, from where the player's feet are. Call once per frame. */
@@ -70,17 +73,60 @@ class NeighbourRenderer {
     /** True when the player's feet are lower on the screen than his, so the player is drawn over him. */
     fun isBehindPlayer(playerFeetY: Float) = playerFeetY >= Level1Npc.FEET_Y
 
+    /**
+     * Frame of the sheet for this moment. On his phone he taps away (frames 0..3, a thumb after
+     * the other) and now and then looks up (4). When somebody is close he lowers the phone and
+     * raises a hand (5), and moves his mouth (5/6) while the bubble is being typed.
+     */
+    private fun frameAt(nowMs: Long): Int {
+        if (near) {
+            val typing = lineIndex in lines.indices &&
+                nowMs - lineStart < lines[lineIndex].length * 1000L / TYPE_CHARS_PER_SECOND
+            return if (typing && (nowMs / TALK_FLAP_MS) % 2L == 1L) 6 else 5
+        }
+        val t = nowMs % PHONE_CYCLE_MS
+        if (t > PHONE_CYCLE_MS - GLANCE_MS) return 4
+        return ((t / TAP_MS) % 4L).toInt()
+    }
+
     fun DrawScope.drawSprite(art: LevelArt, cameraX: Float, cameraY: Float, nowMs: Long) {
-        val picture = art.npc ?: return
-        val h = Level1Npc.SPRITE_HEIGHT
-        val w = h * picture.width / picture.height
+        val sheet = art.npc ?: return
+        val fw = Level1Npc.FRAME_W
+        val fh = Level1Npc.FRAME_H
+        val frame = frameAt(nowMs).coerceIn(0, Level1Npc.FRAMES - 1)
+        if ((frame + 1) * fw > sheet.width || fh > sheet.height) return
+        val k  = Level1Npc.SCALE
+        val w  = fw * k
+        val h  = fh * k
         val sx = Level1Npc.X - cameraX
         val sy = Level1Npc.FEET_Y - cameraY
         if (sx < -w || sx > size.width + w || sy < -h || sy > size.height + h) return
-        val bob = sin(nowMs * 0.003f) * 1.5f                       // he breathes
-        drawOval(Color(0x55000000), topLeft = Offset(sx - w * 0.4f, sy - 5f), size = Size(w * 0.8f, 11f))
-        box.set(sx - w * 0.5f, sy - h + bob, sx + w * 0.5f, sy + bob)
-        drawContext.canvas.nativeCanvas.drawBitmap(picture, null, box, spritePaint)
+
+        // Contact shadow: a dark oval under the boots and a wider, fainter one, so he sits on the ground.
+        drawOval(Color(0x30000000), topLeft = Offset(sx - 34f, sy - 9f), size = Size(68f, 18f))
+        drawOval(Color(0x66000000), topLeft = Offset(sx - 24f, sy - 6f), size = Size(48f, 11f))
+
+        val breathe = if (near) 0f else sin(nowMs * 0.0025f) * 0.6f
+        val left = sx - w / 2f
+        val top  = sy - Level1Npc.FEET_ROW * k + breathe
+        src.set(frame * fw, 0, (frame + 1) * fw, fh)
+        box.set(left, top, left + w, top + h)
+        drawContext.canvas.nativeCanvas.drawBitmap(sheet, src, box, spritePaint)
+
+        // The screen of the phone lights his belly and the ground in front of him (not when he has lowered it).
+        if (!near || frame == 5 || frame == 6) {
+            val flicker = 0.85f + 0.15f * sin(nowMs * 0.02f)
+            val px = if (near) left + 5.5f * k else left + 20.5f * k
+            val py = if (near) top + 52f * k else top + 41f * k
+            val r  = (if (near) 26f else 40f) * flicker
+            drawCircle(
+                brush  = Brush.radialGradient(
+                    listOf(Color(0x5534DCF2), Color(0x2234DCF2), Color(0x0034DCF2)),
+                    center = Offset(px, py), radius = r,
+                ),
+                radius = r, center = Offset(px, py),
+            )
+        }
     }
 
     fun DrawScope.drawBubble(cameraX: Float, cameraY: Float, nowMs: Long) {
@@ -197,6 +243,10 @@ class NeighbourRenderer {
     }
 
     private companion object {
+        const val TAP_MS        = 260L      // each tapping frame
+        const val PHONE_CYCLE_MS = 5200L    // after this long on the phone he looks up for a moment
+        const val GLANCE_MS     = 700L
+        const val TALK_FLAP_MS  = 140L
         const val BASE_LINE_MS = 1500L
         const val PER_CHAR_MS  = 45L
         const val MIN_LINE_MS  = 2600L

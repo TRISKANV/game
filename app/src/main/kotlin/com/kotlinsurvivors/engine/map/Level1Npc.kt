@@ -3,18 +3,29 @@ package com.kotlinsurvivors.engine.map
 import kotlin.math.floor
 
 /**
- * The neighbour who stands on the pavement a few steps from the protagonist's door in Level 1,
- * and comments on whoever comes close. His position is in world pixels; [FEET_Y] is where his
- * boots touch the ground.
+ * The neighbour of Level 1: he stands in the street in front of the parked car, looking at his
+ * phone, and comments on whoever comes close. His position is in world pixels; [FEET_Y] is where
+ * his boots touch the ground.
  *
  * He is solid: [stampSolid] marks the ground under his feet as blocked in the level's collision
  * grid, so the player walks around him and the enemies' paths do too.
  */
 object Level1Npc {
-    const val X       = 2400f
-    const val FEET_Y  = 650f
+    const val X       = 1048f
+    const val FEET_Y  = 846f
 
-    /** Height of his picture in world pixels (the player is about 90). */
+    /** His sprite sheet (npc_leek.png): [FRAMES] cells of [FRAME_W] x [FRAME_H] pixels side by side. */
+    const val FRAME_W = 42
+    const val FRAME_H = 60
+    const val FRAMES  = 7
+
+    /** Row of the cell where the soles end; the boots are drawn so this row sits on [FEET_Y]. */
+    const val FEET_ROW = 58
+
+    /** World pixels per sprite pixel: the same as the player, so both look drawn with the same pen. */
+    const val SCALE = 1.8f
+
+    /** Distance from his boots to the top of his leaves in world pixels; the bubble floats above it. */
     const val SPRITE_HEIGHT = 100f
 
     /** He starts talking when the player's feet come this close, and stops when they go beyond [LEAVE_RADIUS]. */
