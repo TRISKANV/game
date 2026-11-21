@@ -110,7 +110,7 @@ data class PlayerComponent(
     var speed: Float = 220f,
     var level: Int = 1,
     var experience: Int = 0,
-    var experienceToNextLevel: Int = 10,
+    var experienceToNextLevel: Int = 25,
     var coins: Int = 0,
     var damageMultiplier: Float = 1.0f,
     var attackSpeedMultiplier: Float = 1.0f,

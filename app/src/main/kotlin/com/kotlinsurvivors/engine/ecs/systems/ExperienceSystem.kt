@@ -13,8 +13,11 @@ class ExperienceSystem {
     companion object {
         const val MAX_LEVELS_PER_FRAME = 1
 
-        /** Each level asks for this many times the experience of the one before (+45%). */
-        const val XP_GROWTH_PER_LEVEL = 1.45
+        /** Experience needed to go from level 1 to 2: about five kills of the weakest enemy. */
+        const val XP_FIRST_LEVEL = 25.0
+
+        /** Each level asks for this many times the experience of the one before (+40%). */
+        const val XP_GROWTH_PER_LEVEL = 1.40
 
         /** Seconds the chest takes to open once the player touches it. */
         const val CHEST_OPEN_SECONDS = 1.1f
@@ -226,7 +229,7 @@ class ExperienceSystem {
 
     private fun xpForLevel(level: Int): Int {
         val cappedLevel = level.coerceAtMost(50)
-        val result = (10.0 * XP_GROWTH_PER_LEVEL.pow(cappedLevel - 1.0)).toInt().coerceIn(1, 500_000)
+        val result = (XP_FIRST_LEVEL * XP_GROWTH_PER_LEVEL.pow(cappedLevel - 1.0)).toInt().coerceIn(1, 500_000)
         if (level > 50) {
             Log.d(TAG, "xpForLevel: level $level capped at 50 → xpNeeded=$result")
         }

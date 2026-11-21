@@ -1,5 +1,9 @@
 package com.kotlinsurvivors.features.room.presentation.screen
 
+import com.kotlinsurvivors.features.settings.presentation.viewmodel.SettingsViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.runtime.SideEffect
 import androidx.compose.ui.res.stringResource
 import com.kotlinsurvivors.R
 import android.graphics.Bitmap
@@ -66,7 +70,11 @@ private class RoomArt(room: Bitmap, character: Bitmap) {
  * or attacks. Stepping on the mat in front of the door calls [onExit].
  */
 @Composable
-fun RoomScreen(onExit: () -> Unit) {
+fun RoomScreen(
+    onExit: () -> Unit,
+    settingsViewModel: SettingsViewModel = hiltViewModel()
+) {
+    val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current.applicationContext
     val art by produceState<RoomArt?>(null, context) {
         value = withContext(Dispatchers.IO) {
@@ -83,6 +91,8 @@ fun RoomScreen(onExit: () -> Unit) {
 
     val world    = remember { RoomWorld() }
     val joystick = remember { VirtualJoystick() }
+    // The joystick size chosen in Settings applies here too, not only in the game.
+    SideEffect { joystick.setScale(settings.joystickSize) }
     val latestOnExit by rememberUpdatedState(onExit)
 
     // Bumped every frame so the canvas below is drawn again.

@@ -77,13 +77,13 @@ class ChestTest {
         assertTrue(chests().isEmpty())
     }
 
-    @Test fun xpCurveGrowsFortyFivePercentPerLevel() {
+    @Test fun xpCurveGrowsFortyPercentPerLevelFromTwentyFive() {
         val player = world.players[pid]!!
-        var expected = 10.0
+        assertEquals(25, player.experienceToNextLevel)
         repeat(6) {
             val orb = EntityFactory.createPickup(world, PickupType.EXPERIENCE_SMALL, 500f, 500f)
             xp.processEvents(world, mutableListOf(GameEvent.PickupCollected(orb, PickupType.EXPERIENCE_SMALL, 1_000_000)), 0.016f)
-            expected *= 1.45
+            val expected = 25.0 * Math.pow(1.40, player.level - 1.0)
             assertEquals("after level ${player.level}", expected.toInt(), player.experienceToNextLevel)
         }
     }

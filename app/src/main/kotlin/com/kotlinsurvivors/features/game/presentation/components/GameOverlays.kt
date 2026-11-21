@@ -151,12 +151,13 @@ private const val NUB_DIAMETER_FACTOR = 0.95f
 fun PauseMenuOverlay(
     onResume   : () -> Unit,
     onRestart  : () -> Unit,
+    onSettings : () -> Unit,
     onMainMenu : () -> Unit
 ) {
     val panel = rememberUiImage("ui_panel_pause.png")
     val title = rememberUiImage("ui_title_paused${languageSuffix()}.png")
     if (panel == null || title == null) {
-        PlainPauseMenu(onResume, onRestart, onMainMenu)
+        PlainPauseMenu(onResume, onRestart, onSettings, onMainMenu)
         return
     }
 
@@ -177,6 +178,8 @@ fun PauseMenuOverlay(
                 Spacer(Modifier.height(unit * PAUSE_BUTTON_GAP))
                 PixelButton("restart",  stringResource(R.string.pause_restart), unit * PAUSE_BUTTON_WIDTH, onRestart)  { PauseButton(stringResource(R.string.pause_restart), Color(0xFFFFCA28), onRestart) }
                 Spacer(Modifier.height(unit * PAUSE_BUTTON_GAP))
+                PixelButton("settings", stringResource(R.string.menu_settings), unit * PAUSE_BUTTON_WIDTH, onSettings) { PauseButton(stringResource(R.string.menu_settings), Color(0xFFB0B8B0), onSettings) }
+                Spacer(Modifier.height(unit * PAUSE_BUTTON_GAP))
                 PixelButton("mainmenu", stringResource(R.string.pause_main_menu), unit * PAUSE_BUTTON_WIDTH, onMainMenu) { PauseButton(stringResource(R.string.pause_main_menu), Color(0xFFEF5350), onMainMenu) }
             }
         }
@@ -193,6 +196,7 @@ private const val PAUSE_BUTTON_GAP   = 3
 private fun PlainPauseMenu(
     onResume   : () -> Unit,
     onRestart  : () -> Unit,
+    onSettings : () -> Unit,
     onMainMenu : () -> Unit
 ) {
     Box(
@@ -215,6 +219,7 @@ private fun PlainPauseMenu(
                 HorizontalDivider(color = Color(0xFF7CE04A).copy(alpha = 0.2f))
                 PauseButton(stringResource(R.string.pause_resume), Color(0xFF7CE04A), onResume)
                 PauseButton(stringResource(R.string.pause_restart), Color(0xFFFFCA28), onRestart)
+                PauseButton(stringResource(R.string.menu_settings), Color(0xFFB0B8B0), onSettings)
                 PauseButton(stringResource(R.string.pause_main_menu), Color(0xFFEF5350), onMainMenu)
             }
         }

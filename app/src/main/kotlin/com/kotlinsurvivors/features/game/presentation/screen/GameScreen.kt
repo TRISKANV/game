@@ -1,5 +1,7 @@
 package com.kotlinsurvivors.features.game.presentation.screen
 
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.kotlinsurvivors.features.settings.presentation.screen.PauseSettingsPanel
 import com.kotlinsurvivors.core.audio.Sound
 import com.kotlinsurvivors.core.audio.LocalSoundEffects
 import androidx.compose.foundation.Canvas
@@ -219,12 +221,21 @@ fun GameScreen(
         }
 
         // ── Pause ─────────────────────────────────────────────────────────
+        // The settings panel opened from the pause menu. Saved so a language change, which
+        // recreates the activity, brings the player back to it instead of to the pause menu.
+        var showPauseSettings by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(gameState.isPaused) { if (!gameState.isPaused) showPauseSettings = false }
         if (gameState.isPaused && !gameState.isGameOver) {
-            PauseMenuOverlay(
-                onResume   = { viewModel.resumeGame() },
-                onRestart  = { viewModel.restartGame() },
-                onMainMenu = onNavigateToMenu
-            )
+            if (showPauseSettings) {
+                PauseSettingsPanel(viewModel = settingsViewModel, onClose = { showPauseSettings = false })
+            } else {
+                PauseMenuOverlay(
+                    onResume   = { viewModel.resumeGame() },
+                    onRestart  = { viewModel.restartGame() },
+                    onSettings = { showPauseSettings = true },
+                    onMainMenu = onNavigateToMenu
+                )
+            }
         }
 
         // ── Level-Up ──────────────────────────────────────────────────────

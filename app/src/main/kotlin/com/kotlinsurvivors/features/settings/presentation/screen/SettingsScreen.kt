@@ -333,7 +333,7 @@ private fun shareText(context: Context, text: String) {
 // ── Regular settings widgets ─────────────────────────────────────────────────
 
 @Composable
-private fun SettingsSection(title: String) {
+internal fun SettingsSection(title: String) {
     Text(
         title,
         color         = Color(0xFF7CE04A),
@@ -347,7 +347,7 @@ private fun SettingsSection(title: String) {
 }
 
 @Composable
-private fun SettingsToggle(
+internal fun SettingsToggle(
     label    : String,
     sublabel : String,
     checked  : Boolean,
@@ -378,7 +378,7 @@ private fun SettingsToggle(
 }
 
 @Composable
-private fun SettingsSlider(
+internal fun SettingsSlider(
     label    : String,
     sublabel : String,
     value    : Float,
@@ -438,7 +438,7 @@ private fun SettingsInfoRow(
     }
 }
 
-private tailrec fun Context.findActivity(): Activity? = when (this) {
+internal tailrec fun Context.findActivity(): Activity? = when (this) {
     is Activity       -> this
     is ContextWrapper -> baseContext.findActivity()
     else              -> null
@@ -446,7 +446,7 @@ private tailrec fun Context.findActivity(): Activity? = when (this) {
 
 /** Two options side by side: the language names are always written in their own language. */
 @Composable
-private fun LanguageRow(
+internal fun LanguageRow(
     label    : String,
     sublabel : String,
     current  : String,

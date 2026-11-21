@@ -589,14 +589,25 @@ class GameRenderer(
             val hub = DRONE_ROTOR_HUBS[k]
             val cx  = sx + (hub[0] - frameW * 0.5f) * scale
             val cy  = bodyY + (hub[1] - sheet.height * 0.5f) * scale
-            drawCircle(Color(0x30DDEEF4), bladeR, Offset(cx, cy))                  // the blur of the blades
-            val dir = if (k % 2 == 0) 1f else -1f                                  // neighbours turn opposite ways
-            val ang = dir * now * DRONE_ROTOR_SPEED + k * 0.9f
+            drawCircle(Color(0x26DDEEF4), bladeR, Offset(cx, cy))                  // the blur of the blades
+            val dir  = if (k % 2 == 0) 1f else -1f                                  // neighbours turn opposite ways
+            val head = dir * now * DRONE_ROTOR_SPEED + k * 0.9f                     // where the leading edge is, in radians
+            val headDeg = head * (180f / PI.toFloat())
+            val topLeft = Offset(cx - bladeR, cy - bladeR)
+            val arcSize = Size(bladeR * 2f, bladeR * 2f)
             for (blade in 0..1) {
-                val b = ang + blade * (PI.toFloat() / 2f)
-                val dx = cos(b) * bladeR; val dy = sin(b) * bladeR
-                drawLine(Color(0xCCECEFF1), Offset(cx - dx, cy - dy), Offset(cx + dx, cy + dy), strokeWidth = (scale * 0.7f).coerceAtLeast(1.5f))
+                val base = headDeg + blade * 180f
+                // A fading wedge behind each blade, like the smear a fast propeller leaves.
+                for (t in 0 until DRONE_TRAIL_STEPS) {
+                    val alpha = (0x70 * (1f - t / DRONE_TRAIL_STEPS.toFloat())).toInt()
+                    val start = if (dir > 0f) base - (t + 1) * DRONE_TRAIL_STEP_DEG else base + t * DRONE_TRAIL_STEP_DEG
+                    drawArc(Color((alpha shl 24) or 0xECEFF1), start, DRONE_TRAIL_STEP_DEG, true, topLeft, arcSize)
+                }
+                val b = head + blade * PI.toFloat()
+                drawLine(Color(0xEEFFFFFF), Offset(cx, cy), Offset(cx + cos(b) * bladeR, cy + sin(b) * bladeR),
+                    strokeWidth = (scale * 0.8f).coerceAtLeast(2f))
             }
+            drawCircle(Color(0xFF37474F), (scale * 0.7f).coerceAtLeast(1.5f), Offset(cx, cy))   // the hub
         }
         if (buf.hasFlag(i, RenderBuffer.FLAG_SHOW_HP_BAR))
             drawHealthBar(sx, bodyY - h * 0.5f - 10f, w * 0.85f, buf.hpPercent[i])
@@ -856,7 +867,9 @@ class GameRenderer(
         const val DRONE_LED_MS         = 300L
         const val DRONE_LIFT           = 0.45f      // how high above its shadow, in sprite heights
         const val DRONE_ROTOR_RADIUS   = 3.4f       // in sprite pixels
-        const val DRONE_ROTOR_SPEED    = 0.05f      // radians per millisecond
+        const val DRONE_ROTOR_SPEED    = 0.024f     // radians per millisecond: about 3.8 turns a second, ~23 degrees per frame so the eye can follow it
+        const val DRONE_TRAIL_STEPS    = 5          // wedges of smear behind each blade
+        const val DRONE_TRAIL_STEP_DEG = 14f        // width of each wedge
         /** Centres of the four motor hubs in a drone frame, in sprite pixels (same as ROTOR_HUBS in gen_drone.py). */
         val DRONE_ROTOR_HUBS = arrayOf(floatArrayOf(4f, 4f), floatArrayOf(19f, 4f), floatArrayOf(4f, 11f), floatArrayOf(19f, 11f))
         const val CHEST_IDLE_FRAME_MS  = 260L

@@ -502,7 +502,7 @@ class GameEngine(
             playerMaxHp      = health?.max ?: 100,
             playerLevel      = player?.level ?: 1,
             playerXp         = player?.experience ?: 0,
-            playerXpToNext   = player?.experienceToNextLevel ?: 10,
+            playerXpToNext   = player?.experienceToNextLevel ?: 25,
             playerCoins      = player?.coins ?: 0,
             playerX          = pt?.x ?: 0f,
             playerY          = pt?.y ?: 0f,

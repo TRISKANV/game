@@ -35,7 +35,7 @@ data class GameState(
     val playerMaxHp      : Int            = 100,
     val playerLevel      : Int            = 1,
     val playerXp         : Int            = 0,
-    val playerXpToNext   : Int            = 10,
+    val playerXpToNext   : Int            = 25,
     val playerCoins      : Int            = 0,
     val playerX          : Float          = 0f,
     val playerY          : Float          = 0f,
