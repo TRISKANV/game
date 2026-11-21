@@ -23,7 +23,7 @@ object WeaponOffers {
     fun pickNewWeapons(owned: Collection<WeaponType>, random: Random = Random.Default): List<WeaponType> {
         if (owned.size >= MAX_WEAPONS) return emptyList()
         return WeaponType.values()
-            .filter { it !in owned }
+            .filter { it !in owned && !it.isChestOnly }
             .shuffled(random)
             .take(NEW_WEAPON_CHOICES)
     }

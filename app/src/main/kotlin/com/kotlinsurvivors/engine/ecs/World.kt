@@ -29,6 +29,7 @@ class World {
     val auras         = HashMap<Int, MutableList<AuraComponent>>(8)
     val orbitals      = HashMap<Int, MutableList<OrbitalComponent>>(8)
     val bosses        = HashMap<Int, BossComponent>(4)
+    val blasts        = HashMap<Int, BlastComponent>(8)
     val playerTags    = HashSet<Int>(2)
     val destroyedTags = HashSet<Int>(128)
 
@@ -85,6 +86,7 @@ class World {
         damageNumbers.remove(id); particles.remove(id)
         auras.remove(id);         orbitals.remove(id)
         bosses.remove(id);        playerTags.remove(id)
+        blasts.remove(id)
     }
 
     fun isAlive(id: Int): Boolean = id in liveEntities && id !in destroyedTags
@@ -134,6 +136,7 @@ class World {
         enemies.clear();      weapons.clear();    projectiles.clear()
         pickups.clear();      damageNumbers.clear(); particles.clear()
         auras.clear();        orbitals.clear();   bosses.clear()
+        blasts.clear()
         playerTags.clear()
         Log.d(TAG, "World cleared")
     }

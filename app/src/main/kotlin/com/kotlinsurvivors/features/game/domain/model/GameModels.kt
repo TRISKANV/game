@@ -24,6 +24,8 @@ data class GameState(
     val levelUpOptions   : List<LevelUpOption> = emptyList(),
     /** Which of [levelUpOptions] the level-up roulette lands on. */
     val levelUpWinner    : Int            = 0,
+    /** The exclusive weapon a boss chest just gave, shown as a banner for a few seconds; null otherwise. */
+    val chestWeapon      : WeaponType?    = null,
 
     // Time
     val elapsedTime      : Float          = 0f,
@@ -71,6 +73,7 @@ data class GameState(
             levelUpsWaiting == other.levelUpsWaiting &&
             levelUpOptions == other.levelUpOptions &&
             levelUpWinner == other.levelUpWinner &&
+            chestWeapon == other.chestWeapon &&
             elapsedTime == other.elapsedTime &&
             playerHp == other.playerHp &&
             playerMaxHp == other.playerMaxHp &&

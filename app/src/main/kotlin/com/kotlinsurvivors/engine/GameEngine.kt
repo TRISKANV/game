@@ -17,6 +17,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import com.kotlinsurvivors.engine.ecs.components.ParticleType
+import com.kotlinsurvivors.engine.ecs.components.WeaponType
 import com.kotlinsurvivors.engine.rendering.RenderBuffer
 import com.kotlinsurvivors.engine.rendering.RenderKind
 import com.kotlinsurvivors.engine.rendering.RenderSnapshot
@@ -44,6 +45,7 @@ class GameEngine(
         const val WORLD_WIDTH    = 4096f
         const val WORLD_HEIGHT   = 4096f
         const val MAX_WEAPON_LEVEL = 8
+        private const val CHEST_BANNER_SECONDS = 4f
         private const val RENDER_BUFFER_COUNT = 8
         private const val FACING_MIN_SPEED_SQ  = 25f   // below 5 px/s the player counts as standing still
 
@@ -72,6 +74,10 @@ class GameEngine(
     private var pendingLevelUp = false
     /** Levels gained whose roulette the player has not opened yet. The game keeps running meanwhile. */
     private var levelUpsWaiting = 0
+
+    // The weapon a boss chest just gave, shown in a banner for CHEST_BANNER_SECONDS.
+    private var chestBannerWeapon: WeaponType? = null
+    private var chestBannerTimer = 0f
     @Volatile private var openRouletteRequested = false
     private val frameEvents    = mutableListOf<GameEvent>()
     private var frameCount     = 0L
@@ -274,6 +280,8 @@ class GameEngine(
         isPaused             = false
         pendingLevelUp       = false
         levelUpsWaiting      = 0
+        chestBannerWeapon    = null
+        chestBannerTimer     = 0f
         openRouletteRequested = false
         frameCount           = 0L
         cachedLevelUpOptions = emptyList()
@@ -328,6 +336,10 @@ class GameEngine(
     private fun tick(dt: Float) {
         frameCount++
         elapsedTime += dt
+        if (chestBannerTimer > 0f) {
+            chestBannerTimer -= dt
+            if (chestBannerTimer <= 0f) chestBannerWeapon = null
+        }
         tickedSinceEmit = true
         frameEvents.clear()
 
@@ -400,6 +412,7 @@ class GameEngine(
                     levelUpsWaiting++
                     CrashLogger.log("LEVEL-UP gained: level ${event.newLevel}, $levelUpsWaiting waiting")
                 }
+                is GameEvent.ChestOpened -> grantChestWeapon()
                 is GameEvent.PlayerHit -> {
                     hitCount++
                     lastHitTime = elapsedTime
@@ -448,6 +461,7 @@ class GameEngine(
             levelUpsWaiting  = levelUpsWaiting,
             levelUpOptions   = cachedLevelUpOptions,  // reuse cached, never regenerate per frame
             levelUpWinner    = cachedLevelUpWinner,
+            chestWeapon      = chestBannerWeapon,
             elapsedTime      = elapsedTime,
             playerHp         = health?.current ?: 0,
             playerMaxHp      = health?.max ?: 100,
@@ -542,6 +556,8 @@ class GameEngine(
                 ex = t.x, ey = t.y,
                 eColor = r.color, eWidth = r.width, eHeight = r.height,
                 eGlowRadius = r.glowRadius, eGlowColor = r.glowColor,
+                // For a chest: seconds it has been opening (-1 while closed) and how long it takes.
+                eLifetime = world.pickups[pkId]?.openTimer ?: -1f, eMaxLifetime = ExperienceSystem.CHEST_OPEN_SECONDS,
                 eSpriteId = world.pickups[pkId]?.type?.ordinal ?: -1
             )
         }
@@ -583,15 +599,24 @@ class GameEngine(
         for (pId in world.getParticleSnapshot()) {
             val t = world.transforms[pId] ?: continue
             val p = world.particles[pId]  ?: continue
-            if (p.type == ParticleType.LASH) {
-                // The cable stays attached to the player while it lashes.
-                val owner = world.transforms[world.getPlayerEntity()] ?: t
+            val effectSprite = when (p.type) {
+                ParticleType.LASH -> RenderBuffer.SPRITE_WHIP_LASH
+                ParticleType.RING -> RenderBuffer.SPRITE_DDOS_RING
+                ParticleType.BEAM -> RenderBuffer.SPRITE_ZERO_DAY_BEAM
+                ParticleType.BOMB -> RenderBuffer.SPRITE_LOGIC_BOMB
+                else              -> -1
+            }
+            if (effectSprite != -1) {
+                // The whip's cable, the DDoS ring and the Zero-Day beam stay attached to the
+                // player while they play; a lit bomb stays where it was dropped.
+                val attached = p.type != ParticleType.BOMB
+                val owner = if (attached) world.transforms[world.getPlayerEntity()] ?: t else t
                 renderBuffer.write(
                     kindOrdinal = RenderKind.PARTICLE,
                     ex = owner.x, ey = owner.y, eRotation = Math.atan2(p.vy.toDouble(), p.vx.toDouble()).toFloat(),
                     eWidth = p.size, eHeight = p.size,
                     eLifetime = p.lifetime, eMaxLifetime = p.maxLifetime,
-                    eSpriteId = RenderBuffer.SPRITE_WHIP_LASH
+                    eSpriteId = effectSprite
                 )
                 continue
             }
@@ -728,6 +753,35 @@ class GameEngine(
         }
     }
 
+    /**
+     * The boss chest opened: gives one of the exclusive weapons the player does not have
+     * yet. Once they have all of them, the chest levels one up instead; if every one is at
+     * the top it heals the player completely.
+     */
+    private fun grantChestWeapon() {
+        val pid     = world.getPlayerEntity()
+        val weapons = world.weapons[pid] ?: return
+        val owned   = weapons.map { it.type }.toSet()
+
+        val unowned = WeaponType.values().filter { it.isChestOnly && it !in owned }
+        val given: WeaponType? = if (unowned.isNotEmpty()) {
+            val type = unowned.random()
+            weapons.add(newWeaponComponent(type))
+            type
+        } else {
+            val upgradable = weapons.filter { it.type.isChestOnly && it.level < MAX_WEAPON_LEVEL }
+            val weapon = upgradable.randomOrNull()
+            if (weapon != null) levelUpWeapon(world, pid, weapon)
+            else world.healths[pid]?.let { it.current = it.max }
+            weapon?.type
+        }
+        if (given != null) {
+            chestBannerWeapon = given
+            chestBannerTimer  = CHEST_BANNER_SECONDS
+        }
+        CrashLogger.log("CHEST opened: gave $given")
+    }
+
     private fun levelUpWeapon(world: World, pid: Int, weapon: com.kotlinsurvivors.engine.ecs.components.WeaponComponent) {
         weapon.level++
         weapon.damage = (weapon.damage * 1.2f).roundToInt()
@@ -751,6 +805,9 @@ class GameEngine(
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> 20
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> 18
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> 22
+                com.kotlinsurvivors.engine.ecs.components.WeaponType.DDOS        -> 30
+                com.kotlinsurvivors.engine.ecs.components.WeaponType.ZERO_DAY    -> 28
+                com.kotlinsurvivors.engine.ecs.components.WeaponType.LOGIC_BOMB  -> 60
                 else -> 0
             },
             cooldown = when (type) {
@@ -761,6 +818,10 @@ class GameEngine(
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.LIGHTNING   -> 1.5f
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> 1.6f
                 com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> 1.3f
+                com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND  -> 1.0f
+                com.kotlinsurvivors.engine.ecs.components.WeaponType.DDOS        -> 3.0f
+                com.kotlinsurvivors.engine.ecs.components.WeaponType.ZERO_DAY    -> 2.4f
+                com.kotlinsurvivors.engine.ecs.components.WeaponType.LOGIC_BOMB  -> 3.5f
                 else -> 999f
             },
             projectileSpeed = if (type == com.kotlinsurvivors.engine.ecs.components.WeaponType.KNIFE) 600f else 350f,
@@ -787,6 +848,9 @@ class GameEngine(
         com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "Honeypot"
         com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "Ethernet Whip"
         com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "Rogue Laptop"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.DDOS        -> "DDoS"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.ZERO_DAY    -> "Zero-Day"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.LOGIC_BOMB  -> "Logic Bomb"
     }
     private fun weaponDescription(type: com.kotlinsurvivors.engine.ecs.components.WeaponType) = when (type) {
         com.kotlinsurvivors.engine.ecs.components.WeaponType.MAGIC_WAND   -> "Sends a data packet at the nearest enemy."
@@ -799,6 +863,9 @@ class GameEngine(
         com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "Drops a trap that burns everything inside."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "Cracks a network cable at enemies in front of you, in any of four directions."
         com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "Hacked laptops orbit you and destroy nearby enemies."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.DDOS        -> "A shock wave hurts everything around you."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.ZERO_DAY    -> "A beam that goes through every enemy in line."
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.LOGIC_BOMB  -> "Drops a bomb on the nearest enemy that explodes after a moment."
     }
     private fun weaponUpgradeTitle(type: com.kotlinsurvivors.engine.ecs.components.WeaponType, lvl: Int) = "${weaponName(type)} Lv.$lvl"
     private fun weaponUpgradeDesc(lvl: Int) = when {
@@ -816,6 +883,9 @@ class GameEngine(
         com.kotlinsurvivors.engine.ecs.components.WeaponType.SANTA_WATER -> "w_honeypot"
         com.kotlinsurvivors.engine.ecs.components.WeaponType.WHIP        -> "w_cable"
         com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE       -> "w_laptop"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.DDOS        -> "w_ddos"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.ZERO_DAY    -> "w_zeroday"
+        com.kotlinsurvivors.engine.ecs.components.WeaponType.LOGIC_BOMB  -> "w_logicbomb"
     }
 }
 

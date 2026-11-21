@@ -24,6 +24,13 @@ class WeaponSystem {
         const val WHIP_REACH        = 130f
         const val WHIP_HALF_WIDTH   = 40f
         const val WHIP_BEHIND       = 20f     // an enemy touching the player still counts as being in front
+        // Chest weapons
+        const val DDOS_RADIUS       = 170f
+        const val ZERO_DAY_LENGTH   = 480f
+        const val ZERO_DAY_HALF_W   = 18f
+        const val BOMB_RANGE        = 380f
+        const val BOMB_RADIUS       = 130f
+        const val DEFAULT_ENEMY_RADIUS = 12f
         val WHIP_ANGLES = floatArrayOf(0f, (PI / 2).toFloat(), PI.toFloat(), (3 * PI / 2).toFloat())  // right, down, left, up
     }
 
@@ -47,6 +54,10 @@ class WeaponSystem {
             val whipDirections = if (weapon.type == WeaponType.WHIP)
                 whipDirectionsWithEnemies(world, pt.x, pt.y, weapon.area * player.areaMultiplier) else 0
             if (weapon.type == WeaponType.WHIP && whipDirections == 0) { weapon.timer = 0f; continue }
+            // The chest weapons, like the whip, wait until there is something to hit.
+            if (weapon.type.isChestOnly && !hasChestWeaponTarget(world, weapon, pt.x, pt.y, weapon.area * player.areaMultiplier)) {
+                weapon.timer = 0f; continue
+            }
             weapon.timer = weapon.cooldown / player.attackSpeedMultiplier
 
             val dmg      = (weapon.damage * player.damageMultiplier).toInt()
@@ -68,9 +79,13 @@ class WeaponSystem {
                 WeaponType.SANTA_WATER -> fireSantaWater(world, pt.x, pt.y, finalDmg, size, weapon, area)
                 WeaponType.WHIP        -> fireWhip(world, pt.x, pt.y, finalDmg, whipDirections, area)
                 WeaponType.BIBLE       -> { }
+                WeaponType.DDOS        -> fireDdos(world, pt.x, pt.y, finalDmg, crit, area)
+                WeaponType.ZERO_DAY    -> fireZeroDay(world, pt.x, pt.y, finalDmg, crit, weapon, area)
+                WeaponType.LOGIC_BOMB  -> fireLogicBomb(world, pt.x, pt.y, finalDmg, crit, weapon, area)
             }
         }
 
+        updateBlasts(world, dt)
         updateAuras(world, pid, dt, player)
         updateOrbitals(world, pid, dt, pt.x, pt.y, player)
         updateProjectileLifetimes(world, dt)
@@ -326,6 +341,103 @@ class WeaponSystem {
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────
+
+    // ── Chest weapons ──────────────────────────────────────────────────────
+
+    private fun distanceToNearestEnemy(world: World, ox: Float, oy: Float): Float {
+        val id = findNearestEnemy(world, ox, oy) ?: return Float.MAX_VALUE
+        val t = world.transforms[id] ?: return Float.MAX_VALUE
+        return hypot(t.x - ox, t.y - oy)
+    }
+
+    private fun hasChestWeaponTarget(world: World, w: WeaponComponent, ox: Float, oy: Float, area: Float): Boolean {
+        val reach = when (w.type) {
+            WeaponType.DDOS       -> DDOS_RADIUS * area
+            WeaponType.ZERO_DAY   -> ZERO_DAY_LENGTH * area
+            else                  -> BOMB_RANGE
+        }
+        return distanceToNearestEnemy(world, ox, oy) <= reach
+    }
+
+    private fun hurtEnemy(world: World, eid: Int, dmg: Int, crit: Boolean, burst: ParticleType) {
+        val health = world.healths[eid] ?: return
+        val t      = world.transforms[eid] ?: return
+        if (health.isDead) return
+        health.current = (health.current - dmg).coerceAtLeast(0)
+        world.renders[eid]?.flashTimer = 0.12f
+        EntityFactory.createDamageNumber(world, t.x, t.y, dmg, crit)
+        EntityFactory.createParticleBurst(world, t.x, t.y, burst, 2)
+        if (health.current <= 0 && !health.isDead) health.isDead = true
+    }
+
+    /** DDoS: a shock wave that hurts everything around the player at once. */
+    private fun fireDdos(world: World, ox: Float, oy: Float, dmg: Int, crit: Boolean, area: Float) {
+        val radius = DDOS_RADIUS * area
+        EntityFactory.createEffect(world, ParticleType.RING, ox, oy, 0f, radius)
+        for (eid in findEnemiesInRadius(world, ox, oy, radius)) hurtEnemy(world, eid, dmg, crit, ParticleType.SPARK)
+    }
+
+    /**
+     * Zero-Day: a beam toward the nearest enemy that goes through everything in its way.
+     * Extra beams (one more every third level) fan out around the first.
+     */
+    private fun fireZeroDay(world: World, ox: Float, oy: Float, dmg: Int, crit: Boolean,
+                            w: WeaponComponent, area: Float) {
+        val target = findNearestEnemy(world, ox, oy) ?: return
+        val tt     = world.transforms[target] ?: return
+        val base   = atan2(tt.y - oy, tt.x - ox)
+        val length = ZERO_DAY_LENGTH * area
+        val half   = ZERO_DAY_HALF_W * (0.8f + 0.2f * area)
+        val spread = PI.toFloat() / 10f
+        val hit    = HashSet<Int>()
+        repeat(w.projectileCount) { i ->
+            val angle = base + if (w.projectileCount > 1) (i - (w.projectileCount - 1) * 0.5f) * spread else 0f
+            EntityFactory.createEffect(world, ParticleType.BEAM, ox, oy, angle, length)
+            val ca = cos(angle); val sa = sin(angle)
+            for (eid in world.getEnemySnapshot()) {
+                if (eid in hit) continue
+                val t = world.transforms[eid] ?: continue
+                val dx = t.x - ox; val dy = t.y - oy
+                val along = dx * ca + dy * sa
+                val across = abs(-dx * sa + dy * ca)
+                val r = world.colliders[eid]?.radius ?: DEFAULT_ENEMY_RADIUS
+                if (along < -10f || along > length || across > half + r) continue
+                hit.add(eid)
+                hurtEnemy(world, eid, dmg, crit, ParticleType.SPARK)
+            }
+        }
+    }
+
+    /** Logic Bomb: drops a bomb on the nearest enemies; it goes off after a short fuse. */
+    private fun fireLogicBomb(world: World, ox: Float, oy: Float, dmg: Int, crit: Boolean,
+                              w: WeaponComponent, area: Float) {
+        val targets = findEnemiesInRadius(world, ox, oy, BOMB_RANGE)
+            .sortedBy { eid -> world.transforms[eid]?.let { val dx = it.x - ox; val dy = it.y - oy; dx * dx + dy * dy } ?: Float.MAX_VALUE }
+            .take(w.projectileCount)
+        for (eid in targets) {
+            val t = world.transforms[eid] ?: continue
+            EntityFactory.createLogicBomb(world, t.x, t.y, dmg, BOMB_RADIUS * area, crit)
+        }
+    }
+
+    /** Counts down every lit bomb and detonates it when the fuse runs out. */
+    private fun updateBlasts(world: World, dt: Float) {
+        if (world.blasts.isEmpty()) return
+        toDestroy.clear()
+        for ((id, blast) in world.blasts) {
+            if (id in world.destroyedTags) continue
+            blast.timeLeft -= dt
+            if (blast.timeLeft > 0f) continue
+            val t = world.transforms[id] ?: continue
+            EntityFactory.createEffect(world, ParticleType.RING, t.x, t.y, 0f, blast.radius)
+            EntityFactory.createParticleBurst(world, t.x, t.y, ParticleType.EXPLOSION, 6)
+            for (eid in findEnemiesInRadius(world, t.x, t.y, blast.radius)) {
+                hurtEnemy(world, eid, blast.damage, blast.isCritical, ParticleType.EXPLOSION)
+            }
+            toDestroy.add(id)
+        }
+        for (id in toDestroy) world.destroyEntity(id)
+    }
 
     private fun findNearestEnemy(world: World, ox: Float, oy: Float): Int? {
         var nearest = -1; var nearestD2 = Float.MAX_VALUE

@@ -169,6 +169,9 @@ object EntityFactory {
 
     // ── Pickups ────────────────────────────────────────────────────────────
 
+    /** How long a boss chest stays on the floor waiting for the player. */
+    const val CHEST_WAIT_SECONDS = 120f
+
     fun createPickup(world: World, type: PickupType, x: Float, y: Float): Int {
         val id = world.createEntity()
         // slight random scatter
@@ -179,7 +182,8 @@ object EntityFactory {
         world.pickups[id]    = PickupComponent(
             type  = type,
             value = pickupValue(type),
-            lifetime = 8f  // 8s for all pickups — prevents XP orb accumulation over time
+            // 8s for all pickups — prevents XP orb accumulation over time. A boss chest waits much longer.
+            lifetime = if (type == PickupType.CHEST) CHEST_WAIT_SECONDS else 8f
         )
         world.colliders[id]  = ColliderComponent(
             radius = pickupRadius(type),
@@ -206,6 +210,7 @@ object EntityFactory {
         PickupType.EXPERIENCE_MEDIUM -> 10f
         PickupType.EXPERIENCE_LARGE  -> 14f
         PickupType.COIN, PickupType.COIN_BAG -> 9f
+        PickupType.CHEST -> 22f
         else -> 12f
     }
 
@@ -220,6 +225,7 @@ object EntityFactory {
             PickupType.HEALTH_LARGE      -> Triple(0xFFF44336L, 0xFFB71C1CL, 24f)
             PickupType.MAGNET            -> Triple(0xFF90A4AEL, 0xFF546E7AL, 20f)
             PickupType.BOMB              -> Triple(0xFF212121L, 0xFF616161L, 20f)
+            PickupType.CHEST             -> Triple(0xFF26C6DAL, 0xFF006064L, 46f)
         }
         return RenderComponent(
             shape = RenderShape.CIRCLE,
@@ -291,6 +297,42 @@ object EntityFactory {
         )
     }
 
+    /** How long the DDoS ring and the Zero-Day beam stay on screen, in seconds. */
+    const val RING_SECONDS = 0.5f
+    const val BEAM_SECONDS = 0.3f
+
+    /** Seconds between the Logic Bomb landing and exploding. */
+    const val BOMB_FUSE_SECONDS = 1.3f
+
+    /**
+     * A one-off picture for a weapon: the DDoS [ParticleType.RING] (size = radius), the
+     * Zero-Day [ParticleType.BEAM] (angle = direction, size = length). Like the whip's
+     * lash it only draws; the weapon system deals the damage.
+     */
+    fun createEffect(world: World, type: ParticleType, x: Float, y: Float, angle: Float, size: Float): Int {
+        val id = world.createEntity()
+        val life = if (type == ParticleType.RING) RING_SECONDS else BEAM_SECONDS
+        world.transforms[id] = TransformComponent(x = x, y = y)
+        world.particles[id]  = ParticleComponent(
+            type = type, lifetime = life, maxLifetime = life,
+            vx = cos(angle), vy = sin(angle), size = size, color = 0xFF69F0AE, drag = 1f
+        )
+        return id
+    }
+
+    /** A lit Logic Bomb at ([x], [y]) that goes off after [BOMB_FUSE_SECONDS]. */
+    fun createLogicBomb(world: World, x: Float, y: Float, damage: Int, radius: Float, crit: Boolean): Int {
+        val id = world.createEntity()
+        world.transforms[id] = TransformComponent(x = x, y = y)
+        // The picture outlives the fuse a little so the weapon system always detonates it first.
+        world.particles[id]  = ParticleComponent(
+            type = ParticleType.BOMB, lifetime = BOMB_FUSE_SECONDS + 0.3f, maxLifetime = BOMB_FUSE_SECONDS + 0.3f,
+            vx = 0f, vy = 0f, size = radius, color = 0xFFEF5350, drag = 1f
+        )
+        world.blasts[id] = BlastComponent(BOMB_FUSE_SECONDS, damage, radius, crit)
+        return id
+    }
+
     private data class ParticleCfg(
         val color: Long, val minSize: Float, val maxSize: Float,
         val minSpeed: Float, val maxSpeed: Float, val lifetime: Float
@@ -305,6 +347,9 @@ object EntityFactory {
         ParticleType.LEVEL_UP   -> ParticleCfg(0xFFCE93D8, 4f, 12f, 60f, 200f, 0.8f)
         ParticleType.HEAL       -> ParticleCfg(0xFFA5D6A7, 3f, 8f, 30f, 100f, 0.7f)
         ParticleType.LASH       -> ParticleCfg(0xFF42A5F5, 0f, 0f, 0f, 0f, WHIP_LASH_SECONDS)
+        ParticleType.RING       -> ParticleCfg(0xFF26C6DA, 0f, 0f, 0f, 0f, RING_SECONDS)
+        ParticleType.BEAM       -> ParticleCfg(0xFF69F0AE, 0f, 0f, 0f, 0f, BEAM_SECONDS)
+        ParticleType.BOMB       -> ParticleCfg(0xFFEF5350, 0f, 0f, 0f, 0f, BOMB_FUSE_SECONDS)
     }
 
     // ── Aura Weapon ────────────────────────────────────────────────────────

@@ -12,6 +12,15 @@ class ExperienceSystem {
 
     companion object {
         const val MAX_LEVELS_PER_FRAME = 1
+
+        /** Each level asks for this many times the experience of the one before (+45%). */
+        const val XP_GROWTH_PER_LEVEL = 1.45
+
+        /** Seconds the chest takes to open once the player touches it. */
+        const val CHEST_OPEN_SECONDS = 1.1f
+
+        /** Chance that a dead boss leaves a chest. */
+        const val BOSS_CHEST_CHANCE = 0.5f
         private const val TAG = "KS_XP"
     }
 
@@ -37,7 +46,7 @@ class ExperienceSystem {
             }
         }
 
-        try { tickPickupLifetimes(world, dt) }
+        try { tickPickupLifetimes(world, dt, outputEvents) }
         catch (e: Exception) {
             Log.e(TAG, "CRASH in tickPickupLifetimes: pickups=${world.pickups.size}", e); throw e
         }
@@ -111,6 +120,11 @@ class ExperienceSystem {
             }
 
             EntityFactory.createParticleBurst(world, t.x, t.y, ParticleType.BLOOD, 5)
+
+            if (event.type.isBoss && Random.nextFloat() < BOSS_CHEST_CHANCE) {
+                EntityFactory.createPickup(world, PickupType.CHEST, t.x, t.y)
+                Log.d(TAG, "Boss ${event.type} dropped a chest")
+            }
         } else {
             Log.w(TAG, "handleEnemyKilled: entity $eid has no transform — already removed?")
         }
@@ -179,9 +193,17 @@ class ExperienceSystem {
             PickupType.MAGNET -> {
                 var count = 0
                 for (pkId in world.getPickupSnapshot()) {
-                    world.pickups[pkId]?.magnetized = true; count++
+                    val pk = world.pickups[pkId]; if (pk != null && pk.type != PickupType.CHEST) { pk.magnetized = true; count++ }
                 }
                 Log.d(TAG, "Magnet activated: magnetized $count pickups")
+            }
+            PickupType.CHEST -> {
+                // The weapon it gives is chosen by the engine, which owns the weapon list.
+                val at = world.transforms[event.entityId] ?: pt
+                if (at != null) {
+                    EntityFactory.createParticleBurst(world, at.x, at.y, ParticleType.LEVEL_UP, 14)
+                    output.add(GameEvent.ChestOpened(at.x, at.y))
+                }
             }
             PickupType.BOMB -> {
                 if (pt != null) {
@@ -203,18 +225,27 @@ class ExperienceSystem {
 
     private fun xpForLevel(level: Int): Int {
         val cappedLevel = level.coerceAtMost(50)
-        val result = (10.0 * (1.18.pow(cappedLevel - 1.0))).toInt().coerceIn(1, 500_000)
+        val result = (10.0 * XP_GROWTH_PER_LEVEL.pow(cappedLevel - 1.0)).toInt().coerceIn(1, 500_000)
         if (level > 50) {
             Log.d(TAG, "xpForLevel: level $level capped at 50 → xpNeeded=$result")
         }
         return result
     }
 
-    private fun tickPickupLifetimes(world: World, dt: Float) {
+    private fun tickPickupLifetimes(world: World, dt: Float, output: MutableList<GameEvent>) {
         toDestroy.clear()
         for (id in world.getPickupSnapshot()) {
             val pickup = world.pickups[id] ?: continue
             if (id in world.destroyedTags) continue
+            if (pickup.openTimer >= 0f) {
+                // A chest that is opening: it does not expire, and it pays out when the animation ends.
+                pickup.openTimer += dt
+                if (pickup.openTimer >= CHEST_OPEN_SECONDS) {
+                    handlePickup(world, GameEvent.PickupCollected(id, pickup.type, pickup.value), output)
+                    toDestroy.add(id)
+                }
+                continue
+            }
             pickup.lifetime -= dt
             if (pickup.lifetime <= 0f) toDestroy.add(id)
         }

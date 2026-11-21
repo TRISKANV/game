@@ -94,6 +94,9 @@ class RenderBuffer {
 
         /** [spriteId] of a particle that is the whip cable instead of a dot. */
         const val SPRITE_WHIP_LASH = 100
+        const val SPRITE_DDOS_RING = 101
+        const val SPRITE_ZERO_DAY_BEAM = 102
+        const val SPRITE_LOGIC_BOMB = 103
     }
 
     fun reset() { count = 0 }

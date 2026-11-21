@@ -15,6 +15,7 @@
     <string name="hud_xp">XP</string>
     <string name="hud_level_short">Lv.%1$d</string>
     <string name="hud_achievement_unlocked">Achievement unlocked</string>
+    <string name="hud_chest_weapon">EXCLUSIVE WEAPON</string>
     <string name="hud_level_up_ready">LEVEL UP!</string>
     <string name="pause_title">PAUSED</string>
     <string name="pause_resume">Resume</string>
@@ -119,6 +120,12 @@
     <string name="weapon_whip_desc">Cracks a network cable at enemies in front of you, in any of four directions.</string>
     <string name="weapon_bible_name">Rogue Laptop</string>
     <string name="weapon_bible_desc">Hacked laptops orbit you and destroy nearby enemies.</string>
+    <string name="weapon_ddos_name">DDoS</string>
+    <string name="weapon_ddos_desc">A shock wave hurts everything around you.</string>
+    <string name="weapon_zero_day_name">Zero-Day</string>
+    <string name="weapon_zero_day_desc">A beam that goes through every enemy in line.</string>
+    <string name="weapon_logic_bomb_name">Logic Bomb</string>
+    <string name="weapon_logic_bomb_desc">Drops a bomb on the nearest enemy that explodes after a moment.</string>
     <string name="ach_first_kill_name">First Blood</string>
     <string name="ach_first_kill_desc">Kill your first enemy</string>
     <string name="ach_survive_1_name">Survivor</string>

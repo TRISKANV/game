@@ -51,7 +51,8 @@ class WeaponOffersTest {
         val seen = HashSet<WeaponType>()
         val random = Random(42)
         repeat(300) { seen += WeaponOffers.pickNewWeapons(listOf(WeaponType.MAGIC_WAND), random) }
-        val expected = WeaponType.values().filter { it != WeaponType.MAGIC_WAND }.toSet()
+        // the chest-only weapons are never offered on level-up
+        val expected = WeaponType.values().filter { it != WeaponType.MAGIC_WAND && !it.isChestOnly }.toSet()
         assertEquals(expected, seen)
     }
 }

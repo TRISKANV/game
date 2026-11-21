@@ -26,6 +26,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.map.Level1
+import com.kotlinsurvivors.engine.ecs.EntityFactory
+import com.kotlinsurvivors.engine.ecs.components.PickupType
 import com.kotlinsurvivors.engine.ecs.components.RenderShape
 import com.kotlinsurvivors.engine.ecs.components.WeaponType
 import kotlin.math.*
@@ -413,6 +415,7 @@ class GameRenderer(
             drawCircle(Color(buf.getGlowColor(i)), sz * 0.5f + buf.glowRadius[i] * pulse, Offset(sx, sy))
         val sprites = atlas
         val id      = buf.spriteId[i]
+        if (id == PickupType.CHEST.ordinal) { renderChest(buf, i, sx, sy); return }
         if (sprites != null && id >= 0 && id * SpriteAtlas.ITEM_CELL < sprites.pickups.width) {
             val size = sz * PICKUP_SPRITE_SCALE
             drawCell(sprites.pickups, id, 0, SpriteAtlas.ITEM_CELL, sprites.pickups.height, sx, sy, size, size, spritePaint)
@@ -420,6 +423,82 @@ class GameRenderer(
         }
         drawCircle(Color(buf.getColor(i)), sz * 0.5f, Offset(sx, sy))
         drawCircle(Color(0x33FFFFFF), sz * 0.25f, Offset(sx - sz * 0.12f, sy - sz * 0.12f))
+    }
+
+    // ── Boss chest ──────────────────────────────────────────────────────────
+
+    /**
+     * On the floor the chest bobs gently, its glow breathes and its LED blinks; once the
+     * player touches it ([RenderBuffer.lifetime] holds the seconds it has been opening,
+     * -1 while closed) it plays the opening frames and a column of light rises from it.
+     */
+    private fun DrawScope.renderChest(buf: RenderBuffer, i: Int, sx: Float, sy: Float) {
+        val size = CHEST_DRAW_SIZE
+        if (!inViewport(sx, sy, size * 2f)) return
+        val now      = System.currentTimeMillis()
+        val opening  = buf.lifetime[i]
+        val progress = if (opening >= 0f) (opening / buf.maxLifetime[i]).coerceIn(0f, 1f) else -1f
+        val bob      = if (progress < 0f) sin(now * 0.004f) * 3f else 0f
+        val breathe  = sin(now * 0.005f) * 0.25f + 0.75f
+        val cy       = sy - 4f + bob
+
+        // soft shadow and a glow that grows while it opens
+        drawOval(Color(0x55000000), Offset(sx - size * 0.45f, sy + size * 0.28f), Size(size * 0.9f, size * 0.22f))
+        val glowR = size * (0.75f + (if (progress < 0f) 0f else progress * 0.9f)) * breathe
+        drawCircle(Color(0x3326C6DA), glowR, Offset(sx, cy))
+        drawCircle(Color(0x2226C6DA), glowR * 1.4f, Offset(sx, cy))
+
+        if (progress >= 0f) {                                  // column of light
+            val beam = size * 1.6f * progress
+            drawRect(Color(0x55B2EBF2), Offset(sx - size * 0.16f, cy - beam), Size(size * 0.32f, beam))
+            drawRect(Color(0x88FFFFFF), Offset(sx - size * 0.06f, cy - beam), Size(size * 0.12f, beam))
+        }
+
+        val sprites = atlas ?: run {
+            drawRect(Color(0xFF455A64), Offset(sx - size * 0.4f, cy - size * 0.3f), Size(size * 0.8f, size * 0.6f))
+            return
+        }
+        val frame = if (progress < 0f) ((now / CHEST_IDLE_FRAME_MS) % SpriteAtlas.CHEST_IDLE_FRAMES).toInt()
+                    else SpriteAtlas.CHEST_IDLE_FRAMES +
+                         (progress * SpriteAtlas.CHEST_OPEN_FRAMES).toInt().coerceAtMost(SpriteAtlas.CHEST_OPEN_FRAMES - 1)
+        drawCell(sprites.chest, frame, 0, SpriteAtlas.CHEST_CELL, sprites.chest.height, sx, cy, size, size, spritePaint)
+    }
+
+    // ── Weapon effects: DDoS ring, Zero-Day beam, lit Logic Bomb ────────────
+
+    /** The ring grows from the player to its full radius while it fades. */
+    private fun DrawScope.renderDdosRing(buf: RenderBuffer, i: Int, sx: Float, sy: Float) {
+        val t = 1f - buf.lifetime[i] / buf.maxLifetime[i]
+        val r = buf.width[i] * (0.25f + 0.75f * t)
+        val a = ((1f - t) * 255f).toInt().coerceIn(0, 255)
+        drawCircle(Color(0xFF26C6DA).copy(alpha = a / 400f), r, Offset(sx, sy))
+        drawCircle(Color(0xFF80DEEA).copy(alpha = a / 255f), r, Offset(sx, sy), style = Stroke(width = 5f))
+        drawCircle(Color.White.copy(alpha = a / 255f), r * 0.92f, Offset(sx, sy), style = Stroke(width = 2f))
+    }
+
+    /** A thick green beam with a white core that thins out and fades. */
+    private fun DrawScope.renderZeroDayBeam(buf: RenderBuffer, i: Int, sx: Float, sy: Float) {
+        val t     = 1f - buf.lifetime[i] / buf.maxLifetime[i]
+        val alpha = (1f - t).coerceIn(0f, 1f)
+        val width = (1f - t * 0.7f)
+        val ex    = sx + cos(buf.rotation[i]) * buf.width[i]
+        val ey    = sy + sin(buf.rotation[i]) * buf.width[i]
+        drawLine(Color(0xFF00E676).copy(alpha = alpha * 0.45f), Offset(sx, sy), Offset(ex, ey), strokeWidth = 26f * width)
+        drawLine(Color(0xFF69F0AE).copy(alpha = alpha), Offset(sx, sy), Offset(ex, ey), strokeWidth = 12f * width)
+        drawLine(Color.White.copy(alpha = alpha), Offset(sx, sy), Offset(ex, ey), strokeWidth = 4f * width)
+    }
+
+    /** A black bomb that blinks faster as the fuse burns, with its blast radius marked on the floor. */
+    private fun DrawScope.renderLogicBomb(buf: RenderBuffer, i: Int, sx: Float, sy: Float) {
+        val left  = (buf.lifetime[i] - 0.3f).coerceAtLeast(0f)                 // seconds to the blast
+        val urge  = 1f - (left / EntityFactory.BOMB_FUSE_SECONDS).coerceIn(0f, 1f)
+        val blink = ((System.currentTimeMillis() / (260 - (urge * 190f).toLong())) % 2L) == 0L
+        drawCircle(Color(0x22EF5350), buf.width[i], Offset(sx, sy))
+        drawCircle(Color(0x88EF5350), buf.width[i] * (0.4f + 0.6f * urge), Offset(sx, sy), style = Stroke(width = 2f))
+        drawCircle(Color(0xFF263238), 11f, Offset(sx, sy))
+        drawCircle(Color(0xFF546E7A), 4f, Offset(sx - 4f, sy - 4f))
+        drawLine(Color(0xFFFFC107), Offset(sx + 3f, sy - 9f), Offset(sx + 8f, sy - 14f), strokeWidth = 2f)
+        drawCircle(if (blink) Color(0xFFFF1744) else Color(0xFF880E4F), 3f, Offset(sx, sy + 1f))
     }
 
     // ── Enemy ───────────────────────────────────────────────────────────────
@@ -595,7 +674,12 @@ class GameRenderer(
 
     private fun DrawScope.renderParticle(buf: RenderBuffer, i: Int) {
         val sx = buf.x[i] - cameraX; val sy = buf.y[i] - cameraY
-        if (buf.spriteId[i] == RenderBuffer.SPRITE_WHIP_LASH) { renderWhipLash(buf, i, sx, sy); return }
+        when (buf.spriteId[i]) {
+            RenderBuffer.SPRITE_WHIP_LASH     -> { renderWhipLash(buf, i, sx, sy); return }
+            RenderBuffer.SPRITE_DDOS_RING     -> { renderDdosRing(buf, i, sx, sy); return }
+            RenderBuffer.SPRITE_ZERO_DAY_BEAM -> { renderZeroDayBeam(buf, i, sx, sy); return }
+            RenderBuffer.SPRITE_LOGIC_BOMB    -> { renderLogicBomb(buf, i, sx, sy); return }
+        }
         if (!inViewport(sx, sy, buf.width[i] * 2f)) return
         val lifeRatio = if (buf.maxLifetime[i] > 0f)
             (buf.lifetime[i] / buf.maxLifetime[i]).coerceIn(0f, 1f) else 0f
@@ -724,6 +808,8 @@ class GameRenderer(
         const val PLAYER_FRAME_MS = 110L
         const val ENEMY_FRAME_MS  = 220L
         const val SPIN_PERIOD_MS  = 500L
+        const val CHEST_DRAW_SIZE      = 48f
+        const val CHEST_IDLE_FRAME_MS  = 260L
         const val WHIP_LASH_SECONDS = com.kotlinsurvivors.engine.ecs.EntityFactory.WHIP_LASH_SECONDS
         const val WHIP_SEGMENTS     = 14
         const val WHIP_WIDTH_HAND   = 6f

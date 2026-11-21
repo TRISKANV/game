@@ -182,6 +182,14 @@ fun GameScreen(
             )
         }
 
+        // ── A boss chest just gave an exclusive weapon ────────────────────────
+        gameState.chestWeapon?.let { weapon ->
+            ChestWeaponBanner(
+                weapon   = weapon,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 148.dp)
+            )
+        }
+
         // ── Level-up waiting: a button the player opens when ready ───────────
         val canShowBadge = !gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp
         if (canShowBadge && gameState.levelUpsWaiting > 0) {

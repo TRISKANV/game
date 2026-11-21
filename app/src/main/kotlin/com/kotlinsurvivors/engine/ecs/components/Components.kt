@@ -184,6 +184,15 @@ enum class WeaponType {
     SANTA_WATER,     // drops holy water pools
     WHIP,            // horizontal melee sweep
     BIBLE,           // orbiting projectiles
+
+    // Exclusive weapons: they only come out of a boss chest, never from a level-up.
+    DDOS,            // shock wave around the player
+    ZERO_DAY,        // long beam through everything in line
+    LOGIC_BOMB;      // bomb dropped on the nearest enemy, explodes after a fuse
+
+    /** True for the weapons that only a boss chest can give. */
+    val isChestOnly: Boolean
+        get() = this == DDOS || this == ZERO_DAY || this == LOGIC_BOMB
 }
 
 /**
@@ -231,7 +240,9 @@ data class ProjectileComponent(
 
 enum class PickupType {
     EXPERIENCE_SMALL, EXPERIENCE_MEDIUM, EXPERIENCE_LARGE,
-    COIN, COIN_BAG, HEALTH_SMALL, HEALTH_LARGE, MAGNET, BOMB
+    COIN, COIN_BAG, HEALTH_SMALL, HEALTH_LARGE, MAGNET, BOMB,
+    /** Dropped by bosses; opens by itself when the player touches it. Keep last: pickups.png has one cell per type before it. */
+    CHEST
 }
 
 /**
@@ -242,12 +253,25 @@ data class PickupComponent(
     var value: Int = 1,
     var lifetime: Float = 15f, // disappears after 15 seconds
     var magnetized: Boolean = false,
-    var magnetSpeed: Float = 0f
+    var magnetSpeed: Float = 0f,
+    /** Chests only: -1 while closed, otherwise seconds since the player touched it. */
+    var openTimer: Float = -1f
 ) : Component
 
 // ─────────────────────────────────────────────
 // DAMAGE NUMBER (floating text)
 // ─────────────────────────────────────────────
+
+/**
+ * A bomb waiting to go off: when [timeLeft] runs out it damages every enemy within
+ * [radius] of its position. Its picture is a particle of type BOMB on the same entity.
+ */
+data class BlastComponent(
+    var timeLeft: Float,
+    val damage: Int,
+    val radius: Float,
+    val isCritical: Boolean
+) : Component
 
 /**
  * Floating damage number visual effect.
@@ -267,7 +291,13 @@ data class DamageNumberComponent(
 enum class ParticleType {
     BLOOD, EXPLOSION, SPARK, EXPERIENCE, COIN, LEVEL_UP, HEAL,
     /** Not a spark: the picture of the network cable lashing out, see [com.kotlinsurvivors.engine.ecs.EntityFactory.createWhipLash]. */
-    LASH
+    LASH,
+    /** An expanding ring: [ParticleComponent.size] is the radius it reaches. */
+    RING,
+    /** A laser beam: velocity holds the direction, size the length. */
+    BEAM,
+    /** A lit bomb: size is its blast radius, drawn as a warning ring. */
+    BOMB
 }
 
 /**

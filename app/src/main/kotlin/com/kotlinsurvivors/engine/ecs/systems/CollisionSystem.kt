@@ -173,11 +173,13 @@ class CollisionSystem {
             val pickup = world.pickups[pkId]    ?: continue
             val pkt    = world.transforms[pkId] ?: continue
             val pkc    = world.colliders[pkId]  ?: continue
+            val isChest = pickup.type == PickupType.CHEST
+            if (isChest && pickup.openTimer >= 0f) continue          // already opening
 
             val dx = pt.x - pkt.x; val dy = pt.y - pkt.y
             val distSq = dx * dx + dy * dy
 
-            if (distSq < pComp.magnetRadius * pComp.magnetRadius) {
+            if (!isChest && distSq < pComp.magnetRadius * pComp.magnetRadius) {
                 pickup.magnetized = true
                 val dist = sqrt(distSq).coerceAtLeast(0.001f)
                 pickup.magnetSpeed = (pComp.magnetRadius - dist) / pComp.magnetRadius * 400f + 80f
@@ -189,6 +191,11 @@ class CollisionSystem {
 
             val pickupDist = pc.radius + pkc.radius + 8f
             if (distSq < pickupDist * pickupDist) {
+                if (isChest) {
+                    // The chest stays where it is and plays its opening; ExperienceSystem finishes it.
+                    pickup.openTimer = 0f
+                    continue
+                }
                 events.add(GameEvent.PickupCollected(pkId, pickup.type, pickup.value))
                 world.destroyEntity(pkId)
             }

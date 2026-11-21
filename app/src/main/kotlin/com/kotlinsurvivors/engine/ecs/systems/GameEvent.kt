@@ -29,4 +29,7 @@ sealed class GameEvent {
     data class LevelUp(val newLevel: Int) : GameEvent()
 
     object BossSpawned : GameEvent()
+
+    /** The chest finished opening at ([x], [y]); the engine decides what it gives. */
+    data class ChestOpened(val x: Float, val y: Float) : GameEvent()
 }

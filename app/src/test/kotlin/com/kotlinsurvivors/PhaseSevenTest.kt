@@ -51,13 +51,15 @@ class SpriteAssetsTest {
     @Test
     fun pickupSheetCoversEveryPickupType() {
         val sheet = image("pickups.png")
-        assertEquals(SpriteAtlas.ITEM_CELL * PickupType.values().size, sheet.width)
+        // the chest has its own sheet (chest.png)
+        assertEquals(SpriteAtlas.ITEM_CELL * PickupType.values().count { it != PickupType.CHEST }, sheet.width)
     }
 
     @Test
     fun projectileSheetCoversEveryWeaponType() {
         val sheet = image("projectiles.png")
-        assertEquals(SpriteAtlas.ITEM_CELL * WeaponType.values().size, sheet.width)
+        // the chest-only weapons are drawn by code, not from this sheet
+        assertEquals(SpriteAtlas.ITEM_CELL * WeaponType.values().count { !it.isChestOnly }, sheet.width)
     }
 
     @Test

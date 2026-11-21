@@ -14,6 +14,7 @@ import com.kotlinsurvivors.engine.ecs.components.EnemyType
  *  - enemy_*.png     2 animation frames side by side, one file per [EnemyType]
  *  - pickups.png     12x12 cells in PickupType order
  *  - projectiles.png 12x12 cells in WeaponType order (the last one is the Bible)
+ *  - chest.png       16x16 cells: 4 waiting on the floor, 5 opening
  *  - ground.png      32x32 seamless tile
  *  - decals.png      28x28 cells of floor clutter
  *
@@ -26,6 +27,7 @@ class SpriteAtlas private constructor(
     val enemies: Array<Bitmap>,
     val pickups: Bitmap,
     val projectiles: Bitmap,
+    val chest: Bitmap,
     val ground: Bitmap,
     val decals: Bitmap
 ) {
@@ -44,6 +46,9 @@ class SpriteAtlas private constructor(
         const val PLAYER_ROWS    = 6
         const val ENEMY_FRAMES   = 2
         const val ITEM_CELL      = 12
+        const val CHEST_CELL     = 16
+        const val CHEST_IDLE_FRAMES = 4
+        const val CHEST_OPEN_FRAMES = 5
         const val DECAL_CELL     = 28
         const val GROUND_TILE    = 32
 
@@ -53,6 +58,7 @@ class SpriteAtlas private constructor(
                 enemies     = Array(EnemyType.values().size) { bitmap(context, enemyFile(EnemyType.values()[it])) },
                 pickups     = bitmap(context, "pickups.png"),
                 projectiles = bitmap(context, "projectiles.png"),
+                chest       = bitmap(context, "chest.png"),
                 ground      = bitmap(context, "ground.png"),
                 decals      = bitmap(context, "decals.png")
             )

@@ -15,6 +15,7 @@
     <string name="hud_xp">XP</string>
     <string name="hud_level_short">Nv.%1$d</string>
     <string name="hud_achievement_unlocked">Logro desbloqueado</string>
+    <string name="hud_chest_weapon">ARMA EXCLUSIVA</string>
     <string name="hud_level_up_ready">¡SUBISTE DE NIVEL!</string>
     <string name="pause_title">PAUSA</string>
     <string name="pause_resume">Seguir</string>
@@ -119,6 +120,12 @@
     <string name="weapon_whip_desc">Azota con un cable de red a los enemigos que tengas enfrente, en las cuatro direcciones.</string>
     <string name="weapon_bible_name">Laptop pirata</string>
     <string name="weapon_bible_desc">Laptops hackeadas giran a tu alrededor y destruyen enemigos cercanos.</string>
+    <string name="weapon_ddos_name">DDoS</string>
+    <string name="weapon_ddos_desc">Una onda expansiva daña todo a tu alrededor.</string>
+    <string name="weapon_zero_day_name">Zero-Day</string>
+    <string name="weapon_zero_day_desc">Un rayo que atraviesa a todos los enemigos en línea.</string>
+    <string name="weapon_logic_bomb_name">Bomba lógica</string>
+    <string name="weapon_logic_bomb_desc">Deja una bomba en el enemigo más cercano que explota al instante.</string>
     <string name="ach_first_kill_name">Primera sangre</string>
     <string name="ach_first_kill_desc">Eliminá a tu primer enemigo</string>
     <string name="ach_survive_1_name">Superviviente</string>
