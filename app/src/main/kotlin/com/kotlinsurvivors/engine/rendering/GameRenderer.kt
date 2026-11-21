@@ -1,5 +1,6 @@
 package com.kotlinsurvivors.engine.rendering
 
+import com.kotlinsurvivors.engine.ecs.systems.MovementSystem
 import android.graphics.Bitmap
 import android.graphics.BitmapShader
 import android.graphics.Matrix
@@ -73,6 +74,9 @@ class GameRenderer(
      * drawn instead. Setting it also switches on lamp glows, rain and the camera limits.
      */
     var levelArt: LevelArt? = null
+
+    /** The neighbour of Level 1; only drawn while [levelArt] is set. Fill its `lines` with the current language. */
+    val neighbour = NeighbourRenderer()
 
     private var glowImage: ImageBitmap? = null
     private var glowSource: Bitmap? = null
@@ -206,10 +210,22 @@ class GameRenderer(
             for (i in 0 until buf.count) {
                 if (buf.kind[i] == RenderKind.ORBITAL) renderOrbital(buf, i)
             }
-            // Pass 5: Player
+            // Pass 5: Neighbour and player, whichever stands lower on the screen is drawn last
+            val levelPicture = levelArt
+            val now = System.currentTimeMillis()
+            var playerFeetY = Float.NaN
+            var playerFeetX = 0f
+            for (i in 0 until buf.count) {
+                if (buf.kind[i] == RenderKind.PLAYER) { playerFeetX = buf.x[i]; playerFeetY = buf.y[i] + MovementSystem.PLAYER_FEET_OFFSET; break }
+            }
+            val neighbourDrawn = levelPicture != null && !playerFeetY.isNaN()
+            val neighbourBehind = neighbourDrawn && neighbour.isBehindPlayer(playerFeetY)
+            if (neighbourDrawn) neighbour.update(playerFeetX, playerFeetY, now)
+            if (levelPicture != null && (neighbourBehind || playerFeetY.isNaN())) with(neighbour) { drawSprite(levelPicture, cameraX, cameraY, now) }
             for (i in 0 until buf.count) {
                 if (buf.kind[i] == RenderKind.PLAYER) renderPlayer(buf, i)
             }
+            if (levelPicture != null && !neighbourBehind && !playerFeetY.isNaN()) with(neighbour) { drawSprite(levelPicture, cameraX, cameraY, now) }
             // Pass 6: Projectiles
             for (i in 0 until buf.count) {
                 if (buf.kind[i] == RenderKind.PROJECTILE) renderProjectile(buf, i)
@@ -224,6 +240,8 @@ class GameRenderer(
                 drawLampGlows(art)
                 drawRain()
             }
+            // Pass 7c: the neighbour's speech bubble, over everything in the world
+            if (art != null) with(neighbour) { drawBubble(cameraX, cameraY, now) }
             // Pass 8: Damage numbers
             if (showDamageNumbers) {
                 for (i in 0 until buf.count) {

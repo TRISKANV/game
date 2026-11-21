@@ -1,0 +1,41 @@
+package com.kotlinsurvivors.engine.map
+
+import kotlin.math.floor
+
+/**
+ * The neighbour who stands on the pavement a few steps from the protagonist's door in Level 1,
+ * and comments on whoever comes close. His position is in world pixels; [FEET_Y] is where his
+ * boots touch the ground.
+ *
+ * He is solid: [stampSolid] marks the ground under his feet as blocked in the level's collision
+ * grid, so the player walks around him and the enemies' paths do too.
+ */
+object Level1Npc {
+    const val X       = 2400f
+    const val FEET_Y  = 650f
+
+    /** Height of his picture in world pixels (the player is about 90). */
+    const val SPRITE_HEIGHT = 100f
+
+    /** He starts talking when the player's feet come this close, and stops when they go beyond [LEAVE_RADIUS]. */
+    const val TALK_RADIUS  = 280f
+    const val LEAVE_RADIUS = 330f
+
+    /** How many different things he can say (strings npc_leek_1 .. npc_leek_N). */
+    const val LINE_COUNT = 14
+
+    private const val HALF_WIDTH = 22f
+    private const val DEPTH_BACK = 10f
+    private const val DEPTH_FRONT = 6f
+
+    /** Marks the cells under his boots as blocked in [blocked], a grid of [cells] x [cells] cells of [cellSize]. */
+    fun stampSolid(blocked: ByteArray, cells: Int, cellSize: Float) {
+        val x0 = floor((X - HALF_WIDTH) / cellSize).toInt()
+        val x1 = floor((X + HALF_WIDTH - 0.01f) / cellSize).toInt()
+        val y0 = floor((FEET_Y - DEPTH_BACK) / cellSize).toInt()
+        val y1 = floor((FEET_Y + DEPTH_FRONT - 0.01f) / cellSize).toInt()
+        for (cy in y0..y1) for (cx in x0..x1) {
+            if (cx in 0 until cells && cy in 0 until cells) blocked[cy * cells + cx] = 1
+        }
+    }
+}

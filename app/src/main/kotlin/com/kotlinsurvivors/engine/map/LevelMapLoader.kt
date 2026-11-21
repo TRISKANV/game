@@ -9,6 +9,7 @@ object LevelMapLoader {
 
     fun loadLevel1(context: Context): LevelMap? = try {
         val bytes = context.assets.open("sprites/level1_solid.bin").use { it.readBytes() }
+        Level1Npc.stampSolid(bytes, Level1.CELLS, Level1.CELL_SIZE)   // the neighbour is an obstacle too
         LevelMap(Level1.CELLS, Level1.CELL_SIZE, bytes)
     } catch (e: Exception) {
         Log.e(TAG, "Could not load the level 1 collision grid, playing without it", e)

@@ -1,5 +1,7 @@
 package com.kotlinsurvivors.features.game.presentation.screen
 
+import com.kotlinsurvivors.R
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.runtime.saveable.rememberSaveable
 import com.kotlinsurvivors.features.settings.presentation.screen.PauseSettingsPanel
 import com.kotlinsurvivors.core.audio.Sound
@@ -37,6 +39,14 @@ import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+
+/** The neighbour's lines, in order; there must be [Level1Npc.LINE_COUNT] of them. */
+private val NEIGHBOUR_LINES = intArrayOf(
+    R.string.npc_leek_1, R.string.npc_leek_2, R.string.npc_leek_3, R.string.npc_leek_4,
+    R.string.npc_leek_5, R.string.npc_leek_6, R.string.npc_leek_7, R.string.npc_leek_8,
+    R.string.npc_leek_9, R.string.npc_leek_10, R.string.npc_leek_11, R.string.npc_leek_12,
+    R.string.npc_leek_13, R.string.npc_leek_14
+)
 
 /**
  * GameScreen
@@ -99,12 +109,17 @@ fun GameScreen(
             levelArt = withContext(Dispatchers.IO) { LevelArt.loadLevel1(context.applicationContext) }
         }
 
+        // What the neighbour of Level 1 says, in the current language; rebuilt when the language changes.
+        val configuration = LocalConfiguration.current
+        val neighbourLines = remember(configuration) { Array(NEIGHBOUR_LINES.size) { context.getString(NEIGHBOUR_LINES[it]) } }
+
         // Settings that act on the game. Plain assignments, safe to repeat every frame.
         SideEffect {
             renderer.showDamageNumbers = settings.showDamageNumbers
             renderer.showFps           = settings.showFps
             renderer.atlas             = sprites
             renderer.levelArt          = levelArt
+            renderer.neighbour.lines   = neighbourLines
             viewModel.joystick?.setScale(settings.joystickSize)
         }
 
