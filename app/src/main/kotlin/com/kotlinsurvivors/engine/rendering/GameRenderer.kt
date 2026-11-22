@@ -265,6 +265,7 @@ class GameRenderer(
         }
         fpsPaint.textSize = 14.sp.toPx()
         drawContext.canvas.nativeCanvas.drawText(fpsText, size.width - 16f, size.height - 16f, fpsPaint)
+        if (levelArt != null) drawContext.canvas.nativeCanvas.drawText(neighbour.debugLine(), size.width - 16f, size.height - 16f - fpsPaint.textSize * 1.4f, fpsPaint)
     }
 
     // ── Background ──────────────────────────────────────────────────────────

@@ -118,6 +118,11 @@ class NeighbourTalkTest {
         assertEquals((0..5).toList(), said.sorted())
     }
 
+    @Test fun theDebugDistanceFollowsThePlayer() {
+        talk.update(nearX, nearY, 0L)
+        assertEquals(100f, talk.distance, 0.5f)
+    }
+
     @Test fun comingBackStartsAFreshLine() {
         talk.update(nearX, nearY, 0L)
         talk.update(farX, nearY, 500L)
@@ -142,5 +147,35 @@ class EnergyCanTest {
     @Test fun aCanWaitsLongerThanAnOrbAndTheDropChanceIsThirtyPercent() {
         assertTrue(com.kotlinsurvivors.engine.ecs.EntityFactory.CAN_WAIT_SECONDS > 30f)
         assertEquals(0.30f, com.kotlinsurvivors.engine.ecs.systems.ExperienceSystem.HEAL_DROP_CHANCE, 0f)
+    }
+}
+
+/** Energy cans: about three in ten kills drop one, but never more than three lie on the floor. */
+class EnergyCanDropTest {
+    private val world = com.kotlinsurvivors.engine.ecs.World()
+    private val xp    = com.kotlinsurvivors.engine.ecs.systems.ExperienceSystem()
+
+    private fun kill() {
+        val id = com.kotlinsurvivors.engine.ecs.EntityFactory.createEnemy(world, com.kotlinsurvivors.engine.ecs.components.EnemyType.TANK, 100f, 100f)
+        world.healths[id]!!.isDead = true
+        xp.processEvents(world, mutableListOf(com.kotlinsurvivors.engine.ecs.systems.GameEvent.EnemyKilled(id, com.kotlinsurvivors.engine.ecs.components.EnemyType.TANK, 5, 0f)))
+        world.flushDestroyed()
+    }
+
+    private fun cans() = world.pickups.values.count {
+        it.type == com.kotlinsurvivors.engine.ecs.components.PickupType.HEALTH_SMALL
+    }
+
+    @Test fun neverMoreThanThreeOnTheFloor() {
+        repeat(500) { kill(); assertTrue("cans: ${cans()}", cans() <= 3) }
+        assertEquals(3, cans())
+    }
+
+    @Test fun oncePickedUpMoreCanFall() {
+        repeat(300) { kill() }
+        assertEquals(3, cans())
+        world.pickups.entries.removeAll { it.value.type == com.kotlinsurvivors.engine.ecs.components.PickupType.HEALTH_SMALL }
+        repeat(300) { kill() }
+        assertEquals(3, cans())
     }
 }

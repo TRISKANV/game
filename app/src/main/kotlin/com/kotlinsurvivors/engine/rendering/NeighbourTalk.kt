@@ -28,6 +28,10 @@ class NeighbourTalk(private val random: Random = Random.Default) {
     var leftAt = 0L
         private set
 
+    /** Distance from the player's feet to his boots at the last update, for the debug line; -1 before any. */
+    var distance = -1f
+        private set
+
     private var order     = IntArray(0)
     private var orderPos  = 0
     private var lastShown = -1
@@ -36,6 +40,7 @@ class NeighbourTalk(private val random: Random = Random.Default) {
     fun update(playerX: Float, playerFeetY: Float, nowMs: Long) {
         if (lines.isEmpty()) return
         val dist = hypot(playerX - Level1Npc.X, playerFeetY - Level1Npc.FEET_Y)
+        distance = dist
         val nowNear = dist <= (if (near) Level1Npc.LEAVE_RADIUS else Level1Npc.TALK_RADIUS)
         if (nowNear && !near) startNextLine(nowMs)
         if (!nowNear && near) leftAt = nowMs

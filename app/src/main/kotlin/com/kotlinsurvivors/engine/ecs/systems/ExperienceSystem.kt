@@ -10,6 +10,9 @@ import kotlin.random.Random
 
 class ExperienceSystem {
 
+    private fun cansOnTheFloor(world: World): Int =
+        world.pickups.values.count { it.type == PickupType.HEALTH_SMALL || it.type == PickupType.HEALTH_LARGE }
+
     companion object {
         const val MAX_LEVELS_PER_FRAME = 1
 
@@ -24,6 +27,9 @@ class ExperienceSystem {
 
         /** Chance that any dead enemy leaves an energy can (heals the player). */
         const val HEAL_DROP_CHANCE = 0.30f
+
+        /** No more cans fall while this many wait on the floor, so the map does not fill with them. */
+        const val MAX_CANS_ON_THE_FLOOR = 3
 
         /** Chance that a dead boss leaves a chest. */
         const val BOSS_CHEST_CHANCE = 0.5f
@@ -124,7 +130,7 @@ class ExperienceSystem {
                 EntityFactory.createPickup(world, coinType, t.x, t.y)
             }
 
-            if (Random.nextFloat() < HEAL_DROP_CHANCE) {
+            if (Random.nextFloat() < HEAL_DROP_CHANCE && cansOnTheFloor(world) < MAX_CANS_ON_THE_FLOOR) {
                 EntityFactory.createPickup(world, PickupType.HEALTH_SMALL, t.x, t.y)
             }
 
