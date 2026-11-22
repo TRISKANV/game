@@ -435,6 +435,10 @@ class GameRenderer(
         val sprites = atlas
         val id      = buf.spriteId[i]
         if (id == PickupType.CHEST.ordinal) { renderChest(buf, i, sx, sy); return }
+        if (sprites != null && (id == PickupType.HEALTH_SMALL.ordinal || id == PickupType.HEALTH_LARGE.ordinal)) {
+            renderEnergyCan(sprites.energyCan, sx, sy, if (id == PickupType.HEALTH_LARGE.ordinal) CAN_LARGE_SCALE else CAN_SMALL_SCALE)
+            return
+        }
         if (sprites != null && id >= 0 && id * SpriteAtlas.ITEM_CELL < sprites.pickups.width) {
             val size = sz * PICKUP_SPRITE_SCALE
             drawCell(sprites.pickups, id, 0, SpriteAtlas.ITEM_CELL, sprites.pickups.height, sx, sy, size, size, spritePaint)
@@ -442,6 +446,22 @@ class GameRenderer(
         }
         drawCircle(Color(buf.getColor(i)), sz * 0.5f, Offset(sx, sy))
         drawCircle(Color(0x33FFFFFF), sz * 0.25f, Offset(sx - sz * 0.12f, sy - sz * 0.12f))
+    }
+
+    // ── Energy can (heals) ───────────────────────────────────────────────────
+
+    /** The can floats a little above its shadow and, every couple of seconds, a glint slides down it. */
+    private fun DrawScope.renderEnergyCan(sheet: Bitmap, sx: Float, sy: Float, scale: Float) {
+        val w = SpriteAtlas.CAN_CELL_W * scale
+        val h = SpriteAtlas.CAN_CELL_H * scale
+        if (!inViewport(sx, sy, h)) return
+        val now  = System.currentTimeMillis()
+        val bob  = sin(now * 0.005f) * 2.5f
+        val glintStep = (now % CAN_GLINT_PERIOD_MS) / CAN_GLINT_STEP_MS          // 0 = no glint, 1..3 = sliding
+        val frame = if (glintStep in 0L until SpriteAtlas.CAN_FRAMES.toLong()) glintStep.toInt() else 0
+        drawOval(Color(0x55000000), Offset(sx - w * 0.4f, sy + h * 0.32f), Size(w * 0.8f, h * 0.16f))
+        drawCircle(Color(0x30FF3D8B), h * 0.75f, Offset(sx, sy + bob))
+        drawCell(sheet, frame, 0, SpriteAtlas.CAN_CELL_W, SpriteAtlas.CAN_CELL_H, sx, sy + bob - h * 0.1f, w, h, spritePaint)
     }
 
     // ── Boss chest ──────────────────────────────────────────────────────────
@@ -890,6 +910,10 @@ class GameRenderer(
         const val ENEMY_FRAME_MS  = 220L
         const val SPIN_PERIOD_MS  = 500L
         const val CHEST_DRAW_SIZE      = 48f
+        const val CAN_SMALL_SCALE      = 1.3f
+        const val CAN_LARGE_SCALE      = 1.8f
+        const val CAN_GLINT_PERIOD_MS  = 1800L
+        const val CAN_GLINT_STEP_MS    = 150L
         const val DRONE_LED_MS         = 300L
         const val DRONE_LIFT           = 0.45f      // how high above its shadow, in sprite heights
         const val DRONE_ROTOR_RADIUS   = 3.4f       // in sprite pixels

@@ -32,10 +32,10 @@ class NeighbourTest {
         assertTrue("transparent corner", (picture.getRGB(0, 0) ushr 24) == 0)
     }
 
-    @Test fun heStandsInFrontOfTheCarOnFreeGround() {
-        // the car's body is x 896..1032, y 744..810; he is just south of it, not far from its front end
-        assertTrue("x ${Level1Npc.X}", Level1Npc.X in 940f..1080f)
-        assertTrue("y ${Level1Npc.FEET_Y}", Level1Npc.FEET_Y in 820f..880f)
+    @Test fun heStandsOnThePavementInFrontOfTheCar() {
+        // the car's body is x 896..1032, y 744..810; he is on the pavement (y 544..704) facing it
+        assertTrue("x ${Level1Npc.X}", Level1Npc.X in 900f..1030f)
+        assertTrue("y ${Level1Npc.FEET_Y}", Level1Npc.FEET_Y in 600f..704f)
         val free = LevelMap(Level1.CELLS, Level1.CELL_SIZE, grid())
         assertFalse("the ground under him is free in the original grid", free.isBlockedAt(Level1Npc.X, Level1Npc.FEET_Y))
         assertTrue(free.isBoxFree(Level1Npc.X, Level1Npc.FEET_Y, 30f, 12f))
@@ -51,8 +51,8 @@ class NeighbourTest {
         // the player can still go round him, above and below, and the spawn point is untouched
         val half = MovementSystem.PLAYER_HALF
         val feet = MovementSystem.PLAYER_FEET_OFFSET
-        assertTrue("east of him", map.isBoxFree(Level1Npc.X + 70f, Level1Npc.FEET_Y + feet - 26f, half, half))
-        assertTrue("below him", map.isBoxFree(Level1Npc.X, Level1Npc.FEET_Y + 40f, half, half))
+        assertTrue("east of him", map.isBoxFree(Level1Npc.X + 70f, Level1Npc.FEET_Y, half, half))
+        assertTrue("above him", map.isBoxFree(Level1Npc.X, Level1Npc.FEET_Y - 40f, half, half))
         assertTrue("spawn", map.isBoxFree(Level1.SPAWN_X, Level1.SPAWN_Y + feet, half, half))
         // only a handful of cells changed
         val before = grid()

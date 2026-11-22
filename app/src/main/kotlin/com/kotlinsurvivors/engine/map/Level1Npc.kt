@@ -3,7 +3,7 @@ package com.kotlinsurvivors.engine.map
 import kotlin.math.floor
 
 /**
- * The neighbour of Level 1: he stands in the street in front of the parked car, looking at his
+ * The neighbour of Level 1: he stands on the pavement across from the parked car, looking at his
  * phone, and comments on whoever comes close. His position is in world pixels; [FEET_Y] is where
  * his boots touch the ground.
  *
@@ -11,8 +11,8 @@ import kotlin.math.floor
  * grid, so the player walks around him and the enemies' paths do too.
  */
 object Level1Npc {
-    const val X       = 1048f
-    const val FEET_Y  = 846f
+    const val X       = 984f
+    const val FEET_Y  = 688f
 
     /** His sprite sheet (npc_leek.png): [FRAMES] cells of [FRAME_W] x [FRAME_H] pixels side by side. */
     const val FRAME_W = 42

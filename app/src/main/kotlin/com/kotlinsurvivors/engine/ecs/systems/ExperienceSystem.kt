@@ -22,6 +22,9 @@ class ExperienceSystem {
         /** Seconds the chest takes to open once the player touches it. */
         const val CHEST_OPEN_SECONDS = 1.1f
 
+        /** Chance that any dead enemy leaves an energy can (heals the player). */
+        const val HEAL_DROP_CHANCE = 0.30f
+
         /** Chance that a dead boss leaves a chest. */
         const val BOSS_CHEST_CHANCE = 0.5f
 
@@ -121,7 +124,7 @@ class ExperienceSystem {
                 EntityFactory.createPickup(world, coinType, t.x, t.y)
             }
 
-            if (Random.nextFloat() < 0.03f) {
+            if (Random.nextFloat() < HEAL_DROP_CHANCE) {
                 EntityFactory.createPickup(world, PickupType.HEALTH_SMALL, t.x, t.y)
             }
 
