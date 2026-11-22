@@ -140,8 +140,9 @@ private object UiIconSheet {
     @Volatile var image: ImageBitmap? = null
 }
 
+/** The sheet of icons, loaded once; null while loading or if it cannot be read. */
 @Composable
-private fun rememberIconSheet(): ImageBitmap? {
+internal fun rememberIconSheet(): ImageBitmap? {
     val appContext = LocalContext.current.applicationContext
     val sheet by produceState(UiIconSheet.image, appContext) {
         if (value == null) {

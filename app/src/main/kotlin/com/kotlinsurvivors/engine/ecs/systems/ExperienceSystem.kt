@@ -23,7 +23,7 @@ class ExperienceSystem {
         const val XP_GROWTH_PER_LEVEL = 1.40
 
         /** Seconds the chest takes to open once the player touches it. */
-        const val CHEST_OPEN_SECONDS = 1.1f
+        const val CHEST_OPEN_SECONDS = 0.25f
 
         /** Chance that any dead enemy leaves an energy can (heals the player). */
         const val HEAL_DROP_CHANCE = 0.30f

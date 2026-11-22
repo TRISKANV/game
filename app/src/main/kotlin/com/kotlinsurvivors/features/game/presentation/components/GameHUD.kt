@@ -398,41 +398,6 @@ fun LevelUpBadge(count: Int, onOpen: () -> Unit, modifier: Modifier = Modifier) 
     }
 }
 
-/** Shown for a few seconds when a boss chest gives an exclusive weapon. */
-@Composable
-fun ChestWeaponBanner(weapon: WeaponType, modifier: Modifier = Modifier) {
-    val icon = when (weapon) {
-        WeaponType.DDOS       -> "w_ddos"
-        WeaponType.ZERO_DAY   -> "w_zeroday"
-        else                  -> "w_logicbomb"
-    }
-    Row(
-        modifier = modifier
-            .background(Color(0xE60D2A33), RoundedCornerShape(3.dp))
-            .border(2.dp, Color(0xFF26C6DA), RoundedCornerShape(3.dp))
-            .padding(horizontal = 18.dp, vertical = 8.dp),
-        verticalAlignment     = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        PixelIcon(icon, 30.dp)
-        Column {
-            Text(
-                stringResource(R.string.hud_chest_weapon),
-                color         = Color(0xFF26C6DA),
-                fontSize      = 11.sp,
-                fontWeight    = FontWeight.Bold,
-                letterSpacing = 1.sp
-            )
-            Text(
-                weaponName(weapon, weapon.name),
-                color      = Color.White,
-                fontSize   = 16.sp,
-                fontWeight = FontWeight.ExtraBold
-            )
-        }
-    }
-}
-
 /** Announces a special wave, a mini-boss or a cleared wave for a few seconds. */
 @Composable
 fun EventBanner(kind: EventKind, modifier: Modifier = Modifier) {

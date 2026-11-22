@@ -23,7 +23,7 @@ import kotlin.math.sin
  * from the render buffer and does not touch the game world (his solid body is part of the
  * level's collision grid, see [Level1Npc.stampSolid]).
  *
- * While the player stays near, he says his lines one after another, in random order and
+ * When the player comes close and when he walks away, he says his lines one after another, in random order and
  * without repeating any until all have been said. The text of each line comes from [lines],
  * which the screen fills in with the current language.
  */
@@ -70,9 +70,8 @@ class NeighbourRenderer {
      * raises a hand (5), and moves his mouth (5/6) while the bubble is being typed.
      */
     private fun frameAt(nowMs: Long): Int {
-        if (talk.near) {
-            val typing = talk.lineIndex in lines.indices &&
-                nowMs - talk.lineStart < lines[talk.lineIndex].length * 1000L / TYPE_CHARS_PER_SECOND
+        if (talk.isSpeaking(nowMs)) {
+            val typing = nowMs - talk.lineStart < lines[talk.lineIndex].length * 1000L / TYPE_CHARS_PER_SECOND
             return if (typing && (nowMs / TALK_FLAP_MS) % 2L == 1L) 6 else 5
         }
         val t = nowMs % PHONE_CYCLE_MS
@@ -84,6 +83,7 @@ class NeighbourRenderer {
         val sheet = art.npc ?: return
         val fw = Level1Npc.FRAME_W
         val fh = Level1Npc.FRAME_H
+        val speaking = talk.isSpeaking(nowMs)
         val frame = frameAt(nowMs).coerceIn(0, Level1Npc.FRAMES - 1)
         if ((frame + 1) * fw > sheet.width || fh > sheet.height) return
         val k  = Level1Npc.SCALE
@@ -97,7 +97,7 @@ class NeighbourRenderer {
         drawOval(Color(0x30000000), topLeft = Offset(sx - 34f, sy - 9f), size = Size(68f, 18f))
         drawOval(Color(0x66000000), topLeft = Offset(sx - 24f, sy - 6f), size = Size(48f, 11f))
 
-        val breathe = if (talk.near) 0f else sin(nowMs * 0.0025f) * 0.6f
+        val breathe = if (speaking) 0f else sin(nowMs * 0.0025f) * 0.6f
         val left = sx - w / 2f
         val top  = sy - Level1Npc.FEET_ROW * k + breathe
         src.set(frame * fw, 0, (frame + 1) * fw, fh)
@@ -105,11 +105,11 @@ class NeighbourRenderer {
         drawContext.canvas.nativeCanvas.drawBitmap(sheet, src, box, spritePaint)
 
         // The screen of the phone lights his belly and the ground in front of him (not when he has lowered it).
-        if (!talk.near || frame == 5 || frame == 6) {
+        if (!speaking || frame == 5 || frame == 6) {
             val flicker = 0.85f + 0.15f * sin(nowMs * 0.02f)
-            val px = if (talk.near) left + 5.5f * k else left + 20.5f * k
-            val py = if (talk.near) top + 52f * k else top + 41f * k
-            val r  = (if (talk.near) 26f else 40f) * flicker
+            val px = if (speaking) left + 5.5f * k else left + 20.5f * k
+            val py = if (speaking) top + 52f * k else top + 41f * k
+            val r  = (if (speaking) 26f else 40f) * flicker
             drawCircle(
                 brush  = Brush.radialGradient(
                     listOf(Color(0x5534DCF2), Color(0x2234DCF2), Color(0x0034DCF2)),
@@ -123,15 +123,9 @@ class NeighbourRenderer {
     fun DrawScope.drawBubble(cameraX: Float, cameraY: Float, nowMs: Long) {
         if (talk.lineIndex < 0 || talk.lineIndex >= lines.size) return
         val elapsed = nowMs - talk.lineStart
-        val alpha = when {
-            talk.near -> {
-                val total = talk.lineDuration(talk.lineIndex)
-                if (elapsed >= total) 0f
-                else min(1f, min(elapsed / FADE_IN_MS.toFloat(), (total - elapsed) / FADE_OUT_MS.toFloat()))
-            }
-            talk.leftAt > 0L -> 1f - (nowMs - talk.leftAt) / FADE_OUT_MS.toFloat()
-            else -> 0f
-        }
+        val total = talk.lineDuration(talk.lineIndex)
+        val alpha = if (elapsed >= total) 0f
+                    else min(1f, min(elapsed / FADE_IN_MS.toFloat(), (total - elapsed) / FADE_OUT_MS.toFloat()))
         if (alpha <= 0f) return
 
         val textSize = 13.sp.toPx()
@@ -172,7 +166,7 @@ class NeighbourRenderer {
         canvas.drawPath(tail, fillPaint)
 
         // The text appears letter by letter, like somebody talking.
-        var shown = if (talk.near) ((elapsed * TYPE_CHARS_PER_SECOND) / 1000L).toInt() + 1 else Int.MAX_VALUE
+        var shown = ((elapsed * TYPE_CHARS_PER_SECOND) / 1000L).toInt() + 1
         textPaint.alpha = a
         var y = box.top + pad + textSize
         for (l in wrapped) {

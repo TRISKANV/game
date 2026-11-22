@@ -3,6 +3,7 @@ package com.kotlinsurvivors.features.game.domain.model
 import com.kotlinsurvivors.engine.ecs.systems.EventKind
 import com.kotlinsurvivors.engine.rendering.RenderSnapshot
 import com.kotlinsurvivors.engine.ecs.systems.GameEvent
+import com.kotlinsurvivors.engine.ChestReward
 import com.kotlinsurvivors.engine.ecs.components.WeaponType
 
 /**
@@ -25,8 +26,8 @@ data class GameState(
     val levelUpOptions   : List<LevelUpOption> = emptyList(),
     /** Which of [levelUpOptions] the level-up roulette lands on. */
     val levelUpWinner    : Int            = 0,
-    /** The exclusive weapon a boss chest just gave, shown as a banner for a few seconds; null otherwise. */
-    val chestWeapon      : WeaponType?    = null,
+    /** What the boss chest the player just opened holds; the game is frozen and the chest screen shown while this is set. */
+    val chestReward      : ChestReward?   = null,
     /** The special wave or mini-boss that was just announced, shown as a banner for a few seconds; null otherwise. */
     val eventBanner      : EventKind?     = null,
     /** Kills in the current streak (shown from 3), its tier (0..4) and the share of the countdown left (0..1, in steps of 0.05). */
@@ -80,7 +81,7 @@ data class GameState(
             levelUpsWaiting == other.levelUpsWaiting &&
             levelUpOptions == other.levelUpOptions &&
             levelUpWinner == other.levelUpWinner &&
-            chestWeapon == other.chestWeapon &&
+            chestReward == other.chestReward &&
             eventBanner == other.eventBanner &&
             comboCount == other.comboCount &&
             comboTier == other.comboTier &&

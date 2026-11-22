@@ -24,10 +24,6 @@ class NeighbourTalk(private val random: Random = Random.Default) {
     /** Index in [lines] of the line being said, -1 before the first one. */
     var lineIndex = -1
         private set
-    /** When the player walked away, for the fade out; 0 while he is near or has never been. */
-    var leftAt = 0L
-        private set
-
     /** Distance from the player's feet to his boots at the last update, for the debug line; -1 before any. */
     var distance = -1f
         private set
@@ -41,12 +37,18 @@ class NeighbourTalk(private val random: Random = Random.Default) {
         if (lines.isEmpty()) return
         val dist = hypot(playerX - Level1Npc.X, playerFeetY - Level1Npc.FEET_Y)
         distance = dist
+        // Two radii so that standing on the edge does not make him chatter: he is "near" from
+        // TALK_RADIUS in and "away" only beyond LEAVE_RADIUS.
         val nowNear = dist <= (if (near) Level1Npc.LEAVE_RADIUS else Level1Npc.TALK_RADIUS)
-        if (nowNear && !near) startNextLine(nowMs)
-        if (!nowNear && near) leftAt = nowMs
-        near = nowNear
-        if (near && nowMs - lineStart > lineDuration(lineIndex) + GAP_MS) startNextLine(nowMs)
+        if (nowNear != near) {
+            near = nowNear
+            startNextLine(nowMs)
+        }
     }
+
+    /** True while the current line is on screen. */
+    fun isSpeaking(nowMs: Long): Boolean =
+        lineIndex in lines.indices && nowMs - lineStart < lineDuration(lineIndex)
 
     /** How long line [index] stays on screen: longer for longer lines, within limits. */
     fun lineDuration(index: Int): Long {
@@ -70,7 +72,6 @@ class NeighbourTalk(private val random: Random = Random.Default) {
         lineIndex = order[orderPos++]
         lastShown = lineIndex
         lineStart = nowMs
-        leftAt    = 0L
     }
 
     companion object {
@@ -78,6 +79,5 @@ class NeighbourTalk(private val random: Random = Random.Default) {
         const val PER_CHAR_MS  = 45L
         const val MIN_LINE_MS  = 2600L
         const val MAX_LINE_MS  = 5200L
-        const val GAP_MS       = 600L
     }
 }

@@ -71,6 +71,11 @@ class GameViewModel @Inject constructor(
         }
     }
 
+    /** The player saw what the boss chest holds and tapped to go on: the reward is handed over. */
+    fun confirmChest() {
+        engine?.confirmChest()
+    }
+
     /** The tester asked for something in the laboratory. Ignored by a real run. */
     fun sendLabCommand(command: LabCommand) {
         engine?.sendLabCommand(command)

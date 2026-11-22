@@ -230,4 +230,12 @@
     <string name="lab_heal">Curar</string>
     <string name="lab_clear">Borrar bichos</string>
     <string name="lab_combo">Sumar al combo</string>
+    <string name="chest_boss_title">¡COFRE DEL JEFE!</string>
+    <string name="chest_tap_open">TOCÁ EL COFRE PARA ABRIRLO</string>
+    <string name="chest_tap_continue">Tocá para continuar</string>
+    <string name="chest_reveal_new">¡ARMA EXCLUSIVA!</string>
+    <string name="chest_reveal_level">¡ARMA MEJORADA!</string>
+    <string name="chest_reveal_heal">¡VIDA AL MÁXIMO!</string>
+    <string name="chest_heal_name">Curación total</string>
+    <string name="chest_level_fmt">Nivel %1$d</string>
 </resources>

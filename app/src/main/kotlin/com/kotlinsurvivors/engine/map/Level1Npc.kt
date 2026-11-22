@@ -28,9 +28,12 @@ object Level1Npc {
     /** Distance from his boots to the top of his leaves in world pixels; the bubble floats above it. */
     const val SPRITE_HEIGHT = 100f
 
-    /** He starts talking when the player's feet come this close, and stops when they go beyond [LEAVE_RADIUS]. */
+    /**
+     * He says one line when the player's feet come this close, and another when they go beyond
+     * [LEAVE_RADIUS]; in between he stays quiet, so the lines do not pile up when standing next to him.
+     */
     const val TALK_RADIUS  = 280f
-    const val LEAVE_RADIUS = 330f
+    const val LEAVE_RADIUS = 380f
 
     /** How many different things he can say (strings npc_leek_1 .. npc_leek_N). */
     const val LINE_COUNT = 14

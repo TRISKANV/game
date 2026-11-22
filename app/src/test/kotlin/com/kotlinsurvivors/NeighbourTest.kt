@@ -86,34 +86,62 @@ class NeighbourTalkTest {
         assertEquals(-1, talk.lineIndex)
     }
 
-    @Test fun startsTalkingWhenThePlayerArrivesAndStopsWhenHeLeaves() {
+    @Test fun saysOneLineOnArrivingAndStaysQuietWhileThePlayerStandsThere() {
         talk.update(farX, nearY, 1000L)
         talk.update(nearX, nearY, 2000L)
         assertTrue(talk.near)
-        assertTrue(talk.lineIndex in 0..5)
         assertEquals(2000L, talk.lineStart)
-        talk.update(farX, nearY, 3000L)
-        assertFalse(talk.near)
-        assertEquals(3000L, talk.leftAt)
+        val first = talk.lineIndex
+        // a minute next to him: no second line
+        var t = 2000L
+        while (t < 62_000L) { t += 100L; talk.update(nearX, nearY, t) }
+        assertEquals(first, talk.lineIndex)
+        assertEquals(2000L, talk.lineStart)
+        assertFalse("the line is long over", talk.isSpeaking(t))
     }
 
-    @Test fun staysNearBetweenTheTwoRadiiSoItDoesNotFlicker() {
+    @Test fun saysAnotherLineOnWalkingAwayAndAnotherOnComingBack() {
         talk.update(nearX, nearY, 0L)
-        talk.update(Level1Npc.X + (Level1Npc.TALK_RADIUS + 20f), nearY, 100L)
+        val arrival = talk.lineIndex
+        talk.update(farX, nearY, 20_000L)
+        assertFalse(talk.near)
+        assertEquals(20_000L, talk.lineStart)
+        assertTrue(talk.isSpeaking(20_100L))
+        val parting = talk.lineIndex
+        assertTrue("not the same line twice in a row", parting != arrival)
+        talk.update(nearX, nearY, 40_000L)
         assertTrue(talk.near)
-        talk.update(Level1Npc.X + (Level1Npc.LEAVE_RADIUS + 20f), nearY, 200L)
+        assertEquals(40_000L, talk.lineStart)
+        assertTrue(talk.lineIndex != parting)
+    }
+
+    @Test fun nothingIsSaidAtTheStartOfTheRun() {
+        talk.update(farX, nearY, 0L)
+        talk.update(farX, nearY, 5000L)
+        assertFalse(talk.isSpeaking(5000L))
+    }
+
+    @Test fun theBandBetweenTheRadiiDoesNotMakeHimChatter() {
+        talk.update(nearX, nearY, 0L)
+        val start = talk.lineStart
+        // wobble between the two radii: still near, no new line
+        for (i in 1..40) {
+            val x = Level1Npc.X + if (i % 2 == 0) Level1Npc.TALK_RADIUS + 20f else Level1Npc.LEAVE_RADIUS - 20f
+            talk.update(x, nearY, i * 50L)
+        }
+        assertTrue(talk.near)
+        assertEquals(start, talk.lineStart)
+        talk.update(Level1Npc.X + Level1Npc.LEAVE_RADIUS + 20f, nearY, 5000L)
         assertFalse(talk.near)
     }
 
     @Test fun sixLinesAreSaidOnceEachBeforeAnyRepeats() {
-        var t = 0L
         val said = ArrayList<Int>()
+        var t = 0L
         talk.update(nearX, nearY, t); said.add(talk.lineIndex)
         while (said.size < 6) {
-            t += 100L
-            talk.update(nearX, nearY, t)
-            if (talk.lineIndex != said.last()) said.add(talk.lineIndex)
-            assertTrue("took too long", t < 120_000L)
+            t += 10_000L; talk.update(farX, nearY, t); said.add(talk.lineIndex)
+            if (said.size < 6) { t += 10_000L; talk.update(nearX, nearY, t); said.add(talk.lineIndex) }
         }
         assertEquals((0..5).toList(), said.sorted())
     }
@@ -123,14 +151,6 @@ class NeighbourTalkTest {
         assertEquals(100f, talk.distance, 0.5f)
     }
 
-    @Test fun comingBackStartsAFreshLine() {
-        talk.update(nearX, nearY, 0L)
-        talk.update(farX, nearY, 500L)
-        talk.update(nearX, nearY, 10_000L)
-        assertTrue(talk.near)
-        assertEquals(10_000L, talk.lineStart)
-        assertEquals(0L, talk.leftAt)
-    }
 }
 
 /** The energy can waits where it fell: no magnet moves it and it outlasts ordinary pickups. */

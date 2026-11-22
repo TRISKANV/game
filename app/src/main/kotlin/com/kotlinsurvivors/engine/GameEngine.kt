@@ -61,7 +61,6 @@ class GameEngine(
         const val WORLD_WIDTH    = 4096f
         const val WORLD_HEIGHT   = 4096f
         const val MAX_WEAPON_LEVEL = 8
-        private const val CHEST_BANNER_SECONDS = 4f
         private const val EVENT_BANNER_SECONDS = 3.5f
         private const val RENDER_BUFFER_COUNT = 8
         private const val FACING_MIN_SPEED_SQ  = 25f   // below 5 px/s the player counts as standing still
@@ -104,9 +103,9 @@ class GameEngine(
     /** Levels gained whose roulette the player has not opened yet. The game keeps running meanwhile. */
     private var levelUpsWaiting = 0
 
-    // The weapon a boss chest just gave, shown in a banner for CHEST_BANNER_SECONDS.
-    private var chestBannerWeapon: WeaponType? = null
-    private var chestBannerTimer = 0f
+    // A boss chest was opened and the game waits, frozen, until the player has seen what it holds.
+    private var pendingChest: ChestReward? = null
+    @Volatile private var chestSeen = false
 
     // The event (special wave, mini-boss) just announced, shown for EVENT_BANNER_SECONDS.
     private var eventBanner: EventKind? = null
@@ -125,6 +124,7 @@ class GameEngine(
     private var hasEmitted                = false
     private var lastEmittedPaused         = false
     private var lastEmittedPendingLevelUp = false
+    private var lastEmittedChest = false
     private var lastEmittedLevelUpsWaiting = 0
     private var cachedLevelUpOptions: List<LevelUpOption> = emptyList()
     private var cachedLevelUpWinner = 0
@@ -175,7 +175,8 @@ class GameEngine(
                     while (accumulator >= FIXED_DT) {
                         drainLevelUpChoices()
                         openRouletteIfRequested()
-                        if (!isPaused && !pendingLevelUp) {
+                        finishChestIfSeen()
+                        if (!isPaused && !pendingLevelUp && pendingChest == null) {
                             tick(FIXED_DT)
                         }
                         accumulator -= FIXED_DT
@@ -315,8 +316,8 @@ class GameEngine(
         isPaused             = false
         pendingLevelUp       = false
         levelUpsWaiting      = 0
-        chestBannerWeapon    = null
-        chestBannerTimer     = 0f
+        pendingChest         = null
+        chestSeen            = false
         eventBanner          = null
         eventBannerTimer     = 0f
         directorEvents.clear()
@@ -379,10 +380,6 @@ class GameEngine(
     private fun tick(dt: Float) {
         frameCount++
         elapsedTime += dt
-        if (chestBannerTimer > 0f) {
-            chestBannerTimer -= dt
-            if (chestBannerTimer <= 0f) chestBannerWeapon = null
-        }
         if (eventBannerTimer > 0f) {
             eventBannerTimer -= dt
             if (eventBannerTimer <= 0f) eventBanner = null
@@ -469,7 +466,7 @@ class GameEngine(
                     CrashLogger.log("LEVEL-UP gained: level ${event.newLevel}, $levelUpsWaiting waiting")
                 }
                 is GameEvent.ChestDropped -> sounds.play(Sound.CHEST_APPEAR)
-                is GameEvent.ChestOpened -> { sounds.play(Sound.CHEST_OPEN); grantChestWeapon() }
+                is GameEvent.ChestOpened -> openChest()
                 is GameEvent.PlayerHit -> {
                     hitCount++
                     lastHitTime = elapsedTime
@@ -569,12 +566,14 @@ class GameEngine(
         val flagsChanged = !hasEmitted ||
             isPaused != lastEmittedPaused ||
             pendingLevelUp != lastEmittedPendingLevelUp ||
+            (pendingChest != null) != lastEmittedChest ||
             levelUpsWaiting != lastEmittedLevelUpsWaiting
         if (!tickedSinceEmit && !flagsChanged) return
         tickedSinceEmit           = false
         hasEmitted                = true
         lastEmittedPaused         = isPaused
         lastEmittedPendingLevelUp = pendingLevelUp
+        lastEmittedChest          = pendingChest != null
         lastEmittedLevelUpsWaiting = levelUpsWaiting
 
         val pid    = world.getPlayerEntity()
@@ -597,7 +596,7 @@ class GameEngine(
             levelUpsWaiting  = levelUpsWaiting,
             levelUpOptions   = cachedLevelUpOptions,  // reuse cached, never regenerate per frame
             levelUpWinner    = cachedLevelUpWinner,
-            chestWeapon      = chestBannerWeapon,
+            chestReward      = pendingChest,
             eventBanner      = eventBanner,
             comboCount       = if (combo.isVisible) combo.count else 0,
             comboTier        = combo.tier,
@@ -901,32 +900,41 @@ class GameEngine(
     }
 
     /**
-     * The boss chest opened: gives one of the exclusive weapons the player does not have
-     * yet. Once they have all of them, the chest levels one up instead; if every one is at
-     * the top it heals the player completely.
+     * The player touched a boss chest: decides what is inside and freezes the game while the screen
+     * shows it. Nothing is handed over until [confirmChest], so what the player sees is what he gets.
      */
-    private fun grantChestWeapon() {
-        val pid     = world.getPlayerEntity()
-        val weapons = world.weapons[pid] ?: return
-        val owned   = weapons.map { it.type }.toSet()
+    private fun openChest() {
+        val pid = world.getPlayerEntity()
+        val owned = world.weapons[pid] ?: return
+        pendingChest = ChestRules.roll(owned, MAX_WEAPON_LEVEL)
+        chestSeen = false
+        CrashLogger.log("CHEST opened: $pendingChest")
+    }
 
-        val unowned = WeaponType.values().filter { it.isChestOnly && it !in owned }
-        val given: WeaponType? = if (unowned.isNotEmpty()) {
-            val type = unowned.random()
-            weapons.add(newWeaponComponent(type))
-            type
-        } else {
-            val upgradable = weapons.filter { it.type.isChestOnly && it.level < MAX_WEAPON_LEVEL }
-            val weapon = upgradable.randomOrNull()
-            if (weapon != null) levelUpWeapon(world, pid, weapon)
-            else world.healths[pid]?.let { it.current = it.max }
-            weapon?.type
+    /** The player has seen the reward and tapped to go on. Safe to call from the UI thread. */
+    fun confirmChest() {
+        chestSeen = true
+    }
+
+    /** Hands over the reward once the player confirmed it and lets the game run again. */
+    private fun finishChestIfSeen() {
+        val reward = pendingChest ?: return
+        if (!chestSeen) return
+        val pid = world.getPlayerEntity()
+        val weapons = world.weapons[pid]
+        if (pid != -1 && weapons != null) {
+            when (reward.kind) {
+                ChestReward.Kind.NEW_WEAPON ->
+                    reward.weapon?.let { if (weapons.none { w -> w.type == it }) weapons.add(newWeaponComponent(it)) }
+                ChestReward.Kind.LEVEL_UP ->
+                    weapons.find { it.type == reward.weapon }?.let { levelUpWeapon(world, pid, it) }
+                ChestReward.Kind.HEAL ->
+                    world.healths[pid]?.let { it.current = it.max }
+            }
+            CrashLogger.log("CHEST reward given: $reward -> ${loadoutSummary(pid)}")
         }
-        if (given != null) {
-            chestBannerWeapon = given
-            chestBannerTimer  = CHEST_BANNER_SECONDS
-        }
-        CrashLogger.log("CHEST opened: gave $given")
+        pendingChest = null
+        chestSeen = false
     }
 
     private fun levelUpWeapon(world: World, pid: Int, weapon: com.kotlinsurvivors.engine.ecs.components.WeaponComponent) {

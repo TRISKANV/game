@@ -230,4 +230,12 @@
     <string name="lab_heal">Heal</string>
     <string name="lab_clear">Clear enemies</string>
     <string name="lab_combo">Add to combo</string>
+    <string name="chest_boss_title">BOSS CHEST!</string>
+    <string name="chest_tap_open">TAP THE CHEST TO OPEN IT</string>
+    <string name="chest_tap_continue">Tap to continue</string>
+    <string name="chest_reveal_new">EXCLUSIVE WEAPON!</string>
+    <string name="chest_reveal_level">WEAPON UPGRADED!</string>
+    <string name="chest_reveal_heal">FULL HEALTH!</string>
+    <string name="chest_heal_name">Full heal</string>
+    <string name="chest_level_fmt">Level %1$d</string>
 </resources>

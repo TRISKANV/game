@@ -198,20 +198,17 @@ fun GameScreen(
             EventBanner(kind = kind, modifier = Modifier.align(Alignment.TopCenter).padding(top = 96.dp))
         }
 
-        // ── A boss chest just gave an exclusive weapon ────────────────────────
-        gameState.chestWeapon?.let { weapon ->
-            ChestWeaponBanner(
-                weapon   = weapon,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 148.dp)
-            )
-        }
-
         // ── Laboratory panel ──────────────────────────────────────────────────
         if (laboratory && !gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp) {
             LabPanel(
                 onCommand = viewModel::sendLabCommand,
                 modifier  = Modifier.align(Alignment.CenterEnd)
             )
+        }
+
+        // ── A boss chest was opened: the game waits while the player sees what it holds ──
+        gameState.chestReward?.let { reward ->
+            ChestOverlay(reward = reward, onFinished = viewModel::confirmChest)
         }
 
         // ── Level-up waiting: a button the player opens when ready ───────────
