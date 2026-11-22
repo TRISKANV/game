@@ -8,6 +8,7 @@ import androidx.lifecycle.viewModelScope
 import com.kotlinsurvivors.core.crash.CrashLogger
 import com.kotlinsurvivors.engine.AchievementEngine
 import com.kotlinsurvivors.engine.GameEngine
+import com.kotlinsurvivors.engine.lab.LabCommand
 import com.kotlinsurvivors.engine.map.LevelMapLoader
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
@@ -41,14 +42,15 @@ class GameViewModel @Inject constructor(
     /** Achievements unlocked during play, for the on-screen banner. */
     val newAchievements = achievementEngine.newlyUnlocked
 
-    fun initEngine(viewportWidth: Float, viewportHeight: Float) {
+    fun initEngine(viewportWidth: Float, viewportHeight: Float, laboratory: Boolean = false) {
         if (engine != null) return
         Log.d(TAG, "Initialising engine: ${viewportWidth}x${viewportHeight}")
         val newEngine = GameEngine(
             viewportWidth, viewportHeight,
             loadPermanentLevels = { gameRepository.getPermanentUpgradeLevels() },
             loadLevelMap        = { LevelMapLoader.loadLevel1(appContext) },
-            sounds              = soundManager
+            sounds              = soundManager,
+            laboratory          = laboratory
         )
         engine = newEngine
         newEngine.start(viewModelScope)
@@ -67,6 +69,11 @@ class GameViewModel @Inject constructor(
                 }
             }
         }
+    }
+
+    /** The tester asked for something in the laboratory. Ignored by a real run. */
+    fun sendLabCommand(command: LabCommand) {
+        engine?.sendLabCommand(command)
     }
 
     fun pauseGame()  {

@@ -62,6 +62,9 @@ class EventDirector(
     private var waveClock  = 0f          // seconds since the last enemy of the wave appeared
     private var checkTimer = 0f
 
+    /** False in the laboratory: nothing starts by itself there, only what the tester asks for. */
+    var autoStart = true
+
     /** True while a special wave is running. */
     val waveActive: Boolean get() = activeTag != 0
 
@@ -75,13 +78,13 @@ class EventDirector(
         if (pid == -1) return
         val pt = world.transforms[pid] ?: return
 
-        if (activeTag == 0 && elapsed >= nextWaveAt && world.bosses.isEmpty()) {
+        if (autoStart && activeTag == 0 && elapsed >= nextWaveAt && world.bosses.isEmpty()) {
             startWave(world, pt.x, pt.y, elapsed, events)
         } else if (activeTag != 0) {
             updateWave(world, dt, pt.x, pt.y, elapsed, events)
         }
 
-        if (elapsed >= nextMiniBossAt && world.bosses.isEmpty() && world.enemies.size < ENEMY_CEILING &&
+        if (autoStart && elapsed >= nextMiniBossAt && world.bosses.isEmpty() && world.enemies.size < ENEMY_CEILING &&
             spawner.findSpawnPoint(pt.x, pt.y)) {
             val type = if (Random.nextBoolean()) EnemyType.TANK else EnemyType.BASIC
             EntityFactory.createMiniBoss(world, type, spawner.spawnPointX, spawner.spawnPointY, spawner.difficultyAt(elapsed))
@@ -98,14 +101,36 @@ class EventDirector(
         if (elapsed >= 60f)  kinds.add(EventKind.DRONE_RAID)
         if (elapsed >= 120f) kinds.add(EventKind.SIEGE)
         if (kinds.size > 1) lastKind?.let { kinds.remove(it) }   // never the same twice in a row
-        val kind = kinds[Random.nextInt(kinds.size)]
+        nextWaveAt += WAVE_EVERY
+        launchWave(world, kinds[Random.nextInt(kinds.size)], px, py, elapsed, events)
+    }
 
+    /**
+     * Starts [kind] right now, whatever the clock says (laboratory). A running wave is dropped first.
+     * A mini-boss is not a wave: it just appears. Returns false when there was no room for it.
+     */
+    fun force(world: World, kind: EventKind, px: Float, py: Float, elapsed: Float, events: MutableList<GameEvent>): Boolean {
+        when (kind) {
+            EventKind.MINI_BOSS -> {
+                if (!spawner.findSpawnPoint(px, py)) return false
+                EntityFactory.createMiniBoss(world, EnemyType.TANK, spawner.spawnPointX, spawner.spawnPointY, spawner.difficultyAt(elapsed))
+                events.add(GameEvent.EventStarted(kind))
+            }
+            EventKind.WAVE_CLEARED -> {
+                giveReward(world, px, py)
+                events.add(GameEvent.WaveCleared)
+            }
+            else -> { endWave(); launchWave(world, kind, px, py, elapsed, events) }
+        }
+        return true
+    }
+
+    private fun launchWave(world: World, kind: EventKind, px: Float, py: Float, elapsed: Float, events: MutableList<GameEvent>) {
         lastKind   = kind
         activeKind = kind
         activeTag  = ++tagCounter
         waveClock  = 0f
         checkTimer = 0f
-        nextWaveAt += WAVE_EVERY
         when (kind) {
             EventKind.SWARM_RUSH -> { toSpawn = SWARM_COUNT; spawnGap = 1f / SWARM_PER_SECOND }
             EventKind.DRONE_RAID -> { toSpawn = DRONE_COUNT; spawnGap = 1f / DRONE_PER_SECOND }

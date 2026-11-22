@@ -58,6 +58,20 @@
     <string name="settings_screen_shake">Temblor de pantalla</string>
     <string name="settings_screen_shake_sub">La pantalla tiembla al recibir daño</string>
     <string name="hud_combo">COMBO x%1$d</string>
+    <string name="npc_leek_1">Parece que esos drones te están mirando… aléjate de mí.</string>
+    <string name="npc_leek_2">¿Eres así de raro como para pararte al lado de alguien sin hablar?</string>
+    <string name="npc_leek_3">Estoy ocupado.</string>
+    <string name="npc_leek_4">Creo que esto se pondrá divertido.</string>
+    <string name="npc_leek_5">Yo no vi nada. Tú tampoco me viste a mí.</string>
+    <string name="npc_leek_6">Bonito hoodie. Muy discreto. Muy «hacker de película».</string>
+    <string name="npc_leek_7">¿Probaste a apagarlo y volverlo a encender? Hablo de tu vida.</string>
+    <string name="npc_leek_8">No hagas clic en ningún enlace raro. Ni en ningún dron.</string>
+    <string name="npc_leek_9">Mejor camina. Yo me quedo aquí, valientemente, mirando.</string>
+    <string name="npc_leek_10">El wifi del barrio va fatal hoy. Seguro es culpa tuya.</string>
+    <string name="npc_leek_11">No, no vendo nada. Y deja de mirarme las gafas.</string>
+    <string name="npc_leek_12">Llevo horas esperando a alguien… y no eras tú.</string>
+    <string name="npc_leek_13">Si ves algo raro por la calle, es normal. Sigue andando.</string>
+    <string name="npc_leek_14">Dicen que los hackers no duermen. Se nota en tus ojeras.</string>
     <string name="event_swarm">¡LLEGA UN ENJAMBRE!</string>
     <string name="event_drones">¡ATAQUE DE DRONES!</string>
     <string name="event_siege">¡TE ESTÁN CERCANDO!</string>
@@ -196,4 +210,24 @@
     <string name="perm_xp_name">Erudito</string>
     <string name="perm_xp_desc" formatted="false">+10% de experiencia por nivel</string>
     <string name="perm_xp_effect" formatted="false">+10% XP</string>
+    <string name="menu_lab">LABORATORIO</string>
+    <string name="lab_open">LAB</string>
+    <string name="lab_close">CERRAR</string>
+    <string name="lab_title">LABORATORIO</string>
+    <string name="lab_tab_enemies">Bichos</string>
+    <string name="lab_tab_bosses">Jefes</string>
+    <string name="lab_tab_items">Ítems</string>
+    <string name="lab_tab_events">Eventos</string>
+    <string name="lab_tab_weapons">Armas</string>
+    <string name="lab_tab_player">Jugador</string>
+    <string name="lab_count">Cantidad: x%1$d (tocá para cambiar)</string>
+    <string name="lab_mini_bosses">Mini-jefes</string>
+    <string name="lab_bosses">Jefes</string>
+    <string name="lab_weapons_hint">Da el arma, o un nivel más si ya la tenés</string>
+    <string name="lab_invincible_on">Invencible: SÍ</string>
+    <string name="lab_invincible_off">Invencible: NO</string>
+    <string name="lab_level_up">Subir nivel</string>
+    <string name="lab_heal">Curar</string>
+    <string name="lab_clear">Borrar bichos</string>
+    <string name="lab_combo">Sumar al combo</string>
 </resources>

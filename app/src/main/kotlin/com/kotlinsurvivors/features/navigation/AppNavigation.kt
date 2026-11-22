@@ -19,6 +19,7 @@ sealed class Screen(val route: String) {
     object Achievements : Screen("achievements")
     object Settings     : Screen("settings")
     object Room         : Screen("room")
+    object Lab          : Screen("lab")
 }
 
 @Composable
@@ -32,7 +33,8 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                 onStartGame        = { navController.navigate(Screen.Room.route) },
                 onOpenShop         = { navController.navigate(Screen.Shop.route) },
                 onOpenAchievements = { navController.navigate(Screen.Achievements.route) },
-                onOpenSettings     = { navController.navigate(Screen.Settings.route) }
+                onOpenSettings     = { navController.navigate(Screen.Settings.route) },
+                onOpenLab          = { navController.navigate(Screen.Lab.route) }
             )
         }
 
@@ -41,6 +43,14 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                 onNavigateToMenu = {
                     navController.popBackStack(Screen.MainMenu.route, inclusive = false)
                 }
+            )
+        }
+
+        // The laboratory: level 1 with nothing spawning by itself and a panel to test what is new.
+        composable(Screen.Lab.route) {
+            GameScreen(
+                laboratory       = true,
+                onNavigateToMenu = { navController.popBackStack(Screen.MainMenu.route, inclusive = false) }
             )
         }
 

@@ -49,6 +49,8 @@ import kotlinx.coroutines.withContext
 @Composable
 fun GameScreen(
     onNavigateToMenu: () -> Unit,
+    /** True in the laboratory: nothing spawns by itself, nothing is saved and the test panel is shown. */
+    laboratory: Boolean = false,
     viewModel: GameViewModel = hiltViewModel(),
     settingsViewModel: SettingsViewModel = hiltViewModel()
 ) {
@@ -67,7 +69,7 @@ fun GameScreen(
 
         LaunchedEffect(viewportWidth, viewportHeight) {
             if (viewportWidth > 0f && viewportHeight > 0f) {
-                viewModel.initEngine(viewportWidth, viewportHeight)
+                viewModel.initEngine(viewportWidth, viewportHeight, laboratory)
             }
         }
 
@@ -75,7 +77,7 @@ fun GameScreen(
             ?: remember { mutableStateOf(GameState()) })
 
         LaunchedEffect(gameState.isGameOver) {
-            if (gameState.isGameOver) {
+            if (gameState.isGameOver && !laboratory) {
                 viewModel.saveRunResult(gameState)
             }
         }
@@ -201,6 +203,14 @@ fun GameScreen(
             ChestWeaponBanner(
                 weapon   = weapon,
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 148.dp)
+            )
+        }
+
+        // ── Laboratory panel ──────────────────────────────────────────────────
+        if (laboratory && !gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp) {
+            LabPanel(
+                onCommand = viewModel::sendLabCommand,
+                modifier  = Modifier.align(Alignment.CenterEnd)
             )
         }
 

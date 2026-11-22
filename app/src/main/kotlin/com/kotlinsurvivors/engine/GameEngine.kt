@@ -27,6 +27,8 @@ import com.kotlinsurvivors.engine.rendering.RenderBuffer
 import com.kotlinsurvivors.engine.rendering.RenderKind
 import com.kotlinsurvivors.engine.rendering.RenderSnapshot
 import com.kotlinsurvivors.engine.ecs.components.VelocityComponent
+import com.kotlinsurvivors.engine.lab.LabActions
+import com.kotlinsurvivors.engine.lab.LabCommand
 import com.kotlinsurvivors.engine.rendering.Facing
 import kotlin.math.abs
 import kotlin.math.atan2
@@ -43,7 +45,12 @@ class GameEngine(
      */
     private val loadLevelMap: suspend () -> LevelMap? = { null },
     /** Where the sound effects go. Silent by default, so tests and tools need no audio. */
-    private val sounds: SoundEffects = SoundEffects.None
+    private val sounds: SoundEffects = SoundEffects.None,
+    /**
+     * The laboratory: nothing spawns by itself, the player cannot die (until the tester says so)
+     * and the tester's [LabCommand]s are applied. Never set in a real run.
+     */
+    private val laboratory: Boolean = false
 ) {
     companion object {
         const val TARGET_FPS     = 60
@@ -74,6 +81,17 @@ class GameEngine(
     private val eventDirector    = EventDirector(spawnSystem, WORLD_WIDTH, viewportWidth, viewportHeight)
 
     val joystick = VirtualJoystick()
+
+    // ── Laboratory ──────────────────────────────────────────────────────────
+    private val labQueue = java.util.concurrent.ConcurrentLinkedQueue<LabCommand>()
+    private var labInvincible = true
+
+    init { eventDirector.autoStart = !laboratory }
+
+    /** Queues a laboratory command; it runs on the engine thread at the start of the next tick. Ignored in a real run. */
+    fun sendLabCommand(command: LabCommand) {
+        if (laboratory) labQueue.add(command)
+    }
 
     private val _gameState = MutableStateFlow(GameState())
     val gameState: StateFlow<GameState> = _gameState.asStateFlow()
@@ -303,6 +321,9 @@ class GameEngine(
         eventBannerTimer     = 0f
         directorEvents.clear()
         eventDirector.reset()
+        eventDirector.autoStart = !laboratory
+        labQueue.clear()
+        labInvincible = true
         combo.reset()
         openRouletteRequested = false
         frameCount           = 0L
@@ -368,6 +389,7 @@ class GameEngine(
         }
         tickedSinceEmit = true
         frameEvents.clear()
+        if (laboratory) drainLabCommands()
 
         // Periodic stats log every LOG_EVERY frames
         if (frameCount % LOG_EVERY == 0L) {
@@ -406,6 +428,7 @@ class GameEngine(
             Log.e(TAG, world.getDiagnosticString()); throw e
         }
 
+        if (laboratory && labInvincible) LabActions.healFull(world)
         playEventSounds(frameEvents)
         combo.update(dt)
         world.players[world.getPlayerEntity()]?.let(combo::applyTo)
@@ -420,7 +443,7 @@ class GameEngine(
         }
 
         try {
-            if (spawnSystem.update(world, dt, elapsedTime).bossSpawned) sounds.play(Sound.BOSS_APPEAR)
+            if (!laboratory && spawnSystem.update(world, dt, elapsedTime).bossSpawned) sounds.play(Sound.BOSS_APPEAR)
             eventDirector.update(world, dt, elapsedTime, directorEvents)
             announceEvents()
         } catch (e: Exception) {
@@ -459,6 +482,36 @@ class GameEngine(
                 else -> {}
             }
         }
+    }
+
+    /** Applies what the tester asked for since the last tick. Laboratory only. */
+    private fun drainLabCommands() {
+        val pid = world.getPlayerEntity()
+        if (pid == -1) { labQueue.clear(); return }
+        val pt = world.transforms[pid] ?: return
+        val map = movementSystem.levelMap
+        while (true) {
+            val command = labQueue.poll() ?: break
+            CrashLogger.log("LAB: $command")
+            when (command) {
+                is LabCommand.SpawnEnemy    -> LabActions.spawnEnemies(world, map, command.type, command.count)
+                is LabCommand.SpawnMiniBoss -> LabActions.spawnEnemies(world, map, command.type, 1, miniBoss = true)
+                is LabCommand.DropPickup    -> LabActions.dropPickup(world, map, command.type)
+                is LabCommand.StartEvent    -> eventDirector.force(world, command.kind, pt.x, pt.y, elapsedTime, directorEvents)
+                is LabCommand.GiveWeapon    -> labGiveWeapon(pid, command.type)
+                is LabCommand.LevelUp       -> LabActions.levelUp(world, map)
+                is LabCommand.AddCombo      -> combo.onKills(command.kills)
+                is LabCommand.ClearEnemies  -> LabActions.clearEnemies(world)
+                is LabCommand.HealFull      -> LabActions.healFull(world)
+                is LabCommand.SetInvincible -> labInvincible = command.on
+            }
+        }
+    }
+
+    private fun labGiveWeapon(pid: Int, type: com.kotlinsurvivors.engine.ecs.components.WeaponType) {
+        val owned = world.weapons[pid]?.find { it.type == type }
+        if (owned == null) addWeapon(world, pid, type)
+        else if (owned.level < MAX_WEAPON_LEVEL) levelUpWeapon(world, pid, owned)
     }
 
     /** Shows the banner and plays the sound for every event the director started this frame. */
@@ -795,6 +848,21 @@ class GameEngine(
         return options
     }
 
+    /** Gives the player a weapon he does not have yet, with the extra parts some of them need. */
+    private fun addWeapon(world: World, pid: Int, wt: com.kotlinsurvivors.engine.ecs.components.WeaponType) {
+        val weapons = world.weapons[pid] ?: return
+        if (weapons.any { it.type == wt }) return
+        weapons.add(newWeaponComponent(wt))
+        when (wt) {
+            com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC ->
+                EntityFactory.addAuraWeapon(world, pid, wt, 100f, 8, 2f)
+            com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE  ->
+                EntityFactory.addOrbitalWeapon(world, pid, wt, 3, 120f, 1.8f, 20, 14f)
+            else -> {}
+        }
+        Log.d(TAG, "New weapon added: $wt. Total weapons: ${weapons.size}")
+    }
+
     private fun applyUpgrade(world: World, pid: Int, option: LevelUpOption) {
         val player  = world.players[pid]  ?: return
         val health  = world.healths[pid]  ?: return
@@ -809,17 +877,7 @@ class GameEngine(
             }
             UpgradeType.NEW_WEAPON -> {
                 val wt = option.weaponType ?: return
-                if (weapons.none { it.type == wt }) {
-                    weapons.add(newWeaponComponent(wt))
-                    when (wt) {
-                        com.kotlinsurvivors.engine.ecs.components.WeaponType.GARLIC ->
-                            EntityFactory.addAuraWeapon(world, pid, wt, 100f, 8, 2f)
-                        com.kotlinsurvivors.engine.ecs.components.WeaponType.BIBLE  ->
-                            EntityFactory.addOrbitalWeapon(world, pid, wt, 3, 120f, 1.8f, 20, 14f)
-                        else -> {}
-                    }
-                    Log.d(TAG, "New weapon added: $wt. Total weapons: ${weapons.size}")
-                }
+                addWeapon(world, pid, wt)
             }
             UpgradeType.STAT -> {
                 when (option.id) {

@@ -49,7 +49,8 @@ fun MainMenuScreen(
     onStartGame     : () -> Unit,
     onOpenShop      : () -> Unit,
     onOpenAchievements: () -> Unit,
-    onOpenSettings  : () -> Unit
+    onOpenSettings  : () -> Unit,
+    onOpenLab       : () -> Unit
 ) {
     val context = LocalContext.current
     val art by produceState<MenuArt?>(null, context) {
@@ -79,6 +80,17 @@ fun MainMenuScreen(
             .drawBehind { drawMenuBackground(art, step) },
         contentAlignment = Alignment.Center
     ) {
+        // The laboratory, for trying out what is new: small, in a corner, out of the way of the game's buttons.
+        OutlinedButton(
+            onClick  = onOpenLab,
+            modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
+            shape    = RoundedCornerShape(2.dp),
+            border   = BorderStroke(2.dp, Color(0xFF34DCF2).copy(alpha = 0.55f)),
+            colors   = ButtonDefaults.outlinedButtonColors(containerColor = Color(0xAA0A0A12), contentColor = Color(0xFF34DCF2))
+        ) {
+            Text(stringResource(R.string.menu_lab), fontSize = 12.sp, fontWeight = FontWeight.SemiBold)
+        }
+
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(0.dp),
