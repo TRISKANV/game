@@ -85,4 +85,16 @@ class SoundManager @Inject constructor(
         if (!synchronized(ready) { id in ready }) return
         pool.play(id, sound.volume, sound.volume, 1, 0, 1f)
     }
+
+    override fun startLoop(sound: Sound): Int {
+        if (!_enabled.value) return -1
+        val id = ids[sound] ?: return -1
+        if (!synchronized(ready) { id in ready }) return -1
+        val stream = pool.play(id, sound.volume, sound.volume, 1, -1, 1f)
+        return if (stream == 0) -1 else stream
+    }
+
+    override fun stopLoop(handle: Int) {
+        if (handle > 0) pool.stop(handle)
+    }
 }

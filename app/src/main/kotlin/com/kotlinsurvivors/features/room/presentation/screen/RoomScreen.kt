@@ -3,7 +3,9 @@ package com.kotlinsurvivors.features.room.presentation.screen
 import com.kotlinsurvivors.features.settings.presentation.viewmodel.SettingsViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.res.stringResource
 import com.kotlinsurvivors.R
 import android.graphics.Bitmap
@@ -15,7 +17,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.offset
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -37,6 +39,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
@@ -45,12 +48,26 @@ import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.input.VirtualJoystick
 import com.kotlinsurvivors.engine.rendering.SpriteAtlas
 import com.kotlinsurvivors.features.game.presentation.components.JoystickWidget
+import com.kotlinsurvivors.core.audio.LocalSoundEffects
+import com.kotlinsurvivors.core.audio.Sound
+import com.kotlinsurvivors.features.room.domain.Interactable
+import com.kotlinsurvivors.features.room.domain.RoomInteractables
+import com.kotlinsurvivors.features.room.domain.StoryCue
+import com.kotlinsurvivors.features.room.domain.StoryDirector
+import com.kotlinsurvivors.features.room.presentation.components.PhoneCallOverlay
+import com.kotlinsurvivors.features.room.presentation.components.StoryBubble
+import com.kotlinsurvivors.features.room.presentation.components.StoryButton
+import com.kotlinsurvivors.features.room.presentation.components.StoryDialogueBox
+import com.kotlinsurvivors.features.room.presentation.components.StoryFileViewer
+import com.kotlinsurvivors.features.room.presentation.components.StoryMission
+import com.kotlinsurvivors.features.room.presentation.components.StoryNotification
 import com.kotlinsurvivors.features.room.domain.RoomLayout
 import com.kotlinsurvivors.features.room.domain.RoomWorld
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
+import kotlin.math.PI
 import kotlin.math.min
+import kotlin.math.sin
 import kotlin.math.roundToInt
 
 /** Images the room needs: the painted room and the character sprite sheet. */
@@ -62,12 +79,17 @@ private class RoomArt(room: Bitmap, character: Bitmap) {
     val characterCellH = character.height / SpriteAtlas.PLAYER_ROWS
 }
 
+/** Clock for the small animations (rain, glow, flicker); read while drawing. */
+private class RoomFx { var time = 0f }
+
 /**
  * RoomScreen
  *
- * Level 0: the protagonist's room. The whole room fits on screen and the character
- * walks around with the same virtual joystick as the game. There are no enemies
- * or attacks. Stepping on the mat in front of the door calls [onExit].
+ * Level 0: the protagonist's room, where Chapter 0 «Sin conexión» is played. The whole room
+ * fits on screen and the character walks around with the same virtual joystick as the game.
+ * There are no enemies or attacks. The script itself lives in [StoryDirector]; this screen
+ * draws it, plays its sounds and hands the player's actions to it. [onExit] is called when
+ * the player has gone through the door at the end of the chapter.
  */
 @Composable
 fun RoomScreen(
@@ -76,6 +98,7 @@ fun RoomScreen(
 ) {
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
     val context = LocalContext.current.applicationContext
+    val sfx = LocalSoundEffects.current
     val art by produceState<RoomArt?>(null, context) {
         value = withContext(Dispatchers.IO) {
             try {
@@ -91,36 +114,78 @@ fun RoomScreen(
 
     val world    = remember { RoomWorld() }
     val joystick = remember { VirtualJoystick() }
+    val fx       = remember { RoomFx() }
+    // Lines of the script are string resources found by name, so both languages share one script.
+    val director = remember(context) {
+        StoryDirector(textOf = { key ->
+            val id = context.resources.getIdentifier(key, "string", context.packageName)
+            if (id == 0) key else context.getString(id)
+        })
+    }
     // The joystick size chosen in Settings applies here too, not only in the game.
     SideEffect { joystick.setScale(settings.joystickSize) }
     val latestOnExit by rememberUpdatedState(onExit)
 
     // Bumped every frame so the canvas below is drawn again.
     var frameTick by remember { mutableStateOf(0) }
+    var near by remember { mutableStateOf<Interactable?>(null) }
 
-    LaunchedEffect(world, joystick) {
-        var last = withFrameNanos { it }
-        while (true) {
-            val now = withFrameNanos { it }
-            val dt  = ((now - last) / NANOS_PER_SECOND).coerceAtMost(MAX_FRAME_SECONDS)
-            last = now
-
-            val input = joystick.getState()
-            world.update(dt, input.dx, input.dy)
-            frameTick++
-
-            if (world.hasReachedDoor) {
-                latestOnExit()
-                break
-            }
-        }
+    // Ambience: the fan, the rain and a quiet melody keep going for as long as the room is on screen.
+    DisposableEffect(sfx) {
+        val loops = listOf(Sound.AMB_FAN, Sound.AMB_RAIN, Sound.AMB_MUSIC).map { sfx.startLoop(it) }
+        sfx.play(Sound.AMB_STATIC)
+        onDispose { loops.forEach { sfx.stopLoop(it) } }
     }
 
-    // The hint fades away after a few seconds.
-    var showHint by remember { mutableStateOf(true) }
-    LaunchedEffect(Unit) {
-        delay(HINT_MS)
-        showHint = false
+    LaunchedEffect(world, joystick, director) {
+        var last = withFrameNanos { it }
+        var ringHandle = -1
+        var lastChars = 0
+        try {
+            while (true) {
+                val now = withFrameNanos { it }
+                val dt  = ((now - last) / NANOS_PER_SECOND).coerceAtMost(MAX_FRAME_SECONDS)
+                last = now
+                fx.time += dt
+
+                director.update(dt)
+
+                val input = joystick.getState()
+                if (director.canWalk) world.update(dt, input.dx, input.dy) else world.update(dt, 0f, 0f)
+                near = if (director.canWalk) RoomInteractables.near(world.x, world.y, director.usable) else null
+
+                for (cue in director.drainCues()) when (cue) {
+                    StoryCue.KEYS      -> sfx.play(Sound.AMB_KEYS)
+                    StoryCue.ANSWER    -> sfx.play(Sound.PHONE_ANSWER)
+                    StoryCue.HANGUP    -> sfx.play(Sound.PHONE_HANGUP)
+                    StoryCue.NOTIFY    -> sfx.play(Sound.NOTIFY_PING)
+                    StoryCue.FILE_OPEN -> sfx.play(Sound.UI_CLICK)
+                    StoryCue.GLITCH    -> { sfx.play(Sound.GLITCH); sfx.play(Sound.AMB_STATIC) }
+                    StoryCue.DOOR      -> sfx.play(Sound.DOOR_OPEN)
+                }
+
+                // The phone rings, on top of the ambience, for as long as the story says so.
+                if (director.phoneRinging && ringHandle < 0) ringHandle = sfx.startLoop(Sound.PHONE_RING).let { if (it < 0) Int.MAX_VALUE else it }
+                if (!director.phoneRinging && ringHandle != -1) {
+                    if (ringHandle != Int.MAX_VALUE) sfx.stopLoop(ringHandle)
+                    ringHandle = -1
+                }
+
+                // A soft blip every other letter while a line is being typed.
+                val chars = director.dialogue?.let { if (it.speaker != null) it.visibleChars else 0 } ?: 0
+                if (chars > lastChars && chars % 2 == 0) sfx.play(Sound.DIALOGUE_BLIP)
+                lastChars = chars
+
+                frameTick++
+
+                if (director.isDone) {
+                    latestOnExit()
+                    break
+                }
+            }
+        } finally {
+            if (ringHandle > 0 && ringHandle != Int.MAX_VALUE) sfx.stopLoop(ringHandle)
+        }
     }
 
     val density = LocalDensity.current
@@ -130,6 +195,10 @@ fun RoomScreen(
             .background(Color.Black)
     ) {
         val viewportWidth = with(density) { maxWidth.toPx() }
+        val viewportHeight = with(density) { maxHeight.toPx() }
+        val roomScale = min(viewportWidth / RoomLayout.WIDTH, viewportHeight / RoomLayout.HEIGHT)
+        val roomLeft = (viewportWidth - RoomLayout.WIDTH * roomScale) / 2f
+        val roomTop = (viewportHeight - RoomLayout.HEIGHT * roomScale) / 2f
 
         // The joystick widget reads plain (non-Compose) state, so the screen is recomposed every
         // frame, the same way the game screen is, to keep the knob following the finger.
@@ -143,40 +212,105 @@ fun RoomScreen(
         ) {
             @Suppress("UNUSED_VARIABLE")
             val redraw = frameTick            // reading it here makes the canvas redraw each frame
-            drawRoom(art, world)
+            drawRoom(art, world, director, fx.time, near)
         }
 
-        Box(modifier = Modifier.fillMaxSize()) {
-            JoystickWidget(
-                joystick = joystick,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(start = 40.dp, bottom = 40.dp)
-            )
-        }
-
-        if (showHint) {
+        // Text laid over the monitors during the glitch: "CONEXIÓN ESTABLECIDA / DISPOSITIVO IDENTIFICADO".
+        if (director.glitching && (fx.time * 9f).toInt() % 4 != 0) {
+            val fontPx = 6.5f * roomScale
             Text(
-                text       = stringResource(R.string.room_hint),
-                color      = Color(0xFFE0E0E0),
-                fontSize   = 13.sp,
-                fontWeight = FontWeight.SemiBold,
-                modifier   = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 16.dp)
-                    .background(Color(0xCC0A0A14), RoundedCornerShape(3.dp))
-                    .padding(horizontal = 14.dp, vertical = 6.dp)
+                text = stringResource(R.string.story_glitch),
+                color = Color(0xFF7CFFB0), fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
+                fontSize = with(density) { fontPx.toSp() }, lineHeight = with(density) { (fontPx * 1.3f).toSp() },
+                modifier = Modifier.offset(
+                    x = with(density) { (roomLeft + 262f * roomScale).toDp() },
+                    y = with(density) { (roomTop + 78f * roomScale).toDp() }
+                )
             )
         }
+
+        if (director.canWalk) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                JoystickWidget(
+                    joystick = joystick,
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(start = 40.dp, bottom = 40.dp)
+                )
+            }
+            val target = near
+            if (target != null) {
+                StoryButton(
+                    label = stringResource(R.string.story_interact),
+                    onClick = { director.interact(target) },
+                    strong = true,
+                    modifier = Modifier.align(Alignment.BottomEnd).padding(end = 40.dp, bottom = 40.dp)
+                )
+            }
+            director.bubbleKey?.let { key ->
+                StoryBubble(
+                    text = remember(key, settings) { context.getString(context.resources.getIdentifier(key, "string", context.packageName)) },
+                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)
+                )
+            }
+        }
+
+        if (director.showNotification) {
+            StoryNotification(
+                title = stringResource(R.string.story_notif_title),
+                body  = stringResource(R.string.story_notif_body),
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp)
+            )
+        }
+
+        if (director.missionVisible) {
+            StoryMission(objective = stringResource(R.string.story_mission_exit), showBanner = director.showMissionBanner)
+        }
+
+        if (director.isCallScreen) {
+            PhoneCallOverlay(
+                incoming = director.isCallIncoming,
+                ending = director.isCallEnding,
+                contactName = stringResource(R.string.story_contact),
+                onAnswer = { director.answer() }
+            )
+        }
+
+        if (director.fileOpen) {
+            StoryFileViewer(
+                fileName = stringResource(R.string.story_file_name),
+                text = stringResource(R.string.story_file_text),
+                onClose = { director.closeFile() }
+            )
+        }
+
+        director.dialogue?.let { StoryDialogueBox(runner = it, onTap = { director.tap() }) }
+
+        if (!director.missionVisible && !director.isDone) {
+            StoryButton(
+                label = stringResource(R.string.story_skip),
+                onClick = { director.skip() },
+                modifier = Modifier.align(Alignment.TopEnd).padding(12.dp).offset(y = if (director.showNotification) 78.dp else 0.dp)
+            )
+        }
+
+        // Fade from and to black.
+        val black = director.blackAlpha
+        if (black > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = black)))
     }
 }
 
 private const val NANOS_PER_SECOND = 1_000_000_000f
 private const val MAX_FRAME_SECONDS = 0.05f      // a long pause must not make the character jump
-private const val HINT_MS = 6000L
 private const val WALK_FRAMES_PER_SECOND = 9f
 
-private fun DrawScope.drawRoom(art: RoomArt?, world: RoomWorld) {
+// Places in the room picture (pixels of the 640x360 image) that the story animates.
+private val MONITORS = RoomLayout.Box(258f, 72f, 122f, 33f)
+private val WINDOW   = RoomLayout.Box(440f, 18f, 90f, 80f)
+private const val PHONE_X = 122f
+private const val PHONE_Y = 194f
+
+private fun DrawScope.drawRoom(art: RoomArt?, world: RoomWorld, story: StoryDirector, time: Float, near: Interactable?) {
     drawRect(Color.Black, size = size)
     if (art == null) return
 
@@ -194,6 +328,43 @@ private fun DrawScope.drawRoom(art: RoomArt?, world: RoomWorld) {
         filterQuality = FilterQuality.None
     )
 
+    // Rectangle in room pixels -> screen.
+    fun rx(v: Float) = originX + v * scale
+    fun ry(v: Float) = originY + v * scale
+
+    // ── Monitors: a soft pulse while a file waits, a flicker during the glitch ──
+    if (story.monitorPulsing) {
+        val a = 0.12f + 0.12f * (0.5f + 0.5f * sin(time * 2f * PI.toFloat() * 1.4f))
+        drawRect(Color(0xFF4CE0A0).copy(alpha = a), Offset(rx(MONITORS.x), ry(MONITORS.y)), Size(MONITORS.w * scale, MONITORS.h * scale))
+    }
+    if (story.glitching) {
+        val step = (time * 24f).toInt()
+        drawRect(Color(0xFF020A06), Offset(rx(MONITORS.x), ry(MONITORS.y)), Size(MONITORS.w * scale, MONITORS.h * scale))
+        for (k in 0 until 7) {
+            val r = ((step * 31 + k * 17) % 97) / 97f
+            val r2 = ((step * 13 + k * 29) % 89) / 89f
+            val bar = if (k % 3 == 0) Color(0xFFFFFFFF) else if (k % 3 == 1) Color(0xFF30E0FF) else Color(0xFFFF40C0)
+            drawRect(
+                bar.copy(alpha = 0.55f),
+                Offset(rx(MONITORS.x + r2 * 40f), ry(MONITORS.y + r * (MONITORS.h - 4f))),
+                Size((30f + r * 70f) * scale, (1f + r2 * 3f) * scale)
+            )
+        }
+    }
+
+    // ── The mobile phone on the nightstand ──
+    val ringing = story.phoneRinging
+    val shake = if (ringing) (if ((time * 30f).toInt() % 2 == 0) 1f else -1f) else 0f
+    if (ringing) {
+        val a = 0.25f + 0.25f * (0.5f + 0.5f * sin(time * 2f * PI.toFloat() * 2.5f))
+        drawCircle(Color(0xFF58C7FF).copy(alpha = a), radius = 16f * scale, center = Offset(rx(PHONE_X + 6f), ry(PHONE_Y + 3f)))
+    }
+    drawRect(Color(0xFF120A12), Offset(rx(PHONE_X - 1f + shake), ry(PHONE_Y - 1f)), Size(14f * scale, 9f * scale))
+    drawRect(
+        if (ringing) Color(0xFF9BE3FF) else Color(0xFF28324A),
+        Offset(rx(PHONE_X + shake), ry(PHONE_Y)), Size(12f * scale, 7f * scale)
+    )
+
     val cellW = art.characterCellW
     val cellH = art.characterCellH
     val column = if (world.isMoving)
@@ -201,8 +372,8 @@ private fun DrawScope.drawRoom(art: RoomArt?, world: RoomWorld) {
     else 0
 
     // The sprite cell's bottom edge is the feet line; world.x / world.y are the feet.
-    val feetScreenX = originX + world.x * scale
-    val feetScreenY = originY + world.y * scale
+    val feetScreenX = rx(world.x)
+    val feetScreenY = ry(world.y)
     val spriteW = cellW * scale
     val spriteH = cellH * scale
 
@@ -218,6 +389,23 @@ private fun DrawScope.drawRoom(art: RoomArt?, world: RoomWorld) {
         dstOffset     = IntOffset((feetScreenX - spriteW / 2f).roundToInt(), (feetScreenY - spriteH).roundToInt()),
         dstSize       = IntSize(spriteW.roundToInt(), spriteH.roundToInt()),
         filterQuality = FilterQuality.None
+    )
+
+    // ── Rain on the window ──
+    for (i in 0 until 16) {
+        val x = WINDOW.x + 4f + (i * 37 % 82)
+        val y = WINDOW.y + 4f + ((time * (55f + i % 4 * 12f) + i * 23f) % (WINDOW.h - 8f))
+        drawLine(Color(0x99A8C8FF), Offset(rx(x), ry(y)), Offset(rx(x - 1.2f), ry(y + 5f)), strokeWidth = 1f * scale)
+    }
+
+    // ── Dark corners, so the room feels like a small lit island at night ──
+    drawRect(
+        brush = Brush.radialGradient(
+            colors = listOf(Color.Transparent, Color(0x99000000)),
+            center = Offset(originX + roomW / 2f, originY + roomH / 2f),
+            radius = roomW * 0.62f
+        ),
+        topLeft = Offset(originX, originY), size = Size(roomW, roomH)
     )
 }
 

@@ -1,0 +1,248 @@
+package com.kotlinsurvivors.features.room.domain
+
+import com.kotlinsurvivors.features.room.domain.Beat.Say
+import com.kotlinsurvivors.features.room.domain.Beat.Silence
+import com.kotlinsurvivors.features.room.domain.Speaker.ASSISTANT
+import com.kotlinsurvivors.features.room.domain.Speaker.PROTAGONIST
+
+/** Chapter 0 goes through these steps in order. */
+enum class StoryPhase {
+    INTRO,            // black screen with the ambience, then the room fades in
+    WAKE,             // "¿Qué hora es...?"
+    EXPLORE,          // free walking; the phone has not rung yet
+    RINGING,          // the phone rings: go and answer it
+    CALL1_INCOMING,   // incoming-call screen, waiting for the player to answer
+    CALL1_TALK,
+    CALL1_ENDING,     // hang-up animation
+    FILE_WAIT,        // notification on the computer: go and open the file
+    FILE_OPEN,        // the text of NO_ABRIR.txt
+    POST_FILE,
+    GLITCH,           // the monitor flickers
+    POST_GLITCH,
+    CALL2_INCOMING,
+    CALL2_TALK,
+    CALL2_ENDING,
+    FINAL,
+    MISSION,          // "Sal de tu habitación": the door works now
+    LEAVING,          // fading out to the next place
+    DONE
+}
+
+/** One-shot sounds the screen plays when the story asks for them. */
+enum class StoryCue { KEYS, ANSWER, HANGUP, NOTIFY, FILE_OPEN, GLITCH, DOOR }
+
+/**
+ * The script of Chapter 0 «Sin conexión» as a small state machine.
+ *
+ * It knows nothing about Android or drawing: the screen feeds it time ([update]), the player's
+ * actions ([interact], [answer], [tap], [closeFile], [skip]) and reads back what to show
+ * (the properties) and which sounds to play ([drainCues]). There are no enemies in this level.
+ */
+class StoryDirector(
+    private val textOf: (String) -> String = { it },
+    private val exploreSeconds: Float = EXPLORE_SECONDS
+) {
+    var phase = StoryPhase.INTRO
+        private set
+
+    /** Dialogue that takes the screen (wake-up, thoughts after the file, the two calls). */
+    var dialogue: DialogueRunner? = null
+        private set
+
+    /** Optional remark about an object; it never stops the player from walking. */
+    var bubbleKey: String? = null
+        private set
+
+    /** Seconds since the mission appeared; drives the "MISIÓN ACTUALIZADA" banner. */
+    var missionClock = 0f
+        private set
+
+    /** Seconds since the notification arrived. */
+    var notificationClock = 0f
+        private set
+
+    private var clock = 0f
+    private var bubbleClock = 0f
+    private var keysPlayed = 0
+    private val cues = ArrayDeque<StoryCue>()
+
+    // ── What to show ─────────────────────────────────────────────────────
+    /** 1 = fully black. The intro fades the room in; leaving fades it out. */
+    val blackAlpha: Float
+        get() = when (phase) {
+            StoryPhase.INTRO   -> if (clock < BLACK_SECONDS) 1f else (1f - (clock - BLACK_SECONDS) / FADE_IN_SECONDS).coerceIn(0f, 1f)
+            StoryPhase.LEAVING -> (clock / LEAVE_SECONDS).coerceIn(0f, 1f)
+            StoryPhase.DONE    -> 1f
+            else               -> 0f
+        }
+
+    val phoneRinging: Boolean
+        get() = phase == StoryPhase.RINGING || phase == StoryPhase.CALL1_INCOMING || phase == StoryPhase.CALL2_INCOMING
+
+    val isCallIncoming: Boolean get() = phase == StoryPhase.CALL1_INCOMING || phase == StoryPhase.CALL2_INCOMING
+    val isCallTalking: Boolean get() = phase == StoryPhase.CALL1_TALK || phase == StoryPhase.CALL2_TALK
+    val isCallEnding: Boolean get() = phase == StoryPhase.CALL1_ENDING || phase == StoryPhase.CALL2_ENDING
+    val isCallScreen: Boolean get() = isCallIncoming || isCallTalking || isCallEnding
+
+    /** The notification banner is up for a few seconds, the monitor keeps pulsing until the file is opened. */
+    val showNotification: Boolean get() = phase == StoryPhase.FILE_WAIT && notificationClock < NOTIFICATION_SECONDS
+    val monitorPulsing: Boolean get() = phase == StoryPhase.FILE_WAIT
+
+    val fileOpen: Boolean get() = phase == StoryPhase.FILE_OPEN
+    val glitching: Boolean get() = phase == StoryPhase.GLITCH
+
+    val missionVisible: Boolean get() = phase == StoryPhase.MISSION || phase == StoryPhase.LEAVING
+    val showMissionBanner: Boolean get() = missionVisible && missionClock < BANNER_SECONDS
+
+    val isDone: Boolean get() = phase == StoryPhase.DONE
+
+    /** Whether the joystick and the use button work. */
+    val canWalk: Boolean
+        get() = phase == StoryPhase.EXPLORE || phase == StoryPhase.RINGING ||
+                phase == StoryPhase.FILE_WAIT || phase == StoryPhase.MISSION
+
+    /** The objects the player may use right now. */
+    val usable: Set<Interactable>
+        get() = when (phase) {
+            StoryPhase.EXPLORE   -> OPTIONAL
+            StoryPhase.RINGING   -> OPTIONAL + Interactable.PHONE
+            StoryPhase.FILE_WAIT -> OPTIONAL
+            StoryPhase.MISSION   -> OPTIONAL + Interactable.DOOR
+            else                 -> emptySet()
+        }
+
+    fun drainCues(): List<StoryCue> = cues.toList().also { cues.clear() }
+
+    // ── Time ─────────────────────────────────────────────────────────────
+    fun update(dt: Float) {
+        clock += dt
+        if (bubbleKey != null) {
+            bubbleClock += dt
+            if (bubbleClock >= BUBBLE_SECONDS) bubbleKey = null
+        }
+        dialogue?.update(dt)
+
+        when (phase) {
+            StoryPhase.INTRO -> {
+                if (keysPlayed == 0 && clock >= 0.6f) { keysPlayed = 1; cues += StoryCue.KEYS }
+                if (keysPlayed == 1 && clock >= 1.9f) { keysPlayed = 2; cues += StoryCue.KEYS }
+                if (clock >= BLACK_SECONDS + FADE_IN_SECONDS) {
+                    startDialogue(StoryPhase.WAKE, listOf(
+                        Say(PROTAGONIST, "story_wake_1"), Silence(700), Say(PROTAGONIST, "story_wake_2")))
+                }
+            }
+            StoryPhase.WAKE         -> if (dialogue.finished()) enter(StoryPhase.EXPLORE)
+            StoryPhase.EXPLORE      -> if (clock >= exploreSeconds) enter(StoryPhase.RINGING)
+            StoryPhase.CALL1_TALK   -> if (dialogue.finished()) { cues += StoryCue.HANGUP; dialogue = null; enter(StoryPhase.CALL1_ENDING) }
+            StoryPhase.CALL1_ENDING -> if (clock >= HANGUP_SECONDS) { cues += StoryCue.NOTIFY; notificationClock = 0f; enter(StoryPhase.FILE_WAIT) }
+            StoryPhase.FILE_WAIT    -> notificationClock += dt
+            StoryPhase.POST_FILE    -> if (dialogue.finished()) { cues += StoryCue.GLITCH; enter(StoryPhase.GLITCH) }
+            StoryPhase.GLITCH       -> if (clock >= GLITCH_SECONDS) startDialogue(StoryPhase.POST_GLITCH, listOf(Say(PROTAGONIST, "story_post_3")))
+            StoryPhase.POST_GLITCH  -> if (dialogue.finished()) { dialogue = null; enter(StoryPhase.CALL2_INCOMING) }
+            StoryPhase.CALL2_TALK   -> if (dialogue.finished()) { cues += StoryCue.HANGUP; dialogue = null; enter(StoryPhase.CALL2_ENDING) }
+            StoryPhase.CALL2_ENDING -> if (clock >= HANGUP_SECONDS) startDialogue(StoryPhase.FINAL, listOf(Say(PROTAGONIST, "story_final")))
+            StoryPhase.FINAL        -> if (dialogue.finished()) startMission()
+            StoryPhase.MISSION      -> missionClock += dt
+            StoryPhase.LEAVING      -> { missionClock += dt; if (clock >= LEAVE_SECONDS) enter(StoryPhase.DONE) }
+            else -> Unit
+        }
+    }
+
+    // ── Player actions ───────────────────────────────────────────────────
+    /** The player used [target]. Returns false if it is not available now. */
+    fun interact(target: Interactable): Boolean {
+        if (target !in usable) return false
+        when {
+            target == Interactable.PHONE -> enter(StoryPhase.CALL1_INCOMING)
+            target == Interactable.COMPUTER && phase == StoryPhase.FILE_WAIT -> {
+                cues += StoryCue.FILE_OPEN
+                enter(StoryPhase.FILE_OPEN)
+            }
+            target == Interactable.DOOR -> { cues += StoryCue.DOOR; enter(StoryPhase.LEAVING) }
+            else -> {
+                bubbleKey = when (target) {
+                    Interactable.COMPUTER -> "story_obj_computer"
+                    Interactable.DESK     -> "story_obj_desk"
+                    else                  -> "story_obj_window"
+                }
+                bubbleClock = 0f
+            }
+        }
+        return true
+    }
+
+    /** The player pressed "answer" on the incoming-call screen. */
+    fun answer() {
+        when (phase) {
+            StoryPhase.CALL1_INCOMING -> { cues += StoryCue.ANSWER; startDialogue(StoryPhase.CALL1_TALK, CALL1) }
+            StoryPhase.CALL2_INCOMING -> { cues += StoryCue.ANSWER; startDialogue(StoryPhase.CALL2_TALK, CALL2) }
+            else -> Unit
+        }
+    }
+
+    /** A tap on the dialogue box. */
+    fun tap() { dialogue?.tap() }
+
+    /** The player closed NO_ABRIR.txt. */
+    fun closeFile() {
+        if (phase != StoryPhase.FILE_OPEN) return
+        startDialogue(StoryPhase.POST_FILE, listOf(
+            Say(PROTAGONIST, "story_post_1"), Silence(600), Say(PROTAGONIST, "story_post_2")))
+    }
+
+    /** Jumps straight to the mission, for players who have seen the introduction already. */
+    fun skip() {
+        if (phase == StoryPhase.MISSION || phase == StoryPhase.LEAVING || phase == StoryPhase.DONE) return
+        dialogue = null
+        bubbleKey = null
+        startMission()
+    }
+
+    // ── Internals ────────────────────────────────────────────────────────
+    private fun DialogueRunner?.finished() = this == null || isFinished
+
+    private fun enter(next: StoryPhase) {
+        phase = next
+        clock = 0f
+    }
+
+    private fun startDialogue(next: StoryPhase, beats: List<Beat>) {
+        dialogue = DialogueRunner(beats, textOf)
+        enter(next)
+    }
+
+    private fun startMission() {
+        dialogue = null
+        missionClock = 0f
+        cues += StoryCue.NOTIFY
+        enter(StoryPhase.MISSION)
+    }
+
+    companion object {
+        const val EXPLORE_SECONDS = 18f
+        const val BLACK_SECONDS = 2.8f
+        const val FADE_IN_SECONDS = 1.6f
+        const val HANGUP_SECONDS = 1.3f
+        const val GLITCH_SECONDS = 2.4f
+        const val LEAVE_SECONDS = 1.2f
+        const val NOTIFICATION_SECONDS = 4f
+        const val BANNER_SECONDS = 3.5f
+        const val BUBBLE_SECONDS = 3.5f
+
+        private val OPTIONAL = setOf(Interactable.COMPUTER, Interactable.DESK, Interactable.WINDOW)
+
+        private fun a(n: Int, prefix: String) = Say(ASSISTANT, "story_${prefix}_%02d".format(n))
+        private fun p(n: Int, prefix: String) = Say(PROTAGONIST, "story_${prefix}_%02d".format(n))
+
+        val CALL1: List<Beat> = listOf(
+            a(1, "call1"), p(2, "call1"), a(3, "call1"), p(4, "call1"), a(5, "call1"), p(6, "call1"),
+            a(7, "call1"), p(8, "call1"), a(9, "call1"), Silence(900), a(10, "call1"), p(11, "call1"),
+            a(12, "call1"), p(13, "call1"), a(14, "call1")
+        )
+
+        val CALL2: List<Beat> = listOf(
+            a(1, "call2"), p(2, "call2"), a(3, "call2"), p(4, "call2"), a(5, "call2"), p(6, "call2"),
+            a(7, "call2"), p(8, "call2"), a(9, "call2")
+        )
+    }
+}

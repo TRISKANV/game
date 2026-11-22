@@ -61,12 +61,34 @@ enum class Sound(val file: String, val minGapMs: Long = 0L, val volume: Float = 
     UI_CLICK      ("ui_click",       40,  0.7f),
     UI_BACK       ("ui_back",        40,  0.7f),
     UI_BUY        ("ui_buy",         80,  0.8f),
-    UI_TOGGLE     ("ui_toggle",      40,  0.7f);
+    UI_TOGGLE     ("ui_toggle",      40,  0.7f),
+
+    // Chapter 0, the room: ambience loops (see SoundEffects.startLoop), the phone and the computer
+    AMB_FAN       ("amb_fan",        0,   0.35f),
+    AMB_RAIN      ("amb_rain",       0,   0.4f),
+    AMB_MUSIC     ("amb_music",      0,   0.3f),
+    AMB_KEYS      ("amb_keys",       0,   0.5f),
+    AMB_STATIC    ("amb_static",     0,   0.35f),
+    PHONE_RING    ("phone_ring",     0,   1f),
+    PHONE_ANSWER  ("phone_answer",   0,   0.8f),
+    PHONE_HANGUP  ("phone_hangup",   0,   0.8f),
+    NOTIFY_PING   ("notify_ping",    0,   0.9f),
+    GLITCH        ("glitch",         0,   0.8f),
+    DOOR_OPEN     ("door_open",      0,   0.8f),
+    DIALOGUE_BLIP ("dialogue_blip",  35,  0.3f);
 }
 
 /** Where the game asks for a sound to be played. Safe to call from any thread. */
 interface SoundEffects {
     fun play(sound: Sound)
+
+    /**
+     * Starts [sound] repeating until [stopLoop] is called with the returned handle (-1 when nothing
+     * could be started, which [stopLoop] accepts). For ambience and the ringing phone.
+     */
+    fun startLoop(sound: Sound): Int = -1
+
+    fun stopLoop(handle: Int) = Unit
 
     /** Plays nothing: for tests and for anything that runs without audio. */
     object None : SoundEffects {

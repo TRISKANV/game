@@ -1,0 +1,278 @@
+package com.kotlinsurvivors.features.room.presentation.components
+
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.kotlinsurvivors.R
+import com.kotlinsurvivors.features.room.domain.DialogueRunner
+import com.kotlinsurvivors.features.room.domain.Speaker
+import kotlinx.coroutines.delay
+
+private val PanelColor  = Color(0xEE0A0A14)
+private val Protagonist = Color(0xFFFFD36B)
+private val Assistant   = Color(0xFF6BD3FF)
+
+/** Bottom box of the story: speaker name, text typed letter by letter, and a tap anywhere to go on. */
+@Composable
+fun StoryDialogueBox(runner: DialogueRunner, onTap: () -> Unit, modifier: Modifier = Modifier) {
+    // The whole screen catches the tap, not only the box: the player never has to aim.
+    Box(
+        modifier = modifier
+            .fillMaxSize()
+            .pointerInput(runner) { detectTapGestures { onTap() } }
+    ) {
+        val speaker = runner.speaker ?: return@Box          // a silence: nothing on screen
+        val name = stringResource(
+            if (speaker == Speaker.PROTAGONIST) R.string.story_speaker_protagonist else R.string.story_speaker_assistant
+        )
+        Column(
+            modifier = Modifier
+                .align(Alignment.BottomCenter)
+                .padding(bottom = 14.dp, start = 24.dp, end = 24.dp)
+                .fillMaxWidth(0.82f)
+                .heightIn(min = 92.dp)
+                .background(PanelColor, RoundedCornerShape(4.dp))
+                .border(1.dp, if (speaker == Speaker.PROTAGONIST) Protagonist else Assistant, RoundedCornerShape(4.dp))
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(
+                text = name, color = if (speaker == Speaker.PROTAGONIST) Protagonist else Assistant,
+                fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace
+            )
+            Text(text = runner.visibleText, color = Color.White, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
+            if (runner.isLineComplete) {
+                Text(
+                    text = stringResource(R.string.story_tap_continue), color = Color(0xFF8A8FA8), fontSize = 10.sp,
+                    modifier = Modifier.align(Alignment.End)
+                )
+            }
+        }
+    }
+}
+
+/** A remark about an object. It does not take the screen: the player keeps walking. */
+@Composable
+fun StoryBubble(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text, color = Protagonist, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
+        textAlign = TextAlign.Center,
+        modifier = modifier
+            .widthIn(max = 380.dp)
+            .background(PanelColor, RoundedCornerShape(4.dp))
+            .border(1.dp, Protagonist, RoundedCornerShape(4.dp))
+            .padding(horizontal = 12.dp, vertical = 8.dp)
+    )
+}
+
+/**
+ * The mobile phone during a call: contact name, incoming-call state with a vibration,
+ * the answer button, the "on call" state and the hang-up. There is no picture of the caller.
+ */
+@Composable
+fun PhoneCallOverlay(
+    incoming: Boolean,
+    ending: Boolean,
+    contactName: String,
+    onAnswer: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val vibration = rememberInfiniteTransition(label = "vibration")
+    val shake by vibration.animateFloat(
+        initialValue = -2.5f, targetValue = 2.5f,
+        animationSpec = infiniteRepeatable(tween(70), RepeatMode.Reverse), label = "shake"
+    )
+    val pulse by vibration.animateFloat(
+        initialValue = 0.45f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(700), RepeatMode.Reverse), label = "pulse"
+    )
+    val fade by animateFloatAsState(if (ending) 0f else 1f, tween(1000), label = "hangup")
+    val shrink by animateFloatAsState(if (ending) 0.86f else 1f, tween(1000), label = "hangupScale")
+
+    Box(modifier = modifier.fillMaxSize().background(Color(0x990A0C14)), contentAlignment = Alignment.TopCenter) {
+        Column(
+            modifier = Modifier
+                .padding(top = 10.dp)
+                .fillMaxHeight(0.62f)
+                .aspectRatio(0.62f)
+                .graphicsLayer {
+                    rotationZ = if (incoming) shake else 0f
+                    alpha = fade
+                    scaleX = shrink; scaleY = shrink
+                }
+                .background(Color(0xFF12141F), RoundedCornerShape(14.dp))
+                .border(2.dp, Color(0xFF3A3F5C), RoundedCornerShape(14.dp))
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.SpaceEvenly
+        ) {
+            Text(
+                text = stringResource(
+                    when {
+                        ending   -> R.string.story_call_ended
+                        incoming -> R.string.story_incoming
+                        else     -> R.string.story_in_call
+                    }
+                ),
+                color = Color(0xFFB8BED8), fontSize = 12.sp, fontFamily = FontFamily.Monospace,
+                modifier = Modifier.graphicsLayer { alpha = if (incoming) pulse else 1f }
+            )
+            Box(
+                modifier = Modifier.size(54.dp).background(Color(0xFF2A2E46), CircleShape),
+                contentAlignment = Alignment.Center
+            ) { Text("?", color = Color(0xFF6C7396), fontSize = 26.sp, fontWeight = FontWeight.Bold) }
+            Text(
+                text = contactName, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
+                fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center
+            )
+            if (incoming) {
+                Box(
+                    modifier = Modifier
+                        .background(Color(0xFF2EA84F), RoundedCornerShape(24.dp))
+                        .pointerInput(Unit) { detectTapGestures { onAnswer() } }
+                        .padding(horizontal = 22.dp, vertical = 10.dp)
+                ) {
+                    Text(
+                        stringResource(R.string.story_answer), color = Color.White,
+                        fontSize = 13.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** The notification that pops up on the computer when a file arrives. */
+@Composable
+fun StoryNotification(title: String, body: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .widthIn(max = 240.dp)
+            .background(PanelColor, RoundedCornerShape(4.dp))
+            .border(1.dp, Color(0xFF4CE0A0), RoundedCornerShape(4.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(3.dp)
+    ) {
+        Text(title, color = Color(0xFF4CE0A0), fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        Text(body, color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+    }
+}
+
+/** NO_ABRIR.txt in a terminal-like window; the text is typed out and CLOSE returns to the room. */
+@Composable
+fun StoryFileViewer(fileName: String, text: String, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    var shown by remember(text) { mutableStateOf(0) }
+    LaunchedEffect(text) {
+        while (shown < text.length) {
+            delay(24)
+            shown += 2
+        }
+    }
+    Box(modifier = modifier.fillMaxSize().background(Color(0xCC03060A)), contentAlignment = Alignment.Center) {
+        Column(
+            modifier = Modifier
+                .fillMaxHeight(0.86f)
+                .fillMaxWidth(0.72f)
+                .background(Color(0xFF05100C), RoundedCornerShape(4.dp))
+                .border(1.dp, Color(0xFF2FAF6F), RoundedCornerShape(4.dp))
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(fileName, color = Color(0xFF4CE0A0), fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
+                Text(
+                    text = text.take(shown), color = Color(0xFFB6FFD8), fontSize = 12.sp,
+                    fontFamily = FontFamily.Monospace, lineHeight = 16.sp
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .border(1.dp, Color(0xFF2FAF6F), RoundedCornerShape(3.dp))
+                    .pointerInput(Unit) { detectTapGestures { onClose() } }
+                    .padding(horizontal = 14.dp, vertical = 6.dp)
+            ) { Text(stringResource(R.string.story_file_close), color = Color(0xFF4CE0A0), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+/** The current objective, top left, and the banner announcing it. */
+@Composable
+fun StoryMission(objective: String, showBanner: Boolean, modifier: Modifier = Modifier) {
+    Box(modifier = modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopStart)
+                .padding(12.dp)
+                .background(PanelColor, RoundedCornerShape(4.dp))
+                .border(1.dp, Color(0xFFFFD36B), RoundedCornerShape(4.dp))
+                .padding(horizontal = 10.dp, vertical = 6.dp)
+        ) {
+            Text(stringResource(R.string.story_mission_label), color = Color(0xFFFFD36B), fontSize = 9.sp, fontWeight = FontWeight.Bold)
+            Text(objective, color = Color.White, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
+        }
+        if (showBanner) {
+            Text(
+                text = stringResource(R.string.story_mission_updated),
+                color = Color(0xFFFFD36B), fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
+                modifier = Modifier
+                    .align(Alignment.TopCenter)
+                    .padding(top = 28.dp)
+                    .background(PanelColor, RoundedCornerShape(4.dp))
+                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            )
+        }
+    }
+}
+
+/** A small round button with a label, used for USE and SKIP. */
+@Composable
+fun StoryButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, strong: Boolean = false) {
+    Box(
+        modifier = modifier
+            .background(if (strong) Color(0xFF2EA84F) else Color(0x99101420), RoundedCornerShape(if (strong) 40.dp else 4.dp))
+            .border(1.dp, if (strong) Color(0xFF7CFFA0) else Color(0xFF3A3F5C), RoundedCornerShape(if (strong) 40.dp else 4.dp))
+            .pointerInput(onClick) { detectTapGestures { onClick() } }
+            .padding(horizontal = if (strong) 24.dp else 10.dp, vertical = if (strong) 18.dp else 5.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(label, color = Color.White, fontSize = if (strong) 15.sp else 11.sp, fontWeight = FontWeight.Bold)
+    }
+}
