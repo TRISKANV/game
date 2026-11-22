@@ -104,6 +104,12 @@ class StoryDirectorTest {
         assertEquals(StoryPhase.EXPLORE, s.phase); assertTrue(s.canWalk)
     }
 
+    @Test fun noFinishedDialogueIsLeftOnScreenWhenTheGameIsFree() {
+        val s = director(); s.run(10f); s.talkThrough()
+        assertTrue(s.canWalk)
+        assertNull(s.dialogue)
+    }
+
     @Test fun optionalRemarksNeverStopTheGame() {
         val s = director(); s.run(10f); s.talkThrough()
         assertTrue(s.interact(Interactable.COMPUTER))

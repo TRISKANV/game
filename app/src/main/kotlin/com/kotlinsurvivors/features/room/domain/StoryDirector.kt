@@ -204,6 +204,8 @@ class StoryDirector(
     private fun enter(next: StoryPhase) {
         phase = next
         clock = 0f
+        // A dialogue that has ended must not linger: the screen would keep catching the player's touches.
+        if (dialogue?.isFinished == true) dialogue = null
     }
 
     private fun startDialogue(next: StoryPhase, beats: List<Beat>) {

@@ -284,7 +284,7 @@ fun RoomScreen(
             )
         }
 
-        director.dialogue?.let { StoryDialogueBox(runner = it, onTap = { director.tap() }) }
+        director.dialogue?.takeIf { !it.isFinished }?.let { StoryDialogueBox(runner = it, onTap = { director.tap() }) }
 
         if (!director.missionVisible && !director.isDone) {
             StoryButton(

@@ -28,6 +28,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -114,6 +115,7 @@ fun PhoneCallOverlay(
     onAnswer: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val latestOnAnswer by rememberUpdatedState(onAnswer)
     val vibration = rememberInfiniteTransition(label = "vibration")
     val shake by vibration.animateFloat(
         initialValue = -2.5f, targetValue = 2.5f,
@@ -166,7 +168,7 @@ fun PhoneCallOverlay(
                 Box(
                     modifier = Modifier
                         .background(Color(0xFF2EA84F), RoundedCornerShape(24.dp))
-                        .pointerInput(Unit) { detectTapGestures { onAnswer() } }
+                        .pointerInput(Unit) { detectTapGestures { latestOnAnswer() } }
                         .padding(horizontal = 22.dp, vertical = 10.dp)
                 ) {
                     Text(
@@ -198,6 +200,7 @@ fun StoryNotification(title: String, body: String, modifier: Modifier = Modifier
 /** NO_ABRIR.txt in a terminal-like window; the text is typed out and CLOSE returns to the room. */
 @Composable
 fun StoryFileViewer(fileName: String, text: String, onClose: () -> Unit, modifier: Modifier = Modifier) {
+    val latestOnClose by rememberUpdatedState(onClose)
     var shown by remember(text) { mutableStateOf(0) }
     LaunchedEffect(text) {
         while (shown < text.length) {
@@ -226,7 +229,7 @@ fun StoryFileViewer(fileName: String, text: String, onClose: () -> Unit, modifie
                 modifier = Modifier
                     .align(Alignment.End)
                     .border(1.dp, Color(0xFF2FAF6F), RoundedCornerShape(3.dp))
-                    .pointerInput(Unit) { detectTapGestures { onClose() } }
+                    .pointerInput(Unit) { detectTapGestures { latestOnClose() } }
                     .padding(horizontal = 14.dp, vertical = 6.dp)
             ) { Text(stringResource(R.string.story_file_close), color = Color(0xFF4CE0A0), fontSize = 12.sp, fontWeight = FontWeight.Bold) }
         }
@@ -265,11 +268,14 @@ fun StoryMission(objective: String, showBanner: Boolean, modifier: Modifier = Mo
 /** A small round button with a label, used for USE and SKIP. */
 @Composable
 fun StoryButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, strong: Boolean = false) {
+    // The screen is recomposed every frame, which hands over a new onClick each time. Keyed on it,
+    // the tap detector would restart before the finger lifts and the tap would never arrive.
+    val latestOnClick by rememberUpdatedState(onClick)
     Box(
         modifier = modifier
             .background(if (strong) Color(0xFF2EA84F) else Color(0x99101420), RoundedCornerShape(if (strong) 40.dp else 4.dp))
             .border(1.dp, if (strong) Color(0xFF7CFFA0) else Color(0xFF3A3F5C), RoundedCornerShape(if (strong) 40.dp else 4.dp))
-            .pointerInput(onClick) { detectTapGestures { onClick() } }
+            .pointerInput(Unit) { detectTapGestures { latestOnClick() } }
             .padding(horizontal = if (strong) 24.dp else 10.dp, vertical = if (strong) 18.dp else 5.dp),
         contentAlignment = Alignment.Center
     ) {
