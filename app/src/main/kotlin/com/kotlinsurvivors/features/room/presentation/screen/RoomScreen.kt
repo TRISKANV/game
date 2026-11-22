@@ -59,6 +59,7 @@ import com.kotlinsurvivors.features.room.presentation.components.StoryBubble
 import com.kotlinsurvivors.features.room.presentation.components.StoryButton
 import com.kotlinsurvivors.features.room.presentation.components.StoryDialogueBox
 import com.kotlinsurvivors.features.room.presentation.components.StoryFileViewer
+import com.kotlinsurvivors.features.room.presentation.components.StoryGlitchMessage
 import com.kotlinsurvivors.features.room.presentation.components.StoryMission
 import com.kotlinsurvivors.features.room.presentation.components.StoryNotification
 import com.kotlinsurvivors.features.room.domain.RoomLayout
@@ -215,17 +216,11 @@ fun RoomScreen(
             drawRoom(art, world, director, fx.time, near)
         }
 
-        // Text laid over the monitors during the glitch: "CONEXIÓN ESTABLECIDA / DISPOSITIVO IDENTIFICADO".
+        // "CONEXIÓN ESTABLECIDA / DISPOSITIVO IDENTIFICADO", flickering while the monitors glitch.
         if (director.glitching && (fx.time * 9f).toInt() % 4 != 0) {
-            val fontPx = 6.5f * roomScale
-            Text(
+            StoryGlitchMessage(
                 text = stringResource(R.string.story_glitch),
-                color = Color(0xFF7CFFB0), fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold,
-                fontSize = with(density) { fontPx.toSp() }, lineHeight = with(density) { (fontPx * 1.3f).toSp() },
-                modifier = Modifier.offset(
-                    x = with(density) { (roomLeft + 262f * roomScale).toDp() },
-                    y = with(density) { (roomTop + 78f * roomScale).toDp() }
-                )
+                modifier = Modifier.align(Alignment.Center)
             )
         }
 
@@ -305,7 +300,12 @@ private const val MAX_FRAME_SECONDS = 0.05f      // a long pause must not make t
 private const val WALK_FRAMES_PER_SECOND = 9f
 
 // Places in the room picture (pixels of the 640x360 image) that the story animates.
-private val MONITORS = RoomLayout.Box(258f, 72f, 122f, 33f)
+// Screens of the three monitors, inside their frames; each one is lit on its own.
+private val SCREENS = listOf(
+    RoomLayout.Box(262f, 77f, 30f, 22f),
+    RoomLayout.Box(304f, 77f, 30f, 22f),
+    RoomLayout.Box(360f, 77f, 30f, 22f)
+)
 private val WINDOW   = RoomLayout.Box(440f, 18f, 90f, 80f)
 private const val PHONE_X = 122f
 private const val PHONE_Y = 194f
@@ -332,23 +332,26 @@ private fun DrawScope.drawRoom(art: RoomArt?, world: RoomWorld, story: StoryDire
     fun rx(v: Float) = originX + v * scale
     fun ry(v: Float) = originY + v * scale
 
-    // ── Monitors: a soft pulse while a file waits, a flicker during the glitch ──
+    // ── Monitors: each screen glows on its own while a file waits and flickers during the glitch ──
     if (story.monitorPulsing) {
-        val a = 0.12f + 0.12f * (0.5f + 0.5f * sin(time * 2f * PI.toFloat() * 1.4f))
-        drawRect(Color(0xFF4CE0A0).copy(alpha = a), Offset(rx(MONITORS.x), ry(MONITORS.y)), Size(MONITORS.w * scale, MONITORS.h * scale))
+        val a = 0.10f + 0.14f * (0.5f + 0.5f * sin(time * 2f * PI.toFloat() * 1.4f))
+        for (m in SCREENS) drawRect(Color(0xFF4CE0A0).copy(alpha = a), Offset(rx(m.x), ry(m.y)), Size(m.w * scale, m.h * scale))
     }
     if (story.glitching) {
         val step = (time * 24f).toInt()
-        drawRect(Color(0xFF020A06), Offset(rx(MONITORS.x), ry(MONITORS.y)), Size(MONITORS.w * scale, MONITORS.h * scale))
-        for (k in 0 until 7) {
-            val r = ((step * 31 + k * 17) % 97) / 97f
-            val r2 = ((step * 13 + k * 29) % 89) / 89f
-            val bar = if (k % 3 == 0) Color(0xFFFFFFFF) else if (k % 3 == 1) Color(0xFF30E0FF) else Color(0xFFFF40C0)
-            drawRect(
-                bar.copy(alpha = 0.55f),
-                Offset(rx(MONITORS.x + r2 * 40f), ry(MONITORS.y + r * (MONITORS.h - 4f))),
-                Size((30f + r * 70f) * scale, (1f + r2 * 3f) * scale)
-            )
+        for ((n, m) in SCREENS.withIndex()) {
+            drawRect(Color(0xFF020A06), Offset(rx(m.x), ry(m.y)), Size(m.w * scale, m.h * scale))
+            for (k in 0 until 4) {
+                val r = ((step * 31 + k * 17 + n * 7) % 97) / 97f
+                val r2 = ((step * 13 + k * 29 + n * 11) % 89) / 89f
+                val bar = if (k % 3 == 0) Color(0xFFFFFFFF) else if (k % 3 == 1) Color(0xFF30E0FF) else Color(0xFFFF40C0)
+                val w = 8f + r * (m.w - 8f)
+                drawRect(
+                    bar.copy(alpha = 0.6f),
+                    Offset(rx(m.x + r2 * (m.w - w)), ry(m.y + r * (m.h - 3f))),
+                    Size(w * scale, (1f + r2 * 2f) * scale)
+                )
+            }
         }
     }
 

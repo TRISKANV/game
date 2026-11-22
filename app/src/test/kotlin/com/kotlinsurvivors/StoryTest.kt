@@ -184,6 +184,17 @@ class StoryDirectorTest {
         assertEquals(1f, s.blackAlpha, 0f)
     }
 
+    @Test fun theFileCanBeOpenedFromEitherSideOfTheChair() {
+        val s = director().toRinging()
+        s.interact(Interactable.PHONE); s.answer(); s.talkThrough(); s.run(2f)
+        assertEquals(StoryPhase.FILE_WAIT, s.phase)
+        // left of the chair, where the desk remark used to win
+        assertEquals(Interactable.COMPUTER, RoomInteractables.near(300f, 155f, s.usable))
+        // right of the chair
+        assertEquals(Interactable.COMPUTER, RoomInteractables.near(370f, 155f, s.usable))
+        assertTrue(Interactable.DESK !in s.usable)
+    }
+
     @Test fun theDoorIsLockedUntilTheMission() {
         val s = director().toRinging()
         assertFalse(Interactable.DOOR in s.usable)

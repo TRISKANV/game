@@ -32,7 +32,12 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.text.TextStyle
+import com.kotlinsurvivors.features.game.presentation.components.pixelFrame
+import com.kotlinsurvivors.features.game.presentation.components.pixelUnitOf
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
@@ -265,20 +270,48 @@ fun StoryMission(objective: String, showBanner: Boolean, modifier: Modifier = Mo
     }
 }
 
-/** A small round button with a label, used for USE and SKIP. */
+/** The USE and SKIP buttons, drawn with the same pixel frame as the game's own panels. */
 @Composable
 fun StoryButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, strong: Boolean = false) {
     // The screen is recomposed every frame, which hands over a new onClick each time. Keyed on it,
     // the tap detector would restart before the finger lifts and the tap would never arrive.
     val latestOnClick by rememberUpdatedState(onClick)
+    val unit = pixelUnitOf(if (strong) 3.dp else 2.dp)
     Box(
         modifier = modifier
-            .background(if (strong) Color(0xFF2EA84F) else Color(0x99101420), RoundedCornerShape(if (strong) 40.dp else 4.dp))
-            .border(1.dp, if (strong) Color(0xFF7CFFA0) else Color(0xFF3A3F5C), RoundedCornerShape(if (strong) 40.dp else 4.dp))
+            .pixelFrame(
+                unit  = unit,
+                frame = if (strong) Color(0xFF2EA84F) else Color(0xFF5A6086),
+                body  = if (strong) Color(0xFF123A20) else Color(0xFF14172A),
+                light = if (strong) Color(0xFF9CFFB4) else Color(0xFFA9B0DA)
+            )
             .pointerInput(Unit) { detectTapGestures { latestOnClick() } }
-            .padding(horizontal = if (strong) 24.dp else 10.dp, vertical = if (strong) 18.dp else 5.dp),
+            .padding(
+                horizontal = unit * (if (strong) 9 else 6),
+                vertical   = unit * (if (strong) 6 else 3)
+            ),
         contentAlignment = Alignment.Center
     ) {
-        Text(label, color = Color.White, fontSize = if (strong) 15.sp else 11.sp, fontWeight = FontWeight.Bold)
+        Text(
+            text = label,
+            color = if (strong) Color(0xFFD8FFE2) else Color(0xFFD0D5F0),
+            fontSize = if (strong) 15.sp else 11.sp,
+            fontWeight = FontWeight.Bold,
+            fontFamily = FontFamily.Monospace,
+            style = TextStyle(shadow = Shadow(Color(0xFF06050A), Offset(2f, 2f), 0f))
+        )
     }
+}
+
+/** The system message that flashes while the monitors glitch. */
+@Composable
+fun StoryGlitchMessage(text: String, modifier: Modifier = Modifier) {
+    val unit = pixelUnitOf(2.dp)
+    Text(
+        text = text, color = Color(0xFF7CFFB0), fontSize = 13.sp, fontWeight = FontWeight.Bold,
+        fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center,
+        modifier = modifier
+            .pixelFrame(unit, Color(0xFF2FAF6F), Color(0xFF04120B), Color(0xFF7CFFB0))
+            .padding(horizontal = unit * 8, vertical = unit * 5)
+    )
 }

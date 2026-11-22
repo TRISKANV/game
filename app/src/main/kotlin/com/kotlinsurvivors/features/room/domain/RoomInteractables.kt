@@ -16,7 +16,8 @@ object RoomInteractables {
     const val REACH = 8f
 
     val zones: Map<Interactable, Box> = mapOf(
-        Interactable.COMPUTER to Box(348f, 150f, 64f, 30f),
+        // The computer can be used from both sides of the chair; where the desk zone also applies, the nearer one wins.
+        Interactable.COMPUTER to Box(250f, 150f, 162f, 30f),
         Interactable.DESK     to Box(250f, 150f, 60f, 30f),
         Interactable.WINDOW   to Box(446f, 150f, 90f, 30f),
         Interactable.PHONE    to Box(138f, 178f, 34f, 50f),

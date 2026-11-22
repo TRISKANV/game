@@ -106,7 +106,7 @@ class StoryDirector(
         get() = when (phase) {
             StoryPhase.EXPLORE   -> OPTIONAL
             StoryPhase.RINGING   -> OPTIONAL + Interactable.PHONE
-            StoryPhase.FILE_WAIT -> OPTIONAL
+            StoryPhase.FILE_WAIT -> setOf(Interactable.COMPUTER, Interactable.WINDOW)   // the desk remark would get in the way
             StoryPhase.MISSION   -> OPTIONAL + Interactable.DOOR
             else                 -> emptySet()
         }
