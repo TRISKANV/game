@@ -74,8 +74,13 @@ class GameRenderer(
      * drawn instead. Setting it also switches on lamp glows, rain and the camera limits.
      */
     var levelArt: LevelArt? = null
+        set(value) {
+            if (field === value) return
+            field = value
+            neighbour.lines = value?.npcLines ?: emptyArray()
+        }
 
-    /** The neighbour of Level 1; only drawn while [levelArt] is set. Fill its `lines` with the current language. */
+    /** The neighbour of Level 1; only drawn while [levelArt] is set, which also gives him his lines. */
     val neighbour = NeighbourRenderer()
 
     private var glowImage: ImageBitmap? = null
