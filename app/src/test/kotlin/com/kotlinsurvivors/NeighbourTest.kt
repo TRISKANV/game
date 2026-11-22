@@ -4,6 +4,7 @@ import com.kotlinsurvivors.engine.ecs.systems.MovementSystem
 import com.kotlinsurvivors.engine.map.Level1
 import com.kotlinsurvivors.engine.map.Level1Npc
 import com.kotlinsurvivors.engine.map.LevelMap
+import com.kotlinsurvivors.engine.ecs.components.staysPut
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -66,5 +67,80 @@ class NeighbourTest {
             val found = Regex("name=\"npc_leek_(\\d+)\"").findAll(text).map { it.groupValues[1].toInt() }.toList().sorted()
             assertEquals("$dir lines", (1..Level1Npc.LINE_COUNT).toList(), found)
         }
+    }
+}
+
+/** The talking logic of the neighbour: when he starts, which line, when he is quiet. */
+class NeighbourTalkTest {
+
+    private val talk = com.kotlinsurvivors.engine.rendering.NeighbourTalk(kotlin.random.Random(7)).apply {
+        lines = Array(6) { "line $it is a sentence of some length" }
+    }
+    private val nearX = Level1Npc.X + 100f
+    private val nearY = Level1Npc.FEET_Y
+    private val farX  = Level1Npc.X + 900f
+
+    @Test fun quietUntilSomebodyComesClose() {
+        talk.update(farX, nearY, 1000L)
+        assertFalse(talk.near)
+        assertEquals(-1, talk.lineIndex)
+    }
+
+    @Test fun startsTalkingWhenThePlayerArrivesAndStopsWhenHeLeaves() {
+        talk.update(farX, nearY, 1000L)
+        talk.update(nearX, nearY, 2000L)
+        assertTrue(talk.near)
+        assertTrue(talk.lineIndex in 0..5)
+        assertEquals(2000L, talk.lineStart)
+        talk.update(farX, nearY, 3000L)
+        assertFalse(talk.near)
+        assertEquals(3000L, talk.leftAt)
+    }
+
+    @Test fun staysNearBetweenTheTwoRadiiSoItDoesNotFlicker() {
+        talk.update(nearX, nearY, 0L)
+        talk.update(Level1Npc.X + (Level1Npc.TALK_RADIUS + 20f), nearY, 100L)
+        assertTrue(talk.near)
+        talk.update(Level1Npc.X + (Level1Npc.LEAVE_RADIUS + 20f), nearY, 200L)
+        assertFalse(talk.near)
+    }
+
+    @Test fun sixLinesAreSaidOnceEachBeforeAnyRepeats() {
+        var t = 0L
+        val said = ArrayList<Int>()
+        talk.update(nearX, nearY, t); said.add(talk.lineIndex)
+        while (said.size < 6) {
+            t += 100L
+            talk.update(nearX, nearY, t)
+            if (talk.lineIndex != said.last()) said.add(talk.lineIndex)
+            assertTrue("took too long", t < 120_000L)
+        }
+        assertEquals((0..5).toList(), said.sorted())
+    }
+
+    @Test fun comingBackStartsAFreshLine() {
+        talk.update(nearX, nearY, 0L)
+        talk.update(farX, nearY, 500L)
+        talk.update(nearX, nearY, 10_000L)
+        assertTrue(talk.near)
+        assertEquals(10_000L, talk.lineStart)
+        assertEquals(0L, talk.leftAt)
+    }
+}
+
+/** The energy can waits where it fell: no magnet moves it and it outlasts ordinary pickups. */
+class EnergyCanTest {
+    @Test fun cansAndChestsStayPutOthersDoNot() {
+        for (t in com.kotlinsurvivors.engine.ecs.components.PickupType.values()) {
+            val expected = t == com.kotlinsurvivors.engine.ecs.components.PickupType.CHEST ||
+                t == com.kotlinsurvivors.engine.ecs.components.PickupType.HEALTH_SMALL ||
+                t == com.kotlinsurvivors.engine.ecs.components.PickupType.HEALTH_LARGE
+            assertEquals(t.name, expected, t.staysPut)
+        }
+    }
+
+    @Test fun aCanWaitsLongerThanAnOrbAndTheDropChanceIsThirtyPercent() {
+        assertTrue(com.kotlinsurvivors.engine.ecs.EntityFactory.CAN_WAIT_SECONDS > 30f)
+        assertEquals(0.30f, com.kotlinsurvivors.engine.ecs.systems.ExperienceSystem.HEAL_DROP_CHANCE, 0f)
     }
 }

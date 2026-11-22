@@ -14,10 +14,8 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.map.Level1Npc
-import kotlin.math.hypot
 import kotlin.math.min
 import kotlin.math.sin
-import kotlin.random.Random
 
 /**
  * Draws the neighbour of Level 1 and the speech bubble that appears over his head when the
@@ -32,15 +30,12 @@ import kotlin.random.Random
 class NeighbourRenderer {
 
     /** What he can say, already translated. Index i is string npc_leek_(i+1). */
-    var lines: Array<String> = emptyArray()
+    var lines: Array<String>
+        get() = talk.lines
+        set(value) { talk.lines = value }
 
-    private var near       = false
-    private var lineStart  = 0L          // when the current line started to be typed
-    private var lineIndex  = -1
-    private var leftAt     = 0L          // when the player walked away, for the fade out
-    private var order      = IntArray(0)
-    private var orderPos   = 0
-    private var lastShown  = -1
+    /** Who is close and what he is saying; the drawing below only reads it. */
+    private val talk = NeighbourTalk()
 
     // Wrapped text of the current line, kept so it is only laid out once per line and width.
     private var wrapped: List<String> = emptyList()
@@ -60,15 +55,7 @@ class NeighbourRenderer {
     private val tail = Path()
 
     /** Decides whether he is talking, from where the player's feet are. Call once per frame. */
-    fun update(playerX: Float, playerFeetY: Float, nowMs: Long) {
-        if (lines.isEmpty()) return
-        val dist = hypot(playerX - Level1Npc.X, playerFeetY - Level1Npc.FEET_Y)
-        val nowNear = dist <= (if (near) Level1Npc.LEAVE_RADIUS else Level1Npc.TALK_RADIUS)
-        if (nowNear && !near) startNextLine(nowMs)
-        if (!nowNear && near) leftAt = nowMs
-        near = nowNear
-        if (near && nowMs - lineStart > lineDuration(lineIndex) + GAP_MS) startNextLine(nowMs)
-    }
+    fun update(playerX: Float, playerFeetY: Float, nowMs: Long) = talk.update(playerX, playerFeetY, nowMs)
 
     /** True when the player's feet are lower on the screen than his, so the player is drawn over him. */
     fun isBehindPlayer(playerFeetY: Float) = playerFeetY >= Level1Npc.FEET_Y
@@ -79,9 +66,9 @@ class NeighbourRenderer {
      * raises a hand (5), and moves his mouth (5/6) while the bubble is being typed.
      */
     private fun frameAt(nowMs: Long): Int {
-        if (near) {
-            val typing = lineIndex in lines.indices &&
-                nowMs - lineStart < lines[lineIndex].length * 1000L / TYPE_CHARS_PER_SECOND
+        if (talk.near) {
+            val typing = talk.lineIndex in lines.indices &&
+                nowMs - talk.lineStart < lines[talk.lineIndex].length * 1000L / TYPE_CHARS_PER_SECOND
             return if (typing && (nowMs / TALK_FLAP_MS) % 2L == 1L) 6 else 5
         }
         val t = nowMs % PHONE_CYCLE_MS
@@ -106,7 +93,7 @@ class NeighbourRenderer {
         drawOval(Color(0x30000000), topLeft = Offset(sx - 34f, sy - 9f), size = Size(68f, 18f))
         drawOval(Color(0x66000000), topLeft = Offset(sx - 24f, sy - 6f), size = Size(48f, 11f))
 
-        val breathe = if (near) 0f else sin(nowMs * 0.0025f) * 0.6f
+        val breathe = if (talk.near) 0f else sin(nowMs * 0.0025f) * 0.6f
         val left = sx - w / 2f
         val top  = sy - Level1Npc.FEET_ROW * k + breathe
         src.set(frame * fw, 0, (frame + 1) * fw, fh)
@@ -114,11 +101,11 @@ class NeighbourRenderer {
         drawContext.canvas.nativeCanvas.drawBitmap(sheet, src, box, spritePaint)
 
         // The screen of the phone lights his belly and the ground in front of him (not when he has lowered it).
-        if (!near || frame == 5 || frame == 6) {
+        if (!talk.near || frame == 5 || frame == 6) {
             val flicker = 0.85f + 0.15f * sin(nowMs * 0.02f)
-            val px = if (near) left + 5.5f * k else left + 20.5f * k
-            val py = if (near) top + 52f * k else top + 41f * k
-            val r  = (if (near) 26f else 40f) * flicker
+            val px = if (talk.near) left + 5.5f * k else left + 20.5f * k
+            val py = if (talk.near) top + 52f * k else top + 41f * k
+            val r  = (if (talk.near) 26f else 40f) * flicker
             drawCircle(
                 brush  = Brush.radialGradient(
                     listOf(Color(0x5534DCF2), Color(0x2234DCF2), Color(0x0034DCF2)),
@@ -130,15 +117,15 @@ class NeighbourRenderer {
     }
 
     fun DrawScope.drawBubble(cameraX: Float, cameraY: Float, nowMs: Long) {
-        if (lineIndex < 0 || lineIndex >= lines.size) return
-        val elapsed = nowMs - lineStart
+        if (talk.lineIndex < 0 || talk.lineIndex >= lines.size) return
+        val elapsed = nowMs - talk.lineStart
         val alpha = when {
-            near -> {
-                val total = lineDuration(lineIndex)
+            talk.near -> {
+                val total = talk.lineDuration(talk.lineIndex)
                 if (elapsed >= total) 0f
                 else min(1f, min(elapsed / FADE_IN_MS.toFloat(), (total - elapsed) / FADE_OUT_MS.toFloat()))
             }
-            leftAt > 0L -> 1f - (nowMs - leftAt) / FADE_OUT_MS.toFloat()
+            talk.leftAt > 0L -> 1f - (nowMs - talk.leftAt) / FADE_OUT_MS.toFloat()
             else -> 0f
         }
         if (alpha <= 0f) return
@@ -147,7 +134,7 @@ class NeighbourRenderer {
         val pad      = 9.dp.toPx()
         val maxWidth = 220.dp.toPx()
         textPaint.textSize = textSize
-        layoutLine(lineIndex, maxWidth, textSize)
+        layoutLine(talk.lineIndex, maxWidth, textSize)
 
         val lineH = textSize * 1.25f
         var widest = 0f
@@ -181,7 +168,7 @@ class NeighbourRenderer {
         canvas.drawPath(tail, fillPaint)
 
         // The text appears letter by letter, like somebody talking.
-        var shown = if (near) ((elapsed * TYPE_CHARS_PER_SECOND) / 1000L).toInt() + 1 else Int.MAX_VALUE
+        var shown = if (talk.near) ((elapsed * TYPE_CHARS_PER_SECOND) / 1000L).toInt() + 1 else Int.MAX_VALUE
         textPaint.alpha = a
         var y = box.top + pad + textSize
         for (l in wrapped) {
@@ -218,40 +205,11 @@ class NeighbourRenderer {
         wrapped = rows; wrappedFor = index; wrappedWidth = maxWidth; wrappedSize = textSize
     }
 
-    private fun lineDuration(index: Int): Long {
-        if (index < 0 || index >= lines.size) return MIN_LINE_MS
-        return (BASE_LINE_MS + lines[index].length * PER_CHAR_MS).coerceIn(MIN_LINE_MS, MAX_LINE_MS)
-    }
-
-    /** Next line from a shuffled deck, so nothing repeats until everything has been said. */
-    private fun startNextLine(nowMs: Long) {
-        if (order.size != lines.size || orderPos >= order.size) {
-            order = IntArray(lines.size) { it }
-            for (i in order.size - 1 downTo 1) {
-                val j = Random.nextInt(i + 1)
-                val t = order[i]; order[i] = order[j]; order[j] = t
-            }
-            if (order.size > 1 && order[0] == lastShown) {       // do not open the new deck with the line just said
-                val t = order[0]; order[0] = order[order.size - 1]; order[order.size - 1] = t
-            }
-            orderPos = 0
-        }
-        lineIndex = order[orderPos++]
-        lastShown = lineIndex
-        lineStart = nowMs
-        leftAt    = 0L
-    }
-
     private companion object {
         const val TAP_MS        = 260L      // each tapping frame
         const val PHONE_CYCLE_MS = 5200L    // after this long on the phone he looks up for a moment
         const val GLANCE_MS     = 700L
         const val TALK_FLAP_MS  = 140L
-        const val BASE_LINE_MS = 1500L
-        const val PER_CHAR_MS  = 45L
-        const val MIN_LINE_MS  = 2600L
-        const val MAX_LINE_MS  = 5200L
-        const val GAP_MS       = 600L
         const val FADE_IN_MS   = 150L
         const val FADE_OUT_MS  = 250L
         const val TYPE_CHARS_PER_SECOND = 45L

@@ -258,6 +258,13 @@ enum class PickupType {
 }
 
 /**
+ * Pickups that never fly to the player, neither with the magnet radius nor with the magnet pickup:
+ * the chest and the energy cans wait where they fell until the player walks over them.
+ */
+val PickupType.staysPut: Boolean
+    get() = this == PickupType.CHEST || this == PickupType.HEALTH_SMALL || this == PickupType.HEALTH_LARGE
+
+/**
  * Data for collectible items on the ground.
  */
 data class PickupComponent(

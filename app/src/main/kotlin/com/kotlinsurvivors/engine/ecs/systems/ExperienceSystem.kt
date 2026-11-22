@@ -208,7 +208,7 @@ class ExperienceSystem {
             PickupType.MAGNET -> {
                 var count = 0
                 for (pkId in world.getPickupSnapshot()) {
-                    val pk = world.pickups[pkId]; if (pk != null && pk.type != PickupType.CHEST) { pk.magnetized = true; count++ }
+                    val pk = world.pickups[pkId]; if (pk != null && !pk.type.staysPut) { pk.magnetized = true; count++ }
                 }
                 Log.d(TAG, "Magnet activated: magnetized $count pickups")
             }

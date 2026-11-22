@@ -180,7 +180,7 @@ class CollisionSystem {
             val dx = pt.x - pkt.x; val dy = pt.y - pkt.y
             val distSq = dx * dx + dy * dy
 
-            if (!isChest && distSq < magnetRadius * magnetRadius) {
+            if (!pickup.type.staysPut && distSq < magnetRadius * magnetRadius) {
                 pickup.magnetized = true
                 val dist = sqrt(distSq).coerceAtLeast(0.001f)
                 pickup.magnetSpeed = (magnetRadius - dist) / magnetRadius * 400f + 80f

@@ -196,6 +196,9 @@ object EntityFactory {
     /** How long a boss chest stays on the floor waiting for the player. */
     const val CHEST_WAIT_SECONDS = 120f
 
+    /** How long an energy can waits on the floor for the player. */
+    const val CAN_WAIT_SECONDS = 90f
+
     // Mini-boss: how much bigger and tougher it is than the enemy it is built from.
     const val MINI_BOSS_HP_FACTOR     = 8
     const val MINI_BOSS_SIZE_FACTOR   = 1.7f
@@ -213,7 +216,11 @@ object EntityFactory {
             type  = type,
             value = pickupValue(type),
             // 8s for all pickups — prevents XP orb accumulation over time. A boss chest waits much longer.
-            lifetime = if (type == PickupType.CHEST) CHEST_WAIT_SECONDS else 8f
+            lifetime = when {
+                type == PickupType.CHEST -> CHEST_WAIT_SECONDS
+                type.staysPut            -> CAN_WAIT_SECONDS
+                else                     -> 8f
+            }
         )
         world.colliders[id]  = ColliderComponent(
             radius = pickupRadius(type),
@@ -241,6 +248,7 @@ object EntityFactory {
         PickupType.EXPERIENCE_LARGE  -> 14f
         PickupType.COIN, PickupType.COIN_BAG -> 9f
         PickupType.CHEST -> 22f
+        PickupType.HEALTH_SMALL, PickupType.HEALTH_LARGE -> 18f     // a can is big: it should not be missed by a hair
         else -> 12f
     }
 

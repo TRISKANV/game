@@ -910,8 +910,8 @@ class GameRenderer(
         const val ENEMY_FRAME_MS  = 220L
         const val SPIN_PERIOD_MS  = 500L
         const val CHEST_DRAW_SIZE      = 48f
-        const val CAN_SMALL_SCALE      = 1.3f
-        const val CAN_LARGE_SCALE      = 1.8f
+        const val CAN_SMALL_SCALE      = 2.0f
+        const val CAN_LARGE_SCALE      = 2.6f
         const val CAN_GLINT_PERIOD_MS  = 1800L
         const val CAN_GLINT_STEP_MS    = 150L
         const val DRONE_LED_MS         = 300L
