@@ -216,10 +216,16 @@ fun StoryNotification(title: String, body: String, modifier: Modifier = Modifier
 
 /** NO_ABRIR.txt in a terminal-like window; the text is typed out and CLOSE returns to the room. */
 @Composable
-fun StoryFileViewer(fileName: String, text: String, onClose: () -> Unit, modifier: Modifier = Modifier) {
+fun StoryFileViewer(
+    fileName: String, text: String, onClose: () -> Unit, modifier: Modifier = Modifier,
+    typing: Boolean = true
+) {
     val latestOnClose by rememberUpdatedState(onClose)
     var shown by remember(text) { mutableStateOf(0) }
-    LaunchedEffect(text) {
+    // While something is on top of the window (the chat pop-up) the text waits, so it starts typing
+    // only once the player can read it.
+    LaunchedEffect(text, typing) {
+        if (!typing) return@LaunchedEffect
         while (shown < text.length) {
             delay(24)
             shown += 2

@@ -281,6 +281,17 @@ fun RoomScreen(
             )
         }
 
+        // The green window of the file is up first; the chat pop-up lands on top of it and the text
+        // only starts to type once the pop-up has been dismissed.
+        if (director.chatPopupOpen || director.fileOpen) {
+            StoryFileViewer(
+                fileName = stringResource(R.string.story_file_name),
+                text = stringResource(R.string.story_file_text),
+                onClose = { director.closeFile() },
+                typing = director.fileOpen
+            )
+        }
+
         if (director.chatPopupOpen) {
             StoryChatPopup(
                 name = stringResource(R.string.story_chat_name),
@@ -290,14 +301,6 @@ fun RoomScreen(
                 noLabel = stringResource(R.string.story_chat_no),
                 onYes = { director.chatYes() },
                 onNo = { director.chatNo() }
-            )
-        }
-
-        if (director.fileOpen) {
-            StoryFileViewer(
-                fileName = stringResource(R.string.story_file_name),
-                text = stringResource(R.string.story_file_text),
-                onClose = { director.closeFile() }
             )
         }
 

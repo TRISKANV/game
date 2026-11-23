@@ -28,6 +28,10 @@ class NeighbourTalk(private val random: Random = Random.Default) {
     var distance = -1f
         private set
 
+    /** How many lines he has started since the run began, for the debug line. */
+    var linesSaid = 0
+        private set
+
     private var order     = IntArray(0)
     private var orderPos  = 0
     private var lastShown = -1
@@ -42,7 +46,9 @@ class NeighbourTalk(private val random: Random = Random.Default) {
         val nowNear = dist <= (if (near) Level1Npc.LEAVE_RADIUS else Level1Npc.TALK_RADIUS)
         if (nowNear != near) {
             near = nowNear
-            startNextLine(nowMs)
+            // Whatever makes the player go in and out of range (knockback, a crowd pushing, walking
+            // along the edge), he never speaks twice within MIN_GAP_MS: a line, then quiet.
+            if (nowMs - lineStart >= MIN_GAP_MS || linesSaid == 0) startNextLine(nowMs)
         }
     }
 
@@ -69,12 +75,15 @@ class NeighbourTalk(private val random: Random = Random.Default) {
             }
             orderPos = 0
         }
+        linesSaid++
         lineIndex = order[orderPos++]
         lastShown = lineIndex
         lineStart = nowMs
     }
 
     companion object {
+        /** Minimum time between the starts of two lines, however often the player crosses his radii. */
+        const val MIN_GAP_MS   = 12_000L
         const val BASE_LINE_MS = 1500L
         const val PER_CHAR_MS  = 45L
         const val MIN_LINE_MS  = 2600L

@@ -59,7 +59,7 @@ class NeighbourRenderer {
 
     /** One line for the on-screen debug overlay (Settings > show FPS): why he is or is not talking. */
     fun debugLine(): String =
-        "NPC d=" + talk.distance.toInt() + " near=" + talk.near + " lines=" + talk.lines.size + " idx=" + talk.lineIndex
+        "NPC d=" + talk.distance.toInt() + " near=" + talk.near + " lines=" + talk.lines.size + " idx=" + talk.lineIndex + " said=" + talk.linesSaid
 
     /** True when the player's feet are lower on the screen than his, so the player is drawn over him. */
     fun isBehindPlayer(playerFeetY: Float) = playerFeetY >= Level1Npc.FEET_Y

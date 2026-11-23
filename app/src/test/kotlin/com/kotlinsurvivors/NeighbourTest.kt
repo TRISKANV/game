@@ -115,6 +115,19 @@ class NeighbourTalkTest {
         assertTrue(talk.lineIndex != parting)
     }
 
+    @Test fun crossingTheRadiiOverAndOverNeverMakesHimChatter() {
+        // in and out of range every half second for a minute: at most one line per MIN_GAP_MS
+        var t = 0L
+        var near = false
+        while (t < 60_000L) {
+            talk.update(if (near) nearX else farX, nearY, t)
+            near = !near
+            t += 500L
+        }
+        val limit = 60_000L / com.kotlinsurvivors.engine.rendering.NeighbourTalk.MIN_GAP_MS + 1
+        assertTrue("said ${talk.linesSaid} lines", talk.linesSaid <= limit)
+    }
+
     @Test fun nothingIsSaidAtTheStartOfTheRun() {
         talk.update(farX, nearY, 0L)
         talk.update(farX, nearY, 5000L)
@@ -140,8 +153,8 @@ class NeighbourTalkTest {
         var t = 0L
         talk.update(nearX, nearY, t); said.add(talk.lineIndex)
         while (said.size < 6) {
-            t += 10_000L; talk.update(farX, nearY, t); said.add(talk.lineIndex)
-            if (said.size < 6) { t += 10_000L; talk.update(nearX, nearY, t); said.add(talk.lineIndex) }
+            t += 13_000L; talk.update(farX, nearY, t); said.add(talk.lineIndex)
+            if (said.size < 6) { t += 13_000L; talk.update(nearX, nearY, t); said.add(talk.lineIndex) }
         }
         assertEquals((0..5).toList(), said.sorted())
     }
