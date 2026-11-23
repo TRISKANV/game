@@ -86,24 +86,26 @@ fun StoryDialogueBox(
         val name = stringResource(
             if (speaker == Speaker.PROTAGONIST) R.string.story_speaker_protagonist else R.string.story_speaker_assistant
         )
-        Y2kWindow(
-            title = name,
-            body = if (speaker == Speaker.ASSISTANT) Y2k.Lime else Y2k.Cream,
+        val deauth = speaker == Speaker.ASSISTANT
+        StoryWindow(
+            name = name,
+            accent = if (deauth) StoryStyle.Purple else StoryStyle.Gold,
+            light = if (deauth) StoryStyle.PurpleLight else StoryStyle.GoldLight,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 18.dp, start = 24.dp, end = 28.dp)
                 .fillMaxWidth(0.84f)
         ) {
             Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).heightIn(min = 72.dp),
+                modifier = Modifier.heightIn(min = 68.dp),
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                if (speaker == Speaker.ASSISTANT) Y2kPortrait(portrait, Modifier.size(72.dp))
+                if (deauth) StoryPortrait(portrait, Modifier.size(width = 62.dp, height = 67.dp))
                 Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(text = runner.visibleText, color = Y2k.Ink, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
+                    Text(text = runner.visibleText, color = StoryStyle.Text, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
                     if (runner.isLineComplete) {
                         Text(
-                            text = stringResource(R.string.story_tap_continue), color = Color(0xFF2E3A12), fontSize = 10.sp,
+                            text = stringResource(R.string.story_tap_continue), color = StoryStyle.Hint, fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace, modifier = Modifier.align(Alignment.End)
                         )
                     }
@@ -116,8 +118,8 @@ fun StoryDialogueBox(
 /** A remark about an object. It does not take the screen: the player keeps walking. */
 @Composable
 fun StoryBubble(text: String, modifier: Modifier = Modifier) {
-    Y2kBubble(modifier = modifier.widthIn(max = 380.dp)) {
-        Text(text = text, color = Y2k.Ink, fontSize = 13.sp, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center)
+    StoryRemark(modifier = modifier.widthIn(max = 380.dp)) {
+        Text(text = text, color = StoryStyle.Text, fontSize = 13.sp, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center)
     }
 }
 
@@ -175,7 +177,7 @@ fun PhoneCallOverlay(
                 color = Color(0xFFB8BED8), fontSize = 12.sp, fontFamily = FontFamily.Monospace,
                 modifier = Modifier.graphicsLayer { alpha = if (incoming) pulse else 1f }
             )
-            Y2kPortrait(portrait, Modifier.size(64.dp))
+            StoryPortrait(portrait, Modifier.size(width = 60.dp, height = 65.dp))
             Text(
                 text = contactName, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center
@@ -344,16 +346,16 @@ fun StoryAssistantMessage(
         modifier = modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { latestOnTap() } },
         contentAlignment = Alignment.TopCenter
     ) {
-        Y2kWindow(title = name, modifier = Modifier.padding(top = 16.dp, end = 4.dp).widthIn(max = 400.dp)) {
-            Row(
-                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Y2kPortrait(portrait, Modifier.size(56.dp))
+        StoryWindow(
+            name = name, accent = StoryStyle.Purple, light = StoryStyle.PurpleLight,
+            modifier = Modifier.padding(top = 16.dp, end = 4.dp).widthIn(max = 400.dp)
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                StoryPortrait(portrait, Modifier.size(width = 50.dp, height = 54.dp))
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(text, color = Y2k.Ink, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                    Text(text, color = StoryStyle.Text, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
                     Text(
-                        stringResource(R.string.story_tap_continue), color = Color(0xFF2E3A12), fontSize = 10.sp,
+                        stringResource(R.string.story_tap_continue), color = StoryStyle.Hint, fontSize = 10.sp,
                         fontFamily = FontFamily.Monospace, modifier = Modifier.align(Alignment.End)
                     )
                 }
