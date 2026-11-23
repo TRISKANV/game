@@ -543,7 +543,8 @@ private fun DrawScope.drawMonitorCountdown(screen: RoomLayout.Box, seconds: Long
     rect(screen.x + 5f, screen.y + 6f, 1f, 3f, Color(0xFF120A12))
 
     val text = com.kotlinsurvivors.features.room.domain.Countdown.formatHours(seconds)
-    val width = text.sumOf { if (it == ':') 3 else 4 } - 1
+    var width = -1                      // every digit takes 4 pixels, a colon 3, with no gap after the last one
+    for (ch in text) width += if (ch == ':') 3 else 4
     var x = screen.x + (screen.w - width) / 2f
     val y = screen.y + 14f
     val pulse = if ((time * 2f).toInt() % 2 == 0) Color(0xFFFFD36B) else Color(0xFFFF7A6A)
