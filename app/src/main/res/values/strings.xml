@@ -239,7 +239,7 @@
     <string name="chest_heal_name">Full heal</string>
     <string name="chest_level_fmt">Level %1$d</string>
     <string name="story_speaker_protagonist">PROTAGONIST</string>
-    <string name="story_speaker_assistant">ASSISTANT</string>
+    <string name="story_speaker_assistant">DEAUTH</string>
     <string name="story_wake_1">What time is it...?</string>
     <string name="story_wake_2">Another sleepless night.</string>
     <string name="story_obj_computer">Too many things open... I should tidy this up some day.</string>

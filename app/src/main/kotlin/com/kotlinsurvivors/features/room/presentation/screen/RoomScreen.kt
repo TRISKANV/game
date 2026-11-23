@@ -116,6 +116,13 @@ fun RoomScreen(
         }
     }
 
+    // DEAUTH's portrait, decoded once: it goes with her lines, her calls and her notifications.
+    val portrait by produceState<androidx.compose.ui.graphics.ImageBitmap?>(null, context) {
+        value = withContext(Dispatchers.IO) {
+            try { SpriteAtlas.bitmap(context, "portrait_deauth.png").asImageBitmap() } catch (e: Exception) { null }
+        }
+    }
+
     val world    = remember { RoomWorld() }
     val joystick = remember { VirtualJoystick() }
     val fx       = remember { RoomFx() }
@@ -277,7 +284,8 @@ fun RoomScreen(
             StoryAssistantMessage(
                 name = stringResource(R.string.story_contact),
                 text = stringResource(R.string.story_final_msg),
-                onTap = { director.tap() }
+                onTap = { director.tap() },
+                portrait = portrait
             )
         }
 
@@ -298,7 +306,8 @@ fun RoomScreen(
                 incoming = director.isCallIncoming,
                 ending = director.isCallEnding,
                 contactName = stringResource(R.string.story_contact),
-                onAnswer = { director.answer() }
+                onAnswer = { director.answer() },
+                portrait = portrait
             )
         }
 
@@ -325,7 +334,7 @@ fun RoomScreen(
             )
         }
 
-        director.dialogue?.takeIf { !it.isFinished }?.let { StoryDialogueBox(runner = it, onTap = { director.tap() }) }
+        director.dialogue?.takeIf { !it.isFinished }?.let { StoryDialogueBox(runner = it, onTap = { director.tap() }, portrait = portrait) }
 
         if (director.usbRegistered) {
             StoryKeyItem(

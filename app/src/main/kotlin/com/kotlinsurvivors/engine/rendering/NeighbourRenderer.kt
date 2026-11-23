@@ -46,6 +46,7 @@ class NeighbourRenderer {
     private val spritePaint = Paint().apply { isAntiAlias = false; isFilterBitmap = false }
     private val fillPaint   = Paint().apply { isAntiAlias = false; color = BUBBLE_FILL }
     private val edgePaint   = Paint().apply { isAntiAlias = false; color = BUBBLE_EDGE }
+    private val shadowPaint = Paint().apply { isAntiAlias = false; color = BUBBLE_EDGE }
     private val textPaint   = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         color    = TEXT_COLOR
         typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -151,17 +152,24 @@ class NeighbourRenderer {
 
         val a = (alpha * 255f).toInt().coerceIn(0, 255)
         val canvas = drawContext.canvas.nativeCanvas
-        val edge = 2.dp.toPx()
+        val edge = 3.dp.toPx()
+        val drop = 4.dp.toPx()
+
+        // Old-computer look: a hard black drop shadow, a thick black outline and a flat lime fill.
+        shadowPaint.alpha = (a * 0.85f).toInt()
+        box.inset(-edge, -edge)
+        box.offset(drop, drop)
+        canvas.drawRoundRect(box, 7f, 7f, shadowPaint)
+        box.offset(-drop, -drop)
 
         // Outline first (slightly bigger), then the fill on top: gives a border that also runs round the tail.
         edgePaint.alpha = a
-        box.inset(-edge, -edge)
-        canvas.drawRoundRect(box, 4f, 4f, edgePaint)
+        canvas.drawRoundRect(box, 7f, 7f, edgePaint)
         box.inset(edge, edge)
         buildTail(tailX, box.bottom, tailH, edge)
         canvas.drawPath(tail, edgePaint)
         fillPaint.alpha = a
-        canvas.drawRoundRect(box, 3f, 3f, fillPaint)
+        canvas.drawRoundRect(box, 5f, 5f, fillPaint)
         buildTail(tailX, box.bottom, tailH, 0f)
         canvas.drawPath(tail, fillPaint)
 
@@ -212,8 +220,8 @@ class NeighbourRenderer {
         const val FADE_OUT_MS  = 250L
         const val TYPE_CHARS_PER_SECOND = 45L
 
-        const val BUBBLE_FILL = 0xFFF4F1E8.toInt()
-        const val BUBBLE_EDGE = 0xFF1A1020.toInt()
-        const val TEXT_COLOR  = 0xFF1A1020.toInt()
+        const val BUBBLE_FILL = 0xFFC6F65A.toInt()
+        const val BUBBLE_EDGE = 0xFF0A0A0A.toInt()
+        const val TEXT_COLOR  = 0xFF0A0A0A.toInt()
     }
 }

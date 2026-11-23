@@ -239,7 +239,7 @@
     <string name="chest_heal_name">Curación total</string>
     <string name="chest_level_fmt">Nivel %1$d</string>
     <string name="story_speaker_protagonist">PROTAGONISTA</string>
-    <string name="story_speaker_assistant">ASISTENTE</string>
+    <string name="story_speaker_assistant">DEAUTH</string>
     <string name="story_wake_1">¿Qué hora es...?</string>
     <string name="story_wake_2">Otra noche sin dormir.</string>
     <string name="story_obj_computer">Tengo demasiadas cosas abiertas... debería ordenar esto algún día.</string>

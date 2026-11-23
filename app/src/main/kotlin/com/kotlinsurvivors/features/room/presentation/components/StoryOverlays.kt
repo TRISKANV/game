@@ -67,9 +67,15 @@ private val PanelColor  = Color(0xEE0A0A14)
 private val Protagonist = Color(0xFFFFD36B)
 private val Assistant   = Color(0xFF6BD3FF)
 
-/** Bottom box of the story: speaker name, text typed letter by letter, and a tap anywhere to go on. */
+/**
+ * Bottom window of the story: the speaker's name in the title bar, the text typed letter by letter
+ * and, for DEAUTH, her portrait so the player knows who is talking. A tap anywhere moves on.
+ */
 @Composable
-fun StoryDialogueBox(runner: DialogueRunner, onTap: () -> Unit, modifier: Modifier = Modifier) {
+fun StoryDialogueBox(
+    runner: DialogueRunner, onTap: () -> Unit, modifier: Modifier = Modifier,
+    portrait: ImageBitmap? = null
+) {
     // The whole screen catches the tap, not only the box: the player never has to aim.
     Box(
         modifier = modifier
@@ -80,27 +86,28 @@ fun StoryDialogueBox(runner: DialogueRunner, onTap: () -> Unit, modifier: Modifi
         val name = stringResource(
             if (speaker == Speaker.PROTAGONIST) R.string.story_speaker_protagonist else R.string.story_speaker_assistant
         )
-        Column(
+        Y2kWindow(
+            title = name,
+            body = if (speaker == Speaker.ASSISTANT) Y2k.Lime else Y2k.Cream,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
-                .padding(bottom = 14.dp, start = 24.dp, end = 24.dp)
-                .fillMaxWidth(0.82f)
-                .heightIn(min = 92.dp)
-                .background(PanelColor, RoundedCornerShape(4.dp))
-                .border(1.dp, if (speaker == Speaker.PROTAGONIST) Protagonist else Assistant, RoundedCornerShape(4.dp))
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(bottom = 18.dp, start = 24.dp, end = 28.dp)
+                .fillMaxWidth(0.84f)
         ) {
-            Text(
-                text = name, color = if (speaker == Speaker.PROTAGONIST) Protagonist else Assistant,
-                fontSize = 12.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace
-            )
-            Text(text = runner.visibleText, color = Color.White, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
-            if (runner.isLineComplete) {
-                Text(
-                    text = stringResource(R.string.story_tap_continue), color = Color(0xFF8A8FA8), fontSize = 10.sp,
-                    modifier = Modifier.align(Alignment.End)
-                )
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp).heightIn(min = 72.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (speaker == Speaker.ASSISTANT) Y2kPortrait(portrait, Modifier.size(72.dp))
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(text = runner.visibleText, color = Y2k.Ink, fontSize = 15.sp, fontFamily = FontFamily.Monospace)
+                    if (runner.isLineComplete) {
+                        Text(
+                            text = stringResource(R.string.story_tap_continue), color = Color(0xFF2E3A12), fontSize = 10.sp,
+                            fontFamily = FontFamily.Monospace, modifier = Modifier.align(Alignment.End)
+                        )
+                    }
+                }
             }
         }
     }
@@ -109,15 +116,9 @@ fun StoryDialogueBox(runner: DialogueRunner, onTap: () -> Unit, modifier: Modifi
 /** A remark about an object. It does not take the screen: the player keeps walking. */
 @Composable
 fun StoryBubble(text: String, modifier: Modifier = Modifier) {
-    Text(
-        text = text, color = Protagonist, fontSize = 13.sp, fontFamily = FontFamily.Monospace,
-        textAlign = TextAlign.Center,
-        modifier = modifier
-            .widthIn(max = 380.dp)
-            .background(PanelColor, RoundedCornerShape(4.dp))
-            .border(1.dp, Protagonist, RoundedCornerShape(4.dp))
-            .padding(horizontal = 12.dp, vertical = 8.dp)
-    )
+    Y2kBubble(modifier = modifier.widthIn(max = 380.dp)) {
+        Text(text = text, color = Y2k.Ink, fontSize = 13.sp, fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center)
+    }
 }
 
 /**
@@ -130,7 +131,8 @@ fun PhoneCallOverlay(
     ending: Boolean,
     contactName: String,
     onAnswer: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    portrait: ImageBitmap? = null
 ) {
     val latestOnAnswer by rememberUpdatedState(onAnswer)
     val vibration = rememberInfiniteTransition(label = "vibration")
@@ -173,10 +175,7 @@ fun PhoneCallOverlay(
                 color = Color(0xFFB8BED8), fontSize = 12.sp, fontFamily = FontFamily.Monospace,
                 modifier = Modifier.graphicsLayer { alpha = if (incoming) pulse else 1f }
             )
-            Box(
-                modifier = Modifier.size(54.dp).background(Color(0xFF2A2E46), CircleShape),
-                contentAlignment = Alignment.Center
-            ) { Text("?", color = Color(0xFF6C7396), fontSize = 26.sp, fontWeight = FontWeight.Bold) }
+            Y2kPortrait(portrait, Modifier.size(64.dp))
             Text(
                 text = contactName, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold,
                 fontFamily = FontFamily.Monospace, textAlign = TextAlign.Center
@@ -334,29 +333,31 @@ fun StoryGlitchMessage(text: String, modifier: Modifier = Modifier) {
     )
 }
 
-/** The assistant's last message, as a phone notification; a tap moves the story on. */
+/** The contact's last message, as a phone notification; a tap moves the story on. */
 @Composable
-fun StoryAssistantMessage(name: String, text: String, onTap: () -> Unit, modifier: Modifier = Modifier) {
+fun StoryAssistantMessage(
+    name: String, text: String, onTap: () -> Unit, modifier: Modifier = Modifier,
+    portrait: ImageBitmap? = null
+) {
     val latestOnTap by rememberUpdatedState(onTap)
-    val unit = pixelUnitOf(2.dp)
     Box(
         modifier = modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { latestOnTap() } },
         contentAlignment = Alignment.TopCenter
     ) {
-        Column(
-            modifier = Modifier
-                .padding(top = 18.dp)
-                .widthIn(max = 380.dp)
-                .pixelFrame(unit, Color(0xFF3FA8D8), Color(0xFF0C1824), Color(0xFF9BE3FF))
-                .padding(horizontal = unit * 8, vertical = unit * 5),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Text(name, color = Assistant, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-            Text(text, color = Color.White, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
-            Text(
-                stringResource(R.string.story_tap_continue), color = Color(0xFF8A8FA8), fontSize = 10.sp,
-                modifier = Modifier.align(Alignment.End)
-            )
+        Y2kWindow(title = name, modifier = Modifier.padding(top = 16.dp, end = 4.dp).widthIn(max = 400.dp)) {
+            Row(
+                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Y2kPortrait(portrait, Modifier.size(56.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(text, color = Y2k.Ink, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+                    Text(
+                        stringResource(R.string.story_tap_continue), color = Color(0xFF2E3A12), fontSize = 10.sp,
+                        fontFamily = FontFamily.Monospace, modifier = Modifier.align(Alignment.End)
+                    )
+                }
+            }
         }
     }
 }
