@@ -60,6 +60,7 @@ import com.kotlinsurvivors.features.room.presentation.components.StoryButton
 import com.kotlinsurvivors.features.room.presentation.components.StoryDialogueBox
 import com.kotlinsurvivors.features.room.presentation.components.StoryFileViewer
 import com.kotlinsurvivors.features.room.presentation.components.StoryGlitchMessage
+import com.kotlinsurvivors.features.room.presentation.components.StoryAssistantMessage
 import com.kotlinsurvivors.features.room.presentation.components.StoryMission
 import com.kotlinsurvivors.features.room.presentation.components.StoryNotification
 import com.kotlinsurvivors.features.room.domain.RoomLayout
@@ -217,7 +218,7 @@ fun RoomScreen(
         }
 
         // "CONEXIÓN ESTABLECIDA / DISPOSITIVO IDENTIFICADO", flickering while the monitors glitch.
-        if (director.glitching && (fx.time * 9f).toInt() % 4 != 0) {
+        if (director.glitchMessageVisible) {
             StoryGlitchMessage(
                 text = stringResource(R.string.story_glitch),
                 modifier = Modifier.align(Alignment.Center)
@@ -248,6 +249,14 @@ fun RoomScreen(
                     modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)
                 )
             }
+        }
+
+        if (director.showAssistantMessage) {
+            StoryAssistantMessage(
+                name = stringResource(R.string.story_speaker_assistant),
+                text = stringResource(R.string.story_final_msg),
+                onTap = { director.tap() }
+            )
         }
 
         if (director.showNotification) {
@@ -341,16 +350,23 @@ private fun DrawScope.drawRoom(art: RoomArt?, world: RoomWorld, story: StoryDire
         val step = (time * 24f).toInt()
         for ((n, m) in SCREENS.withIndex()) {
             drawRect(Color(0xFF020A06), Offset(rx(m.x), ry(m.y)), Size(m.w * scale, m.h * scale))
-            for (k in 0 until 4) {
-                val r = ((step * 31 + k * 17 + n * 7) % 97) / 97f
-                val r2 = ((step * 13 + k * 29 + n * 11) % 89) / 89f
-                val bar = if (k % 3 == 0) Color(0xFFFFFFFF) else if (k % 3 == 1) Color(0xFF30E0FF) else Color(0xFFFF40C0)
-                val w = 8f + r * (m.w - 8f)
-                drawRect(
-                    bar.copy(alpha = 0.6f),
-                    Offset(rx(m.x + r2 * (m.w - w)), ry(m.y + r * (m.h - 3f))),
-                    Size(w * scale, (1f + r2 * 2f) * scale)
-                )
+            if (story.glitchMessageVisible) {
+                // Settled: every screen shows the same steady lines while the message is on.
+                for (k in 0 until 4) {
+                    drawRect(Color(0xFF4CE0A0), Offset(rx(m.x + 3f), ry(m.y + 3f + k * 5f)), Size((m.w - 6f - (k % 2) * 8f) * scale, 1.5f * scale))
+                }
+            } else {
+                // Static: green and cyan bars jumping about, the colours of the monitors themselves.
+                for (k in 0 until 4) {
+                    val r = ((step * 31 + k * 17 + n * 7) % 97) / 97f
+                    val r2 = ((step * 13 + k * 29 + n * 11) % 89) / 89f
+                    val w = 8f + r * (m.w - 8f)
+                    drawRect(
+                        (if (k % 2 == 0) Color(0xFF4CE0A0) else Color(0xFF30C8E8)).copy(alpha = 0.7f),
+                        Offset(rx(m.x + r2 * (m.w - w)), ry(m.y + r * (m.h - 3f))),
+                        Size(w * scale, (1f + r2 * 2f) * scale)
+                    )
+                }
             }
         }
     }

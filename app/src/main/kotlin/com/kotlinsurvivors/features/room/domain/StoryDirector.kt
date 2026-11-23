@@ -17,11 +17,9 @@ enum class StoryPhase {
     FILE_WAIT,        // notification on the computer: go and open the file
     FILE_OPEN,        // the text of NO_ABRIR.txt
     POST_FILE,
-    GLITCH,           // the monitor flickers
+    GLITCH,           // the monitors flicker and a system message shows up
     POST_GLITCH,
-    CALL2_INCOMING,
-    CALL2_TALK,
-    CALL2_ENDING,
+    FINAL_MESSAGE,    // the assistant's last notification
     FINAL,
     MISSION,          // "Sal de tu habitación": the door works now
     LEAVING,          // fading out to the next place
@@ -77,11 +75,11 @@ class StoryDirector(
         }
 
     val phoneRinging: Boolean
-        get() = phase == StoryPhase.RINGING || phase == StoryPhase.CALL1_INCOMING || phase == StoryPhase.CALL2_INCOMING
+        get() = phase == StoryPhase.RINGING || phase == StoryPhase.CALL1_INCOMING
 
-    val isCallIncoming: Boolean get() = phase == StoryPhase.CALL1_INCOMING || phase == StoryPhase.CALL2_INCOMING
-    val isCallTalking: Boolean get() = phase == StoryPhase.CALL1_TALK || phase == StoryPhase.CALL2_TALK
-    val isCallEnding: Boolean get() = phase == StoryPhase.CALL1_ENDING || phase == StoryPhase.CALL2_ENDING
+    val isCallIncoming: Boolean get() = phase == StoryPhase.CALL1_INCOMING
+    val isCallTalking: Boolean get() = phase == StoryPhase.CALL1_TALK
+    val isCallEnding: Boolean get() = phase == StoryPhase.CALL1_ENDING
     val isCallScreen: Boolean get() = isCallIncoming || isCallTalking || isCallEnding
 
     /** The notification banner is up for a few seconds, the monitor keeps pulsing until the file is opened. */
@@ -90,6 +88,16 @@ class StoryDirector(
 
     val fileOpen: Boolean get() = phase == StoryPhase.FILE_OPEN
     val glitching: Boolean get() = phase == StoryPhase.GLITCH
+
+    /**
+     * The glitch goes in three beats so the monitors and the message agree: static, then the screens
+     * settle and the message is readable, then static again. The screen draws whichever applies.
+     */
+    val glitchMessageVisible: Boolean get() = glitching && clock >= GLITCH_STATIC_SECONDS && clock < GLITCH_SECONDS - GLITCH_STATIC_SECONDS
+    val glitchStatic: Boolean get() = glitching && !glitchMessageVisible
+
+    /** The assistant's last notification, shown until the player taps or it times out. */
+    val showAssistantMessage: Boolean get() = phase == StoryPhase.FINAL_MESSAGE
 
     val missionVisible: Boolean get() = phase == StoryPhase.MISSION || phase == StoryPhase.LEAVING
     val showMissionBanner: Boolean get() = missionVisible && missionClock < BANNER_SECONDS
@@ -138,9 +146,8 @@ class StoryDirector(
             StoryPhase.FILE_WAIT    -> notificationClock += dt
             StoryPhase.POST_FILE    -> if (dialogue.finished()) { cues += StoryCue.GLITCH; enter(StoryPhase.GLITCH) }
             StoryPhase.GLITCH       -> if (clock >= GLITCH_SECONDS) startDialogue(StoryPhase.POST_GLITCH, listOf(Say(PROTAGONIST, "story_post_3")))
-            StoryPhase.POST_GLITCH  -> if (dialogue.finished()) { dialogue = null; enter(StoryPhase.CALL2_INCOMING) }
-            StoryPhase.CALL2_TALK   -> if (dialogue.finished()) { cues += StoryCue.HANGUP; dialogue = null; enter(StoryPhase.CALL2_ENDING) }
-            StoryPhase.CALL2_ENDING -> if (clock >= HANGUP_SECONDS) startDialogue(StoryPhase.FINAL, listOf(Say(PROTAGONIST, "story_final")))
+            StoryPhase.POST_GLITCH  -> if (dialogue.finished()) { cues += StoryCue.NOTIFY; enter(StoryPhase.FINAL_MESSAGE) }
+            StoryPhase.FINAL_MESSAGE -> if (clock >= MESSAGE_SECONDS) startFinalDialogue()
             StoryPhase.FINAL        -> if (dialogue.finished()) startMission()
             StoryPhase.MISSION      -> missionClock += dt
             StoryPhase.LEAVING      -> { missionClock += dt; if (clock >= LEAVE_SECONDS) enter(StoryPhase.DONE) }
@@ -175,13 +182,15 @@ class StoryDirector(
     fun answer() {
         when (phase) {
             StoryPhase.CALL1_INCOMING -> { cues += StoryCue.ANSWER; startDialogue(StoryPhase.CALL1_TALK, CALL1) }
-            StoryPhase.CALL2_INCOMING -> { cues += StoryCue.ANSWER; startDialogue(StoryPhase.CALL2_TALK, CALL2) }
             else -> Unit
         }
     }
 
-    /** A tap on the dialogue box. */
-    fun tap() { dialogue?.tap() }
+    /** A tap on the dialogue box, or on the assistant's last notification. */
+    fun tap() {
+        if (phase == StoryPhase.FINAL_MESSAGE && clock >= MESSAGE_MIN_SECONDS) startFinalDialogue()
+        else dialogue?.tap()
+    }
 
     /** The player closed NO_ABRIR.txt. */
     fun closeFile() {
@@ -213,6 +222,9 @@ class StoryDirector(
         enter(next)
     }
 
+    private fun startFinalDialogue() = startDialogue(StoryPhase.FINAL, listOf(
+        Say(PROTAGONIST, "story_final_1"), Silence(900), Say(PROTAGONIST, "story_final_2")))
+
     private fun startMission() {
         dialogue = null
         missionClock = 0f
@@ -225,7 +237,10 @@ class StoryDirector(
         const val BLACK_SECONDS = 2.8f
         const val FADE_IN_SECONDS = 1.6f
         const val HANGUP_SECONDS = 1.3f
-        const val GLITCH_SECONDS = 2.4f
+        const val GLITCH_SECONDS = 3.2f
+        const val GLITCH_STATIC_SECONDS = 0.8f
+        const val MESSAGE_SECONDS = 7f
+        const val MESSAGE_MIN_SECONDS = 1.2f
         const val LEAVE_SECONDS = 1.2f
         const val NOTIFICATION_SECONDS = 4f
         const val BANNER_SECONDS = 3.5f
@@ -233,18 +248,22 @@ class StoryDirector(
 
         private val OPTIONAL = setOf(Interactable.COMPUTER, Interactable.DESK, Interactable.WINDOW)
 
-        private fun a(n: Int, prefix: String) = Say(ASSISTANT, "story_${prefix}_%02d".format(n))
-        private fun p(n: Int, prefix: String) = Say(PROTAGONIST, "story_${prefix}_%02d".format(n))
+        /**
+         * Turns a compact script into beats: "A" and "P" are the next line of the assistant or the
+         * protagonist (keys story_<prefix>_01, 02...), "S900" is a silence of 900 ms.
+         */
+        private fun script(prefix: String, spec: String): List<Beat> {
+            var n = 0
+            return spec.split(" ").map { token ->
+                when (token[0]) {
+                    'S'  -> Silence(token.substring(1).toLong())
+                    'A'  -> Say(ASSISTANT, "story_${prefix}_%02d".format(++n))
+                    else -> Say(PROTAGONIST, "story_${prefix}_%02d".format(++n))
+                }
+            }
+        }
 
-        val CALL1: List<Beat> = listOf(
-            a(1, "call1"), p(2, "call1"), a(3, "call1"), p(4, "call1"), a(5, "call1"), p(6, "call1"),
-            a(7, "call1"), p(8, "call1"), a(9, "call1"), Silence(900), a(10, "call1"), p(11, "call1"),
-            a(12, "call1"), p(13, "call1"), a(14, "call1")
-        )
-
-        val CALL2: List<Beat> = listOf(
-            a(1, "call2"), p(2, "call2"), a(3, "call2"), p(4, "call2"), a(5, "call2"), p(6, "call2"),
-            a(7, "call2"), p(8, "call2"), a(9, "call2")
-        )
+        /** The phone call of the chapter: 28 lines and four silences. */
+        val CALL1: List<Beat> = script("call1", "A P A P S800 A P A P A P S1000 A P A P S1200 A P A P S1000 A P A P A P A P A P")
     }
 }

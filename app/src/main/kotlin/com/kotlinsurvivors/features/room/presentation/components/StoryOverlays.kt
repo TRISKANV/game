@@ -315,3 +315,30 @@ fun StoryGlitchMessage(text: String, modifier: Modifier = Modifier) {
             .padding(horizontal = unit * 8, vertical = unit * 5)
     )
 }
+
+/** The assistant's last message, as a phone notification; a tap moves the story on. */
+@Composable
+fun StoryAssistantMessage(name: String, text: String, onTap: () -> Unit, modifier: Modifier = Modifier) {
+    val latestOnTap by rememberUpdatedState(onTap)
+    val unit = pixelUnitOf(2.dp)
+    Box(
+        modifier = modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { latestOnTap() } },
+        contentAlignment = Alignment.TopCenter
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(top = 18.dp)
+                .widthIn(max = 380.dp)
+                .pixelFrame(unit, Color(0xFF3FA8D8), Color(0xFF0C1824), Color(0xFF9BE3FF))
+                .padding(horizontal = unit * 8, vertical = unit * 5),
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            Text(name, color = Assistant, fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+            Text(text, color = Color.White, fontSize = 14.sp, fontFamily = FontFamily.Monospace)
+            Text(
+                stringResource(R.string.story_tap_continue), color = Color(0xFF8A8FA8), fontSize = 10.sp,
+                modifier = Modifier.align(Alignment.End)
+            )
+        }
+    }
+}
