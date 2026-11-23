@@ -9,6 +9,18 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectTapGestures
+import android.graphics.Bitmap
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.Row
+import androidx.compose.runtime.produceState
+import androidx.compose.ui.graphics.FilterQuality
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.IntSize
+import com.kotlinsurvivors.engine.rendering.SpriteAtlas
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -341,4 +353,71 @@ fun StoryAssistantMessage(name: String, text: String, onTap: () -> Unit, modifie
             )
         }
     }
+}
+
+/**
+ * A chat request that pops up over the file before it opens. "NO" dismisses it; "YES" does
+ * nothing yet (that branch of the story is still to be written).
+ */
+@Composable
+fun StoryChatPopup(
+    name: String, request: String, question: String, yesLabel: String, noLabel: String,
+    onYes: () -> Unit, onNo: () -> Unit, modifier: Modifier = Modifier
+) {
+    val context = LocalContext.current.applicationContext
+    val art by produceState<Pair<ImageBitmap, ImageBitmap>?>(null, context) {
+        value = withContext(Dispatchers.IO) {
+            try {
+                SpriteAtlas.bitmap(context, "popup_mandy.png").asImageBitmap() to
+                    SpriteAtlas.bitmap(context, "popup_chat.png").asImageBitmap()
+            } catch (e: Exception) { null }
+        }
+    }
+    val unit = pixelUnitOf(2.dp)
+    Box(modifier = modifier.fillMaxSize().background(Color(0xAA03060A)).pointerInput(Unit) { detectTapGestures { } },
+        contentAlignment = Alignment.Center) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth(0.84f)
+                .pixelFrame(unit, Color(0xFF3A2F3A), Color(0xFFEDE3D8), Color(0xFFFFF6EA))
+                .padding(horizontal = unit * 8, vertical = unit * 6),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ChatImage(art?.first, Modifier.size(width = 80.dp, height = 100.dp), FilterQuality.Low)   // the portrait as supplied, only scaled
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                Text(name, color = Color(0xFF1B1420), fontSize = 15.sp, fontWeight = FontWeight.Bold)
+                Text(request, color = Color(0xFF2E2433), fontSize = 12.sp)
+                Text(question, color = Color(0xFF1B1420), fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                Row(horizontalArrangement = Arrangement.spacedBy(14.dp), modifier = Modifier.padding(top = 4.dp)) {
+                    ChatChoice(yesLabel, Color(0xFFE8D860), Color(0xFFF6EE9A), onYes)
+                    ChatChoice(noLabel, Color(0xFF9A9AA2), Color(0xFFC4C4CC), onNo)
+                }
+            }
+            ChatImage(art?.second, Modifier.size(44.dp), FilterQuality.None)
+        }
+    }
+}
+
+@Composable
+private fun ChatImage(image: ImageBitmap?, modifier: Modifier, quality: FilterQuality) {
+    Canvas(modifier = modifier) {
+        if (image != null) drawImage(
+            image = image, dstSize = IntSize(size.width.toInt(), size.height.toInt()),
+            filterQuality = quality
+        )
+    }
+}
+
+@Composable
+private fun ChatChoice(label: String, body: Color, light: Color, onClick: () -> Unit) {
+    val latestOnClick by rememberUpdatedState(onClick)
+    val unit = pixelUnitOf(2.dp)
+    Box(
+        modifier = Modifier
+            .pixelFrame(unit, Color(0xFF3A2F3A), body, light)
+            .pointerInput(Unit) { detectTapGestures { latestOnClick() } }
+            .padding(horizontal = unit * 12, vertical = unit * 4),
+        contentAlignment = Alignment.Center
+    ) { Text(label, color = Color(0xFF1B1420), fontSize = 14.sp, fontWeight = FontWeight.Bold) }
 }

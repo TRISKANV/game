@@ -60,6 +60,7 @@ import com.kotlinsurvivors.features.room.presentation.components.StoryButton
 import com.kotlinsurvivors.features.room.presentation.components.StoryDialogueBox
 import com.kotlinsurvivors.features.room.presentation.components.StoryFileViewer
 import com.kotlinsurvivors.features.room.presentation.components.StoryGlitchMessage
+import com.kotlinsurvivors.features.room.presentation.components.StoryChatPopup
 import com.kotlinsurvivors.features.room.presentation.components.StoryAssistantMessage
 import com.kotlinsurvivors.features.room.presentation.components.StoryMission
 import com.kotlinsurvivors.features.room.presentation.components.StoryNotification
@@ -277,6 +278,18 @@ fun RoomScreen(
                 ending = director.isCallEnding,
                 contactName = stringResource(R.string.story_contact),
                 onAnswer = { director.answer() }
+            )
+        }
+
+        if (director.chatPopupOpen) {
+            StoryChatPopup(
+                name = stringResource(R.string.story_chat_name),
+                request = stringResource(R.string.story_chat_request),
+                question = stringResource(R.string.story_chat_question),
+                yesLabel = stringResource(R.string.story_chat_yes),
+                noLabel = stringResource(R.string.story_chat_no),
+                onYes = { director.chatYes() },
+                onNo = { director.chatNo() }
             )
         }
 

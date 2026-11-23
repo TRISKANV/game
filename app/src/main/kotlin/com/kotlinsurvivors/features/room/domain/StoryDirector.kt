@@ -15,7 +15,8 @@ enum class StoryPhase {
     CALL1_TALK,
     CALL1_ENDING,     // hang-up animation
     FILE_WAIT,        // notification on the computer: go and open the file
-    FILE_OPEN,        // the text of NO_ABRIR.txt
+    FILE_POPUP,       // a chat pop-up that comes up over the file; "no" goes on to the file
+    FILE_OPEN,        // the text of the file
     POST_FILE,
     GLITCH,           // the monitors flicker and a system message shows up
     POST_GLITCH,
@@ -86,6 +87,7 @@ class StoryDirector(
     val showNotification: Boolean get() = phase == StoryPhase.FILE_WAIT && notificationClock < NOTIFICATION_SECONDS
     val monitorPulsing: Boolean get() = phase == StoryPhase.FILE_WAIT
 
+    val chatPopupOpen: Boolean get() = phase == StoryPhase.FILE_POPUP
     val fileOpen: Boolean get() = phase == StoryPhase.FILE_OPEN
     val glitching: Boolean get() = phase == StoryPhase.GLITCH
 
@@ -162,8 +164,8 @@ class StoryDirector(
         when {
             target == Interactable.PHONE -> enter(StoryPhase.CALL1_INCOMING)
             target == Interactable.COMPUTER && phase == StoryPhase.FILE_WAIT -> {
-                cues += StoryCue.FILE_OPEN
-                enter(StoryPhase.FILE_OPEN)
+                cues += StoryCue.NOTIFY
+                enter(StoryPhase.FILE_POPUP)
             }
             target == Interactable.DOOR -> { cues += StoryCue.DOOR; enter(StoryPhase.LEAVING) }
             else -> {
@@ -192,7 +194,17 @@ class StoryDirector(
         else dialogue?.tap()
     }
 
-    /** The player closed NO_ABRIR.txt. */
+    /** "No" on the chat pop-up: it goes away and the file is there underneath. */
+    fun chatNo() {
+        if (phase != StoryPhase.FILE_POPUP) return
+        cues += StoryCue.FILE_OPEN
+        enter(StoryPhase.FILE_OPEN)
+    }
+
+    /** "Yes" on the chat pop-up. For now nothing happens: the pop-up stays and the story waits. */
+    fun chatYes() = Unit
+
+    /** The player closed the file. */
     fun closeFile() {
         if (phase != StoryPhase.FILE_OPEN) return
         startDialogue(StoryPhase.POST_FILE, listOf(

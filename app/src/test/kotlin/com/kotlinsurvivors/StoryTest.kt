@@ -151,6 +151,14 @@ class StoryDirectorTest {
 
         // the computer now opens the file instead of a remark
         assertTrue(s.interact(Interactable.COMPUTER))
+        // the chat pop-up comes first and covers the file; "yes" does nothing, "no" goes on
+        assertTrue(s.chatPopupOpen); assertFalse(s.fileOpen); assertFalse(s.canWalk)
+        s.closeFile()
+        assertTrue(s.chatPopupOpen)
+        s.chatYes()
+        assertTrue(s.chatPopupOpen); assertFalse(s.fileOpen)
+        s.chatNo()
+        assertFalse(s.chatPopupOpen)
         assertTrue(s.fileOpen); assertFalse(s.canWalk)
         s.closeFile()
         assertEquals(StoryPhase.POST_FILE, s.phase)
@@ -180,8 +188,8 @@ class StoryDirectorTest {
         assertTrue(Interactable.DOOR in s.usable)
 
         val cues = s.drainCues()
-        // notification of the draft, the glitch, the assistant's message and the mission
-        assertEquals(3, cues.count { it == StoryCue.NOTIFY })
+        // notification of the draft, the chat pop-up, the assistant's message and the mission
+        assertEquals(4, cues.count { it == StoryCue.NOTIFY })
         assertEquals(1, cues.count { it == StoryCue.GLITCH })
         assertEquals(1, cues.count { it == StoryCue.HANGUP })
         assertEquals(1, cues.count { it == StoryCue.ANSWER })
@@ -208,7 +216,7 @@ class StoryDirectorTest {
     @Test fun theAssistantMessageMovesOnByItselfAfterAWhile() {
         val s = director().toRinging()
         s.interact(Interactable.PHONE); s.answer(); s.talkThrough(); s.run(2f)
-        s.interact(Interactable.COMPUTER); s.closeFile(); s.talkThrough(); s.run(4.5f); s.talkThrough()
+        s.interact(Interactable.COMPUTER); s.chatNo(); s.closeFile(); s.talkThrough(); s.run(4.5f); s.talkThrough()
         assertEquals(StoryPhase.FINAL_MESSAGE, s.phase)
         s.run(StoryDirector.MESSAGE_SECONDS + 0.1f)
         assertEquals(StoryPhase.FINAL, s.phase)
@@ -239,7 +247,7 @@ class StoryDirectorTest {
         val keys = StoryDirector.CALL1.filterIsInstance<Beat.Say>().map { it.key } +
             listOf("story_wake_1", "story_wake_2", "story_obj_computer", "story_obj_desk", "story_obj_window",
                    "story_post_1", "story_post_2", "story_post_3", "story_final_msg", "story_final_1", "story_final_2", "story_notif_body", "story_file_text",
-                   "story_glitch", "story_contact", "story_mission_exit")
+                   "story_glitch", "story_contact", "story_chat_name", "story_chat_request", "story_chat_question", "story_chat_yes", "story_chat_no", "story_mission_exit")
         for (lang in listOf("values", "values-es")) {
             val xml = File("src/main/res/$lang/strings.xml").readText()
             for (k in keys) assertTrue("$lang is missing $k", xml.contains("name=\"$k\""))

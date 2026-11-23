@@ -282,6 +282,11 @@
     <string name="story_notif_body">Borrador sin enviar.\nNombre: \"LO_QUE_VI.txt\"</string>
     <string name="story_file_name">LO_QUE_VI.txt</string>
     <string name="story_file_text">Si estás leyendo esto, ya lo hice.\n\nVi algo que no debía ver.\nNo puedo decir qué, todavía.\nNo es seguro, ni para mí ni para nadie cercano.\n\nSé lo que arriesgo. Fui yo el que lo buscó.\n\nPero no voy a esconderlo.\nAlguien tiene que escucharlo.\n\nPerdón por no contarte más.</string>
+    <string name="story_chat_name">Mandy (a 5 km de distancia)</string>
+    <string name="story_chat_request">(te ha enviado una solicitud de fontanero).....</string>
+    <string name="story_chat_question">\"¿Te apetece trabajar?\"</string>
+    <string name="story_chat_yes">SÍ</string>
+    <string name="story_chat_no">NO</string>
     <string name="story_file_close">CERRAR</string>
     <string name="story_post_1">Cada vez que lo leo me pesa más.</string>
     <string name="story_post_2">No hay vuelta atrás.</string>

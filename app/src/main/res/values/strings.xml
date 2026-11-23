@@ -282,6 +282,11 @@
     <string name="story_notif_body">Unsent draft.\nName: \"LO_QUE_VI.txt\"</string>
     <string name="story_file_name">LO_QUE_VI.txt</string>
     <string name="story_file_text">If you are reading this, I already did it.\n\nI saw something I wasn\'t supposed to see.\nI can\'t say what, not yet.\nIt isn\'t safe, not for me and not for anyone close.\n\nI know what I\'m risking. I\'m the one who went looking.\n\nBut I won\'t hide it.\nSomebody has to hear it.\n\nSorry for not telling you more.</string>
+    <string name="story_chat_name">Mandy (5 km away)</string>
+    <string name="story_chat_request">(sent you a plumber request).....</string>
+    <string name="story_chat_question">\"Do you feel like working?\"</string>
+    <string name="story_chat_yes">YES</string>
+    <string name="story_chat_no">NO</string>
     <string name="story_file_close">CLOSE</string>
     <string name="story_post_1">It gets heavier every time I read it.</string>
     <string name="story_post_2">There is no turning back.</string>
