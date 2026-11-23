@@ -384,13 +384,13 @@ fun StoryChatPopup(
         contentAlignment = Alignment.Center) {
         Row(
             modifier = Modifier
-                .fillMaxWidth(0.84f)
+                .fillMaxWidth(0.68f)   // inside the green window (0.72 wide), never wider
                 .pixelFrame(unit, Color(0xFF3A2F3A), Color(0xFFEDE3D8), Color(0xFFFFF6EA))
                 .padding(horizontal = unit * 8, vertical = unit * 6),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            ChatImage(art?.first, Modifier.size(width = 80.dp, height = 100.dp), FilterQuality.Low)   // the portrait as supplied, only scaled
+            ChatImage(art?.first, Modifier.size(width = 72.dp, height = 90.dp), FilterQuality.Low)   // the portrait as supplied, only scaled
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 Text(name, color = Color(0xFF1B1420), fontSize = 15.sp, fontWeight = FontWeight.Bold)
                 Text(request, color = Color(0xFF2E2433), fontSize = 12.sp)
@@ -400,7 +400,7 @@ fun StoryChatPopup(
                     ChatChoice(noLabel, Color(0xFF9A9AA2), Color(0xFFC4C4CC), onNo)
                 }
             }
-            ChatImage(art?.second, Modifier.size(44.dp), FilterQuality.None)
+            ChatImage(art?.second, Modifier.size(36.dp), FilterQuality.None)
         }
     }
 }

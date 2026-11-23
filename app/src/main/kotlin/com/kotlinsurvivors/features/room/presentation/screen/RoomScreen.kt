@@ -327,9 +327,9 @@ private const val WALK_FRAMES_PER_SECOND = 9f
 // Places in the room picture (pixels of the 640x360 image) that the story animates.
 // Screens of the three monitors, inside their frames; each one is lit on its own.
 private val SCREENS = listOf(
-    RoomLayout.Box(262f, 77f, 30f, 22f),
-    RoomLayout.Box(304f, 77f, 30f, 22f),
-    RoomLayout.Box(360f, 77f, 30f, 22f)
+    RoomLayout.Box(261f, 75f, 32f, 28f),
+    RoomLayout.Box(303f, 75f, 46f, 28f),      // the middle monitor is wider than the other two
+    RoomLayout.Box(359f, 75f, 32f, 28f)
 )
 private val WINDOW   = RoomLayout.Box(440f, 18f, 90f, 80f)
 private const val PHONE_X = 122f
