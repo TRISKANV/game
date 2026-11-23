@@ -427,3 +427,17 @@ private fun ChatChoice(label: String, body: Color, light: Color, onClick: () -> 
         contentAlignment = Alignment.Center
     ) { Text(label, color = Color(0xFF1B1420), fontSize = 14.sp, fontWeight = FontWeight.Bold) }
 }
+
+/** A key item of the story, shown as a small tag once the protagonist has it (the USB with the evidence). */
+@Composable
+fun StoryKeyItem(label: String, name: String, modifier: Modifier = Modifier) {
+    val unit = pixelUnitOf(2.dp)
+    Column(
+        modifier = modifier
+            .pixelFrame(unit, Color(0xFFB8943C), Color(0xFF1A1508), Color(0xFFFFE08A))
+            .padding(horizontal = unit * 6, vertical = unit * 3)
+    ) {
+        Text(label, color = Color(0xFFFFD36B), fontSize = 9.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
+        Text(name, color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+    }
+}

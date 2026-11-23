@@ -173,7 +173,25 @@ class StoryDirectorTest {
         s.run(1f)
         assertEquals(StoryPhase.POST_GLITCH, s.phase)
         s.talkThrough()
-        // the assistant's last notification: it ignores a tap at once, then a tap moves on
+
+        // second call: it rings by itself, the ambience steps back while they talk, the USB is registered
+        assertEquals(StoryPhase.CALL2_INCOMING, s.phase)
+        assertTrue(s.phoneRinging); assertFalse(s.canWalk)
+        assertFalse(s.usbRegistered)
+        assertEquals(1f, s.ambienceVolume, 0f)
+        s.answer()
+        assertEquals(StoryPhase.CALL2_TALK, s.phase)
+        assertTrue(s.ambienceVolume < 1f)
+        s.talkThrough()
+        assertTrue(s.usbRegistered)
+        assertEquals(StoryPhase.CALL2_ENDING, s.phase)
+        s.run(2f)
+        // a few quiet seconds looking at the computer, with no control
+        assertEquals(StoryPhase.LOOK_AT_PC, s.phase)
+        assertFalse(s.canWalk)
+        s.run(StoryDirector.LOOK_SECONDS + 0.2f)
+
+        // the contact's last notification: it ignores a tap at once, then a tap moves on
         assertEquals(StoryPhase.FINAL_MESSAGE, s.phase)
         assertTrue(s.showAssistantMessage)
         s.tap()
@@ -188,11 +206,11 @@ class StoryDirectorTest {
         assertTrue(Interactable.DOOR in s.usable)
 
         val cues = s.drainCues()
-        // notification of the draft, the chat pop-up, the assistant's message and the mission
-        assertEquals(4, cues.count { it == StoryCue.NOTIFY })
+        // notification of the file, the chat pop-up, the USB, the contact's message and the mission
+        assertEquals(5, cues.count { it == StoryCue.NOTIFY })
         assertEquals(1, cues.count { it == StoryCue.GLITCH })
-        assertEquals(1, cues.count { it == StoryCue.HANGUP })
-        assertEquals(1, cues.count { it == StoryCue.ANSWER })
+        assertEquals(2, cues.count { it == StoryCue.HANGUP })
+        assertEquals(2, cues.count { it == StoryCue.ANSWER })
 
         s.run(5f); assertFalse(s.showMissionBanner); assertTrue(s.missionVisible)
         assertTrue(s.interact(Interactable.DOOR))
@@ -217,6 +235,7 @@ class StoryDirectorTest {
         val s = director().toRinging()
         s.interact(Interactable.PHONE); s.answer(); s.talkThrough(); s.run(2f)
         s.interact(Interactable.COMPUTER); s.chatNo(); s.closeFile(); s.talkThrough(); s.run(4.5f); s.talkThrough()
+        s.answer(); s.talkThrough(); s.run(2f); s.run(StoryDirector.LOOK_SECONDS + 0.2f)
         assertEquals(StoryPhase.FINAL_MESSAGE, s.phase)
         s.run(StoryDirector.MESSAGE_SECONDS + 0.1f)
         assertEquals(StoryPhase.FINAL, s.phase)
@@ -244,9 +263,9 @@ class StoryDirectorTest {
     }
 
     @Test fun everyLineOfTheScriptIsAKnownStringInBothLanguages() {
-        val keys = StoryDirector.CALL1.filterIsInstance<Beat.Say>().map { it.key } +
+        val keys = (StoryDirector.CALL1 + StoryDirector.CALL2).filterIsInstance<Beat.Say>().map { it.key } +
             listOf("story_wake_1", "story_wake_2", "story_obj_computer", "story_obj_desk", "story_obj_window",
-                   "story_post_1", "story_post_2", "story_post_3", "story_final_msg", "story_final_1", "story_final_2", "story_notif_body", "story_file_text",
+                   "story_post_1", "story_post_2", "story_post_3", "story_final_msg", "story_final_1", "story_usb_label", "story_usb_name", "story_notif_body", "story_file_text",
                    "story_glitch", "story_contact", "story_chat_name", "story_chat_request", "story_chat_question", "story_chat_yes", "story_chat_no", "story_mission_exit")
         for (lang in listOf("values", "values-es")) {
             val xml = File("src/main/res/$lang/strings.xml").readText()
@@ -255,15 +274,27 @@ class StoryDirectorTest {
     }
 
     @Test fun theCallsFollowTheScriptOrder() {
-        assertEquals(32, StoryDirector.CALL1.size)             // 28 lines and 4 silences
-        assertEquals(28, StoryDirector.CALL1.count { it is Beat.Say })
+        assertEquals(9, StoryDirector.CALL1.size)
         assertEquals(Speaker.ASSISTANT, (StoryDirector.CALL1.first() as Beat.Say).speaker)
-        assertEquals("story_call1_28", (StoryDirector.CALL1.last() as Beat.Say).key)
-        assertEquals(Speaker.PROTAGONIST, (StoryDirector.CALL1.last() as Beat.Say).speaker)
-        // the assistant and the protagonist alternate, and the lines of the speakers never repeat a key
-        val says = StoryDirector.CALL1.filterIsInstance<Beat.Say>()
+        assertEquals("story_call1_09", (StoryDirector.CALL1.last() as Beat.Say).key)
+        // the first call alternates strictly; every key is used once
+        val first = StoryDirector.CALL1.filterIsInstance<Beat.Say>()
+        for (pair in first.zipWithNext()) assertTrue(pair.first.speaker != pair.second.speaker)
+
+        // the second one: 35 lines and 4 silences (after the weight of "no one must know", the decision,
+        // the promise to survive, and her taking a breath)
+        assertEquals(39, StoryDirector.CALL2.size)
+        val says = StoryDirector.CALL2.filterIsInstance<Beat.Say>()
+        assertEquals(35, says.size)
+        assertEquals(4, StoryDirector.CALL2.count { it is Beat.Silence })
         assertEquals(says.size, says.map { it.key }.toSet().size)
-        for (pair in says.zipWithNext()) assertTrue(pair.first.speaker != pair.second.speaker)
+        assertEquals("story_call2_01", says.first().key)
+        assertEquals("story_call2_35", says.last().key)
+        assertEquals(Speaker.ASSISTANT, says.last().speaker)
+        // the USB line is the protagonist's, and it is the one that registers the key item
+        assertEquals(Speaker.PROTAGONIST, says.first { it.key == StoryDirector.USB_LINE_KEY }.speaker)
+        val usbText = File("src/main/res/values-es/strings.xml").readText()
+        assertTrue(usbText.substringAfter("name=\"${StoryDirector.USB_LINE_KEY}\">").substringBefore("<").contains("USB"))
     }
 
     @Test fun thereIsNoPoliceStationYetSoTheDoorLeadsOnToTheGame() {

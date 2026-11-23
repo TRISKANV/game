@@ -60,6 +60,7 @@ import com.kotlinsurvivors.features.room.presentation.components.StoryButton
 import com.kotlinsurvivors.features.room.presentation.components.StoryDialogueBox
 import com.kotlinsurvivors.features.room.presentation.components.StoryFileViewer
 import com.kotlinsurvivors.features.room.presentation.components.StoryGlitchMessage
+import com.kotlinsurvivors.features.room.presentation.components.StoryKeyItem
 import com.kotlinsurvivors.features.room.presentation.components.StoryChatPopup
 import com.kotlinsurvivors.features.room.presentation.components.StoryAssistantMessage
 import com.kotlinsurvivors.features.room.presentation.components.StoryMission
@@ -134,16 +135,25 @@ fun RoomScreen(
     var near by remember { mutableStateOf<Interactable?>(null) }
 
     // Ambience: the fan, the rain and a quiet melody keep going for as long as the room is on screen.
+    val ambience = remember { mutableListOf<Int>() }
     DisposableEffect(sfx) {
         val loops = listOf(Sound.AMB_FAN, Sound.AMB_RAIN, Sound.AMB_MUSIC).map { sfx.startLoop(it) }
+        ambience.addAll(loops)
         sfx.play(Sound.AMB_STATIC)
-        onDispose { loops.forEach { sfx.stopLoop(it) } }
+        onDispose { loops.forEach { sfx.stopLoop(it) }; ambience.clear() }
     }
+
+    // The skip button only exists for players who have already been through the introduction:
+    // the first time, every line of the story is mandatory.
+    val prefs = remember(context) { context.getSharedPreferences("story", android.content.Context.MODE_PRIVATE) }
+    val introSeen = remember(prefs) { prefs.getBoolean("intro_seen", false) }
 
     LaunchedEffect(world, joystick, director) {
         var last = withFrameNanos { it }
         var ringHandle = -1
         var lastChars = 0
+        var lastAmbience = 1f
+        var seenSaved = false
         try {
             while (true) {
                 val now = withFrameNanos { it }
@@ -152,6 +162,17 @@ fun RoomScreen(
                 fx.time += dt
 
                 director.update(dt)
+
+                // During a call the ambience steps back a little so the voices come first.
+                val ambienceVolume = director.ambienceVolume
+                if (ambienceVolume != lastAmbience) {
+                    ambience.forEach { sfx.setLoopVolume(it, ambienceVolume) }
+                    lastAmbience = ambienceVolume
+                }
+                if (director.missionVisible && !seenSaved) {
+                    prefs.edit().putBoolean("intro_seen", true).apply()
+                    seenSaved = true
+                }
 
                 val input = joystick.getState()
                 if (director.canWalk) world.update(dt, input.dx, input.dy) else world.update(dt, 0f, 0f)
@@ -254,7 +275,7 @@ fun RoomScreen(
 
         if (director.showAssistantMessage) {
             StoryAssistantMessage(
-                name = stringResource(R.string.story_speaker_assistant),
+                name = stringResource(R.string.story_contact),
                 text = stringResource(R.string.story_final_msg),
                 onTap = { director.tap() }
             )
@@ -306,7 +327,15 @@ fun RoomScreen(
 
         director.dialogue?.takeIf { !it.isFinished }?.let { StoryDialogueBox(runner = it, onTap = { director.tap() }) }
 
-        if (!director.missionVisible && !director.isDone) {
+        if (director.usbRegistered) {
+            StoryKeyItem(
+                label = stringResource(R.string.story_usb_label),
+                name = stringResource(R.string.story_usb_name),
+                modifier = Modifier.align(Alignment.TopStart).padding(start = 12.dp, top = if (director.missionVisible) 72.dp else 12.dp)
+            )
+        }
+
+        if (introSeen && !director.missionVisible && !director.isDone) {
             StoryButton(
                 label = stringResource(R.string.story_skip),
                 onClick = { director.skip() },

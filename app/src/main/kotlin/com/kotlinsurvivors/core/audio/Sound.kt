@@ -90,6 +90,9 @@ interface SoundEffects {
 
     fun stopLoop(handle: Int) = Unit
 
+    /** Scales the volume of a running loop (1 = its own volume), e.g. to lower the ambience during a call. */
+    fun setLoopVolume(handle: Int, factor: Float) = Unit
+
     /** Plays nothing: for tests and for anything that runs without audio. */
     object None : SoundEffects {
         override fun play(sound: Sound) = Unit

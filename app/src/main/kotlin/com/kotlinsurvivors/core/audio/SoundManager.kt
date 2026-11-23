@@ -86,15 +86,30 @@ class SoundManager @Inject constructor(
         pool.play(id, sound.volume, sound.volume, 1, 0, 1f)
     }
 
+    /** Own volume of each running loop, so [setLoopVolume] can scale it. */
+    private val loopVolumes = HashMap<Int, Float>()
+
     override fun startLoop(sound: Sound): Int {
         if (!_enabled.value) return -1
         val id = ids[sound] ?: return -1
         if (!synchronized(ready) { id in ready }) return -1
         val stream = pool.play(id, sound.volume, sound.volume, 1, -1, 1f)
-        return if (stream == 0) -1 else stream
+        if (stream == 0) return -1
+        synchronized(loopVolumes) { loopVolumes[stream] = sound.volume }
+        return stream
+    }
+
+    override fun setLoopVolume(handle: Int, factor: Float) {
+        if (handle <= 0) return
+        val base = synchronized(loopVolumes) { loopVolumes[handle] } ?: return
+        val v = (base * factor).coerceIn(0f, 1f)
+        pool.setVolume(handle, v, v)
     }
 
     override fun stopLoop(handle: Int) {
-        if (handle > 0) pool.stop(handle)
+        if (handle > 0) {
+            pool.stop(handle)
+            synchronized(loopVolumes) { loopVolumes.remove(handle) }
+        }
     }
 }

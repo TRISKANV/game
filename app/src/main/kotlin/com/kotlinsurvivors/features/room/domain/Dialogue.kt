@@ -37,6 +37,9 @@ class DialogueRunner(
 
     val isSilence: Boolean get() = current is Beat.Silence
 
+    /** The string key of the line on screen, or null during a silence or once finished. */
+    val currentKey: String? get() = (current as? Beat.Say)?.key
+
     /** The complete text of the current line ("" during a silence). */
     val fullText: String get() = (current as? Beat.Say)?.let { textOf(it.key) } ?: ""
 
