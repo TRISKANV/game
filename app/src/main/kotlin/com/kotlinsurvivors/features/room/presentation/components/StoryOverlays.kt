@@ -89,8 +89,8 @@ fun StoryDialogueBox(
         val deauth = speaker == Speaker.ASSISTANT
         StoryWindow(
             name = name,
-            accent = if (deauth) StoryStyle.Purple else StoryStyle.Gold,
-            light = if (deauth) StoryStyle.PurpleLight else StoryStyle.GoldLight,
+            accent = if (deauth) StoryStyle.Purple else StoryStyle.Green,
+            light = if (deauth) StoryStyle.PurpleLight else StoryStyle.GreenLight,
             modifier = Modifier
                 .align(Alignment.BottomCenter)
                 .padding(bottom = 18.dp, start = 24.dp, end = 28.dp)

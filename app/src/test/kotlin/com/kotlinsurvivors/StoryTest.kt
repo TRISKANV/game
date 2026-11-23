@@ -1,6 +1,7 @@
 package com.kotlinsurvivors
 
 import com.kotlinsurvivors.features.room.domain.Beat
+import com.kotlinsurvivors.features.room.domain.Countdown
 import com.kotlinsurvivors.features.room.domain.DialogueRunner
 import com.kotlinsurvivors.features.room.domain.Interactable
 import com.kotlinsurvivors.features.room.domain.RoomInteractables
@@ -151,12 +152,11 @@ class StoryDirectorTest {
 
         // the computer now opens the file instead of a remark
         assertTrue(s.interact(Interactable.COMPUTER))
-        // the chat pop-up comes first and covers the file; "yes" does nothing, "no" goes on
+        // the chat pop-up comes first and covers the file; "no" goes on to the file
         assertTrue(s.chatPopupOpen); assertFalse(s.fileOpen); assertFalse(s.canWalk)
         s.closeFile()
         assertTrue(s.chatPopupOpen)
-        s.chatYes()
-        assertTrue(s.chatPopupOpen); assertFalse(s.fileOpen)
+        assertFalse(s.infected)
         s.chatNo()
         assertFalse(s.chatPopupOpen)
         assertTrue(s.fileOpen); assertFalse(s.canWalk)
@@ -239,6 +239,62 @@ class StoryDirectorTest {
         assertEquals(StoryPhase.FINAL_MESSAGE, s.phase)
         s.run(StoryDirector.MESSAGE_SECONDS + 0.1f)
         assertEquals(StoryPhase.FINAL, s.phase)
+    }
+
+    @Test fun sayingYesInfectsTheComputerAndTheClocksKeepRunning() {
+        val s = director().toRinging()
+        s.interact(Interactable.PHONE); s.answer(); s.talkThrough(); s.run(2f)
+        s.interact(Interactable.COMPUTER)
+        assertTrue(s.chatPopupOpen); assertFalse(s.infected)
+        s.chatYes()
+        assertTrue(s.infecting); assertTrue(s.infected); assertFalse(s.canWalk)
+        assertEquals(1, s.drainCues().count { it == StoryCue.INFECT })
+        s.run(StoryDirector.INFECTION_SECONDS / 2f)
+        assertTrue(s.infectionProgress in 0.3f..0.7f)
+        s.run(StoryDirector.INFECTION_SECONDS)
+        // the ransom screen, with both clocks counting down from their starting values
+        assertEquals(StoryPhase.RANSOM, s.phase)
+        assertTrue(s.showRansom); assertFalse(s.canWalk)
+        val first = s.paymentDoublesIn
+        assertTrue(first < Countdown.PAYMENT_DOUBLES_SECONDS)
+        s.run(3f)
+        assertTrue(s.paymentDoublesIn < first)
+        assertTrue(s.filesLostIn < Countdown.FILES_LOST_SECONDS)
+        assertTrue(s.filesLostIn - s.paymentDoublesIn >= 4L * 86_400 - 1)   // always four days apart
+
+        // closing it goes on with the story (the file opens), the clocks keep going
+        s.closeRansom()
+        assertTrue(s.fileOpen); assertFalse(s.showRansom)
+        s.closeFile(); s.talkThrough(); s.run(4.5f); s.talkThrough()
+        val before = s.paymentDoublesIn
+        s.run(10f)
+        assertTrue(s.paymentDoublesIn < before)
+        assertTrue(s.infected)
+    }
+
+    @Test fun theRansomNoteCanBeReadAgainFromTheComputer() {
+        val s = director()
+        s.skip()
+        assertFalse(s.infected)
+        // before the infection the computer only makes a remark
+        s.interact(Interactable.COMPUTER); assertFalse(s.showRansom)
+        val t = director().toRinging()
+        t.interact(Interactable.PHONE); t.answer(); t.talkThrough(); t.run(2f)
+        t.interact(Interactable.COMPUTER); t.chatYes(); t.run(StoryDirector.INFECTION_SECONDS + 0.2f)
+        t.closeRansom(); t.closeFile(); t.talkThrough(); t.run(4.5f); t.talkThrough()
+        t.answer(); t.talkThrough(); t.run(2f); t.run(StoryDirector.LOOK_SECONDS + 0.2f)
+        t.tap(); t.run(StoryDirector.MESSAGE_MIN_SECONDS + 0.1f); t.tap(); t.talkThrough()
+        assertEquals(StoryPhase.MISSION, t.phase)
+        assertTrue(t.interact(Interactable.COMPUTER))
+        assertTrue(t.showRansom); assertFalse(t.canWalk)
+        t.closeRansom()
+        assertFalse(t.showRansom); assertTrue(t.canWalk)
+    }
+
+    @Test fun yesOutsideThePopupDoesNothing() {
+        val s = director().toRinging()
+        s.chatYes()
+        assertFalse(s.infected)
     }
 
     @Test fun theDoorIsLockedUntilTheMission() {
@@ -333,5 +389,31 @@ class RoomInteractablesTest {
         assertEquals(Interactable.DOOR, RoomInteractables.near(x, y, setOf(Interactable.DOOR)))
         assertNull(RoomInteractables.near(x, y, setOf(Interactable.PHONE)))
         assertNotNull(RoomInteractables.near(x, y, Interactable.values().toSet()))
+    }
+}
+
+class CountdownTest {
+    @Test fun clocksAreWrittenDaysHoursMinutesSeconds() {
+        assertEquals("02:23:57:55", Countdown.format(Countdown.PAYMENT_DOUBLES_SECONDS))
+        assertEquals("06:23:57:55", Countdown.format(Countdown.FILES_LOST_SECONDS))
+        assertEquals("00:00:00:00", Countdown.format(0))
+        assertEquals("00:00:00:00", Countdown.format(-5))
+        assertEquals("01:00:00:01", Countdown.format(86_401))
+    }
+
+    @Test fun theMonitorShowsTheSameTimeAsHours() {
+        assertEquals("71:57:55", Countdown.formatHours(Countdown.PAYMENT_DOUBLES_SECONDS))
+        assertEquals("00:00:09", Countdown.formatHours(9))
+    }
+
+    @Test fun everyRansomTextExistsInBothLanguages() {
+        val keys = listOf("story_infect_title", "story_infect_error", "story_ransom_title", "story_ransom_header",
+            "story_ransom_pay_label", "story_ransom_lost_label", "story_ransom_time_left", "story_ransom_text",
+            "story_ransom_send", "story_ransom_address", "story_ransom_check", "story_ransom_decrypt",
+            "story_ransom_no_payment", "story_ransom_need_payment", "story_ransom_close")
+        for (lang in listOf("values", "values-es")) {
+            val xml = File("src/main/res/$lang/strings.xml").readText()
+            for (k in keys) assertTrue("$lang is missing $k", xml.contains("name=\"$k\""))
+        }
     }
 }

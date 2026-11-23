@@ -60,6 +60,8 @@ import com.kotlinsurvivors.features.room.presentation.components.StoryButton
 import com.kotlinsurvivors.features.room.presentation.components.StoryDialogueBox
 import com.kotlinsurvivors.features.room.presentation.components.StoryFileViewer
 import com.kotlinsurvivors.features.room.presentation.components.StoryGlitchMessage
+import com.kotlinsurvivors.features.room.presentation.components.StoryInfection
+import com.kotlinsurvivors.features.room.presentation.components.StoryRansomScreen
 import com.kotlinsurvivors.features.room.presentation.components.StoryKeyItem
 import com.kotlinsurvivors.features.room.presentation.components.StoryChatPopup
 import com.kotlinsurvivors.features.room.presentation.components.StoryAssistantMessage
@@ -193,6 +195,7 @@ fun RoomScreen(
                     StoryCue.FILE_OPEN -> sfx.play(Sound.UI_CLICK)
                     StoryCue.GLITCH    -> { sfx.play(Sound.GLITCH); sfx.play(Sound.AMB_STATIC) }
                     StoryCue.DOOR      -> sfx.play(Sound.DOOR_OPEN)
+                    StoryCue.INFECT    -> { sfx.play(Sound.GLITCH); sfx.play(Sound.AMB_STATIC) }
                 }
 
                 // The phone rings, on top of the ambience, for as long as the story says so.
@@ -313,12 +316,22 @@ fun RoomScreen(
 
         // The green window of the file is up first; the chat pop-up lands on top of it and the text
         // only starts to type once the pop-up has been dismissed.
-        if (director.chatPopupOpen || director.fileOpen) {
+        if (director.chatPopupOpen || director.infecting || director.fileOpen) {
             StoryFileViewer(
                 fileName = stringResource(R.string.story_file_name),
                 text = stringResource(R.string.story_file_text),
                 onClose = { director.closeFile() },
                 typing = director.fileOpen
+            )
+        }
+
+        if (director.infecting) StoryInfection(progress = director.infectionProgress, time = fx.time)
+
+        if (director.showRansom) {
+            StoryRansomScreen(
+                paymentDoublesIn = director.paymentDoublesIn,
+                filesLostIn = director.filesLostIn,
+                onClose = { director.closeRansom() }
             )
         }
 
@@ -425,6 +438,9 @@ private fun DrawScope.drawRoom(art: RoomArt?, world: RoomWorld, story: StoryDire
         }
     }
 
+    // ── The main (middle) monitor shows the ransom clock once the computer is infected ──
+    if (story.infected && !story.glitching) drawMonitorCountdown(SCREENS[1], story.paymentDoublesIn, time, scale, originX, originY)
+
     // ── The mobile phone on the nightstand ──
     val ringing = story.phoneRinging
     val shake = if (ringing) (if ((time * 30f).toInt() % 2 == 0) 1f else -1f) else 0f
@@ -504,3 +520,46 @@ private fun Modifier.roomJoystickInput(joystick: VirtualJoystick, viewportWidth:
             }
         }
     }
+
+// Digits of the monitor clock, 3x5 pixels each ('#' is lit).
+private val DIGITS = mapOf(
+    '0' to "###" + "#.#" + "#.#" + "#.#" + "###", '1' to ".#." + "##." + ".#." + ".#." + "###",
+    '2' to "###" + "..#" + "###" + "#.." + "###", '3' to "###" + "..#" + "###" + "..#" + "###",
+    '4' to "#.#" + "#.#" + "###" + "..#" + "..#", '5' to "###" + "#.." + "###" + "..#" + "###",
+    '6' to "###" + "#.." + "###" + "#.#" + "###", '7' to "###" + "..#" + "..#" + "..#" + "..#",
+    '8' to "###" + "#.#" + "###" + "#.#" + "###", '9' to "###" + "#.#" + "###" + "..#" + "###"
+)
+
+/** Draws "HH:MM:SS" in red pixel digits on [screen] (room pixels), on top of the monitor's own picture. */
+private fun DrawScope.drawMonitorCountdown(screen: RoomLayout.Box, seconds: Long, time: Float, scale: Float, originX: Float, originY: Float) {
+    fun rect(x: Float, y: Float, w: Float, h: Float, c: Color) =
+        drawRect(c, Offset(originX + x * scale, originY + y * scale), Size(w * scale, h * scale))
+
+    rect(screen.x, screen.y, screen.w, screen.h, Color(0xFF2A070B))
+    rect(screen.x, screen.y, screen.w, 2f, Color(0xFFB02A2A))                          // title strip
+    // a small padlock on the left of the strip
+    rect(screen.x + 3f, screen.y + 4f, 5f, 1f, Color(0xFFF1E6D0))
+    rect(screen.x + 2f, screen.y + 5f, 7f, 5f, Color(0xFFB02A2A))
+    rect(screen.x + 5f, screen.y + 6f, 1f, 3f, Color(0xFF120A12))
+
+    val text = com.kotlinsurvivors.features.room.domain.Countdown.formatHours(seconds)
+    val width = text.sumOf { if (it == ':') 3 else 4 } - 1
+    var x = screen.x + (screen.w - width) / 2f
+    val y = screen.y + 14f
+    val pulse = if ((time * 2f).toInt() % 2 == 0) Color(0xFFFFD36B) else Color(0xFFFF7A6A)
+    for (ch in text) {
+        if (ch == ':') {
+            val c = if ((time * 2f).toInt() % 2 == 0) pulse else Color(0xFF7A2A2A)
+            rect(x + 1f, y + 1f, 1f, 1f, c); rect(x + 1f, y + 3f, 1f, 1f, c)
+            x += 3f
+        } else {
+            val bits = DIGITS.getValue(ch)
+            for (i in bits.indices) if (bits[i] == '#') rect(x + i % 3, y + i / 3, 1f, 1f, pulse)
+            x += 4f
+        }
+    }
+    // the bar under the digits, emptying as the payment gets closer
+    val fraction = (seconds.toFloat() / com.kotlinsurvivors.features.room.domain.Countdown.PAYMENT_DOUBLES_SECONDS).coerceIn(0f, 1f)
+    rect(screen.x + 3f, screen.y + screen.h - 4f, screen.w - 6f, 1f, Color(0xFF5A1A1E))
+    rect(screen.x + 3f, screen.y + screen.h - 4f, (screen.w - 6f) * fraction, 1f, Color(0xFF58D86A))
+}

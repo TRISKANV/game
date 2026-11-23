@@ -16,6 +16,8 @@ enum class StoryPhase {
     CALL1_ENDING,     // hang-up animation
     FILE_WAIT,        // notification on the computer: go and open the file
     FILE_POPUP,       // a chat pop-up that comes up over the file; "no" goes on to the file
+    INFECTION,        // "yes": the computer gets infected, a short animation
+    RANSOM,           // the ransom screen with its two countdowns; closing it goes on to the file
     FILE_OPEN,        // the text of the file
     POST_FILE,
     GLITCH,           // the monitors flicker and a system message shows up
@@ -32,7 +34,7 @@ enum class StoryPhase {
 }
 
 /** One-shot sounds the screen plays when the story asks for them. */
-enum class StoryCue { KEYS, ANSWER, HANGUP, NOTIFY, FILE_OPEN, GLITCH, DOOR }
+enum class StoryCue { KEYS, ANSWER, HANGUP, NOTIFY, FILE_OPEN, GLITCH, DOOR, INFECT }
 
 /**
  * The script of Chapter 0 «Sin conexión» as a small state machine.
@@ -100,6 +102,26 @@ class StoryDirector(
 
     val chatPopupOpen: Boolean get() = phase == StoryPhase.FILE_POPUP
     val fileOpen: Boolean get() = phase == StoryPhase.FILE_OPEN
+
+    // ── The infection: animation, ransom screen and the clocks that keep running afterwards ──
+    /** True from the moment the player says "yes" to the pop-up. */
+    var infected = false
+        private set
+
+    /** Seconds the infection has been going, the base of both countdowns. */
+    var infectedSeconds = 0f
+        private set
+
+    /** The ransom screen is up on the computer, to read it again later when [reviewing]. */
+    private var reviewing = false
+
+    val infecting: Boolean get() = phase == StoryPhase.INFECTION
+    val infectionProgress: Float get() = if (infecting) (clock / INFECTION_SECONDS).coerceIn(0f, 1f) else if (infected) 1f else 0f
+    val showRansom: Boolean get() = phase == StoryPhase.RANSOM || reviewing
+
+    /** Seconds left before the payment doubles / before the files are lost. They only ever go down. */
+    val paymentDoublesIn: Long get() = Countdown.PAYMENT_DOUBLES_SECONDS - infectedSeconds.toLong()
+    val filesLostIn: Long get() = Countdown.FILES_LOST_SECONDS - infectedSeconds.toLong()
     val glitching: Boolean get() = phase == StoryPhase.GLITCH
 
     /**
@@ -119,12 +141,12 @@ class StoryDirector(
 
     /** Whether the joystick and the use button work. */
     val canWalk: Boolean
-        get() = phase == StoryPhase.EXPLORE || phase == StoryPhase.RINGING ||
-                phase == StoryPhase.FILE_WAIT || phase == StoryPhase.MISSION
+        get() = !reviewing && (phase == StoryPhase.EXPLORE || phase == StoryPhase.RINGING ||
+                phase == StoryPhase.FILE_WAIT || phase == StoryPhase.MISSION)
 
     /** The objects the player may use right now. */
     val usable: Set<Interactable>
-        get() = when (phase) {
+        get() = if (reviewing) emptySet() else when (phase) {
             StoryPhase.EXPLORE   -> OPTIONAL
             StoryPhase.RINGING   -> OPTIONAL + Interactable.PHONE
             StoryPhase.FILE_WAIT -> setOf(Interactable.COMPUTER, Interactable.WINDOW)   // the desk remark would get in the way
@@ -142,6 +164,7 @@ class StoryDirector(
             if (bubbleClock >= BUBBLE_SECONDS) bubbleKey = null
         }
         dialogue?.update(dt)
+        if (infected) infectedSeconds += dt
 
         when (phase) {
             StoryPhase.INTRO -> {
@@ -157,6 +180,7 @@ class StoryDirector(
             StoryPhase.CALL1_TALK   -> if (dialogue.finished()) { cues += StoryCue.HANGUP; dialogue = null; enter(StoryPhase.CALL1_ENDING) }
             StoryPhase.CALL1_ENDING -> if (clock >= HANGUP_SECONDS) { cues += StoryCue.NOTIFY; notificationClock = 0f; enter(StoryPhase.FILE_WAIT) }
             StoryPhase.FILE_WAIT    -> notificationClock += dt
+            StoryPhase.INFECTION    -> if (clock >= INFECTION_SECONDS) { cues += StoryCue.NOTIFY; enter(StoryPhase.RANSOM) }
             StoryPhase.POST_FILE    -> if (dialogue.finished()) { cues += StoryCue.GLITCH; enter(StoryPhase.GLITCH) }
             StoryPhase.GLITCH       -> if (clock >= GLITCH_SECONDS) startDialogue(StoryPhase.POST_GLITCH, listOf(Say(PROTAGONIST, "story_post_3")))
             StoryPhase.POST_GLITCH  -> if (dialogue.finished()) enter(StoryPhase.CALL2_INCOMING)
@@ -184,6 +208,7 @@ class StoryDirector(
                 cues += StoryCue.NOTIFY
                 enter(StoryPhase.FILE_POPUP)
             }
+            target == Interactable.COMPUTER && infected -> { cues += StoryCue.NOTIFY; reviewing = true }   // read the ransom note again
             target == Interactable.DOOR -> { cues += StoryCue.DOOR; enter(StoryPhase.LEAVING) }
             else -> {
                 bubbleKey = when (target) {
@@ -219,8 +244,22 @@ class StoryDirector(
         enter(StoryPhase.FILE_OPEN)
     }
 
-    /** "Yes" on the chat pop-up. For now nothing happens: the pop-up stays and the story waits. */
-    fun chatYes() = Unit
+    /** "Yes" on the chat pop-up: the computer gets infected and the ransom clocks start. */
+    fun chatYes() {
+        if (phase != StoryPhase.FILE_POPUP) return
+        infected = true
+        infectedSeconds = 0f
+        cues += StoryCue.INFECT
+        enter(StoryPhase.INFECTION)
+    }
+
+    /** The player closes the ransom screen: the story goes on with the file (or back to the room). */
+    fun closeRansom() {
+        when {
+            reviewing -> reviewing = false
+            phase == StoryPhase.RANSOM -> { cues += StoryCue.FILE_OPEN; enter(StoryPhase.FILE_OPEN) }
+        }
+    }
 
     /** The player closed the file. */
     fun closeFile() {
@@ -263,6 +302,7 @@ class StoryDirector(
 
     companion object {
         const val EXPLORE_SECONDS = 18f
+        const val INFECTION_SECONDS = 5f
         const val BLACK_SECONDS = 2.8f
         const val FADE_IN_SECONDS = 1.6f
         const val HANGUP_SECONDS = 1.3f

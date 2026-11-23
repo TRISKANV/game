@@ -21,6 +21,8 @@ import com.kotlinsurvivors.features.game.presentation.components.pixelUnitOf
 /** Colours of the story panels: a dark body and one accent per speaker, like the game's own panels. */
 object StoryStyle {
     val Body        = Color(0xFF130F1F)
+    val Green       = Color(0xFF3FBF6A)
+    val GreenLight  = Color(0xFFA6FFC0)
     val Gold        = Color(0xFFD9A93A)
     val GoldLight   = Color(0xFFFFE08A)
     val Purple      = Color(0xFF8A52E0)
@@ -61,7 +63,7 @@ fun StoryRemark(modifier: Modifier = Modifier, content: @Composable () -> Unit) 
     val unit = pixelUnitOf(2.dp)
     androidx.compose.foundation.layout.Box(
         modifier = modifier
-            .pixelFrame(unit, StoryStyle.Gold, StoryStyle.Body, StoryStyle.GoldLight)
+            .pixelFrame(unit, StoryStyle.Green, StoryStyle.Body, StoryStyle.GreenLight)
             .padding(horizontal = unit * 7, vertical = unit * 4)
     ) { content() }
 }
