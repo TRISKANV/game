@@ -17,7 +17,7 @@ enum class StoryPhase {
     FILE_WAIT,        // notification on the computer: go and open the file
     FILE_POPUP,       // a chat pop-up that comes up over the file; "no" goes on to the file
     INFECTION,        // "yes": the computer gets infected, a short animation
-    RANSOM,           // the ransom screen with its two countdowns; closing it goes on to the file
+    RANSOM,           // the ransom screen with its two countdowns; closing it starts the alternative ending
     FILE_OPEN,        // the text of the file
     POST_FILE,
     GLITCH,           // the monitors flicker and a system message shows up
@@ -30,7 +30,16 @@ enum class StoryPhase {
     FINAL,
     MISSION,          // "Sal de tu habitación": the door works now
     LEAVING,          // fading out to the next place
-    DONE
+    DONE,
+
+    // ── Alternative ending: the player said "yes" to the pop-up ──
+    ALT_EXPLORE,        // the computer is dead; only the ransom note can be read again
+    ALT_RINGING,        // the phone rings
+    ALT_CALL_INCOMING,
+    ALT_CALL_TALK,      // DEAUTH finds out the computer can't be used any more
+    ALT_CALL_ENDING,
+    ALT_FINAL,          // his last line
+    ENDING              // black screen: "mañana lo arreglo"
 }
 
 /** One-shot sounds the screen plays when the story asks for them. */
@@ -78,18 +87,46 @@ class StoryDirector(
             StoryPhase.INTRO   -> if (clock < BLACK_SECONDS) 1f else (1f - (clock - BLACK_SECONDS) / FADE_IN_SECONDS).coerceIn(0f, 1f)
             StoryPhase.LEAVING -> (clock / LEAVE_SECONDS).coerceIn(0f, 1f)
             StoryPhase.DONE    -> 1f
+            StoryPhase.ENDING  -> (clock / ENDING_FADE_OUT_SECONDS).coerceIn(0f, 1f)
             else               -> 0f
         }
 
     val phoneRinging: Boolean
-        get() = phase == StoryPhase.RINGING || isCallIncoming
+        get() = phase == StoryPhase.RINGING || phase == StoryPhase.ALT_RINGING || isCallIncoming
 
-    val isCallIncoming: Boolean get() = phase == StoryPhase.CALL1_INCOMING || phase == StoryPhase.CALL2_INCOMING
-    val isCallTalking: Boolean get() = phase == StoryPhase.CALL1_TALK || phase == StoryPhase.CALL2_TALK
-    val isCallEnding: Boolean get() = phase == StoryPhase.CALL1_ENDING || phase == StoryPhase.CALL2_ENDING
+    val isCallIncoming: Boolean
+        get() = phase == StoryPhase.CALL1_INCOMING || phase == StoryPhase.CALL2_INCOMING || phase == StoryPhase.ALT_CALL_INCOMING
+    val isCallTalking: Boolean
+        get() = phase == StoryPhase.CALL1_TALK || phase == StoryPhase.CALL2_TALK || phase == StoryPhase.ALT_CALL_TALK
+    val isCallEnding: Boolean
+        get() = phase == StoryPhase.CALL1_ENDING || phase == StoryPhase.CALL2_ENDING || phase == StoryPhase.ALT_CALL_ENDING
 
-    /** 1 normally; lower while somebody is talking on the phone, so the voices come first. */
-    val ambienceVolume: Float get() = if (isCallTalking) CALL_AMBIENCE_VOLUME else 1f
+    /** 1 normally; lower while somebody is talking on the phone, so the voices come first; the ending lets the rain fade. */
+    val ambienceVolume: Float
+        get() = when {
+            isCallTalking -> CALL_AMBIENCE_VOLUME
+            phase == StoryPhase.ENDING -> ENDING_AMBIENCE_VOLUME
+            else -> 1f
+        }
+
+    // ── The alternative ending ───────────────────────────────────────────
+    val isEnding: Boolean get() = phase == StoryPhase.ENDING
+
+    /** How many of the three closing lines are on the screen, counting the one fading in. */
+    val endingLinesShown: Int
+        get() = if (!isEnding) 0 else ((clock - ENDING_FIRST_LINE_AT) / ENDING_LINE_EVERY + 1f).toInt().coerceIn(0, ENDING_LINES)
+
+    /** 0..1 opacity of closing line [index] (0-based): it fades in when it appears. */
+    fun endingLineAlpha(index: Int): Float =
+        if (!isEnding) 0f else ((clock - ENDING_FIRST_LINE_AT - index * ENDING_LINE_EVERY) / ENDING_FADE_SECONDS).coerceIn(0f, 1f)
+
+    private val endingTitleAt get() = ENDING_FIRST_LINE_AT + ENDING_LINES * ENDING_LINE_EVERY + 0.6f
+
+    /** 0..1 opacity of the "FINAL ALTERNATIVO" card, which comes after the last line. */
+    val endingTitleAlpha: Float get() = if (!isEnding) 0f else ((clock - endingTitleAt) / ENDING_FADE_SECONDS).coerceIn(0f, 1f)
+
+    /** The way back to the menu shows up once the card has been read. */
+    val endingMenuVisible: Boolean get() = isEnding && clock >= endingTitleAt + ENDING_MENU_DELAY
 
     /** The USB with the evidence, once the protagonist has mentioned it: the key item of the story. */
     var usbRegistered = false
@@ -142,7 +179,8 @@ class StoryDirector(
     /** Whether the joystick and the use button work. */
     val canWalk: Boolean
         get() = !reviewing && (phase == StoryPhase.EXPLORE || phase == StoryPhase.RINGING ||
-                phase == StoryPhase.FILE_WAIT || phase == StoryPhase.MISSION)
+                phase == StoryPhase.FILE_WAIT || phase == StoryPhase.MISSION ||
+                phase == StoryPhase.ALT_EXPLORE || phase == StoryPhase.ALT_RINGING)
 
     /** The objects the player may use right now. */
     val usable: Set<Interactable>
@@ -151,6 +189,9 @@ class StoryDirector(
             StoryPhase.RINGING   -> OPTIONAL + Interactable.PHONE
             StoryPhase.FILE_WAIT -> setOf(Interactable.COMPUTER, Interactable.WINDOW)   // the desk remark would get in the way
             StoryPhase.MISSION   -> OPTIONAL + Interactable.DOOR
+            // the infected computer only shows the ransom note; the desk remark is gone with the file
+            StoryPhase.ALT_EXPLORE -> setOf(Interactable.COMPUTER, Interactable.WINDOW)
+            StoryPhase.ALT_RINGING -> setOf(Interactable.COMPUTER, Interactable.WINDOW, Interactable.PHONE)
             else                 -> emptySet()
         }
 
@@ -181,6 +222,10 @@ class StoryDirector(
             StoryPhase.CALL1_ENDING -> if (clock >= HANGUP_SECONDS) { cues += StoryCue.NOTIFY; notificationClock = 0f; enter(StoryPhase.FILE_WAIT) }
             StoryPhase.FILE_WAIT    -> notificationClock += dt
             StoryPhase.INFECTION    -> if (clock >= INFECTION_SECONDS) { cues += StoryCue.NOTIFY; enter(StoryPhase.RANSOM) }
+            StoryPhase.ALT_EXPLORE  -> if (clock >= ALT_EXPLORE_SECONDS) enter(StoryPhase.ALT_RINGING)
+            StoryPhase.ALT_CALL_TALK -> if (dialogue.finished()) { cues += StoryCue.HANGUP; dialogue = null; enter(StoryPhase.ALT_CALL_ENDING) }
+            StoryPhase.ALT_CALL_ENDING -> if (clock >= HANGUP_SECONDS) startDialogue(StoryPhase.ALT_FINAL, listOf(Say(PROTAGONIST, "story_alt_final")))
+            StoryPhase.ALT_FINAL    -> if (dialogue.finished()) enter(StoryPhase.ENDING)
             StoryPhase.POST_FILE    -> if (dialogue.finished()) { cues += StoryCue.GLITCH; enter(StoryPhase.GLITCH) }
             StoryPhase.GLITCH       -> if (clock >= GLITCH_SECONDS) startDialogue(StoryPhase.POST_GLITCH, listOf(Say(PROTAGONIST, "story_post_3")))
             StoryPhase.POST_GLITCH  -> if (dialogue.finished()) enter(StoryPhase.CALL2_INCOMING)
@@ -203,6 +248,7 @@ class StoryDirector(
     fun interact(target: Interactable): Boolean {
         if (target !in usable) return false
         when {
+            target == Interactable.PHONE && phase == StoryPhase.ALT_RINGING -> enter(StoryPhase.ALT_CALL_INCOMING)
             target == Interactable.PHONE -> enter(StoryPhase.CALL1_INCOMING)
             target == Interactable.COMPUTER && phase == StoryPhase.FILE_WAIT -> {
                 cues += StoryCue.NOTIFY
@@ -227,6 +273,7 @@ class StoryDirector(
         when (phase) {
             StoryPhase.CALL1_INCOMING -> { cues += StoryCue.ANSWER; startDialogue(StoryPhase.CALL1_TALK, CALL1) }
             StoryPhase.CALL2_INCOMING -> { cues += StoryCue.ANSWER; startDialogue(StoryPhase.CALL2_TALK, CALL2) }
+            StoryPhase.ALT_CALL_INCOMING -> { cues += StoryCue.ANSWER; startDialogue(StoryPhase.ALT_CALL_TALK, ALT_CALL) }
             else -> Unit
         }
     }
@@ -253,11 +300,14 @@ class StoryDirector(
         enter(StoryPhase.INFECTION)
     }
 
-    /** The player closes the ransom screen: the story goes on with the file (or back to the room). */
+    /**
+     * The player closes the ransom screen. The first time, the story takes its alternative branch:
+     * the computer is lost, he can only wait for the phone. Later it just goes back to the room.
+     */
     fun closeRansom() {
         when {
             reviewing -> reviewing = false
-            phase == StoryPhase.RANSOM -> { cues += StoryCue.FILE_OPEN; enter(StoryPhase.FILE_OPEN) }
+            phase == StoryPhase.RANSOM -> enter(StoryPhase.ALT_EXPLORE)
         }
     }
 
@@ -271,6 +321,7 @@ class StoryDirector(
     /** Jumps straight to the mission, for players who have seen the introduction already. */
     fun skip() {
         if (phase == StoryPhase.MISSION || phase == StoryPhase.LEAVING || phase == StoryPhase.DONE) return
+        if (infected) return   // there is no way round the alternative ending
         dialogue = null
         bubbleKey = null
         startMission()
@@ -303,6 +354,14 @@ class StoryDirector(
     companion object {
         const val EXPLORE_SECONDS = 18f
         const val INFECTION_SECONDS = 5f
+        const val ALT_EXPLORE_SECONDS = 6f
+        const val ENDING_FADE_OUT_SECONDS = 2.5f
+        const val ENDING_FIRST_LINE_AT = 3.2f
+        const val ENDING_LINE_EVERY = 3.4f
+        const val ENDING_FADE_SECONDS = 1.4f
+        const val ENDING_MENU_DELAY = 2.2f
+        const val ENDING_LINES = 3
+        const val ENDING_AMBIENCE_VOLUME = 0.3f
         const val BLACK_SECONDS = 2.8f
         const val FADE_IN_SECONDS = 1.6f
         const val HANGUP_SECONDS = 1.3f
@@ -343,6 +402,9 @@ class StoryDirector(
          * on a USB, that he will hand it to the police, and that he left a message for his family; she
          * promises to watch over him. The pauses mark the moments that weigh.
          */
+        /** Alternative call: he tells her the computer is lost and she sends him to bed. 13 lines. */
+        val ALT_CALL: List<Beat> = script("alt", "A P A P A P S1000 A P A P A P A")
+
         val CALL2: List<Beat> = script("call2",
             "A P A P A P A P S900 P A P A P A P S900 P A P A P A P S900 A P A P A S1200 A P A P A A P A")
     }

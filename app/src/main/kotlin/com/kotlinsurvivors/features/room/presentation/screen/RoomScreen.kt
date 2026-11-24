@@ -66,6 +66,7 @@ import com.kotlinsurvivors.features.room.presentation.components.StoryKeyItem
 import com.kotlinsurvivors.features.room.presentation.components.StoryChatPopup
 import com.kotlinsurvivors.features.room.presentation.components.StoryAssistantMessage
 import com.kotlinsurvivors.features.room.presentation.components.StoryMission
+import com.kotlinsurvivors.features.room.presentation.components.StoryEnding
 import com.kotlinsurvivors.features.room.presentation.components.StoryNotification
 import com.kotlinsurvivors.features.room.domain.RoomLayout
 import com.kotlinsurvivors.features.room.domain.RoomWorld
@@ -100,6 +101,7 @@ private class RoomFx { var time = 0f }
 @Composable
 fun RoomScreen(
     onExit: () -> Unit,
+    onBackToMenu: () -> Unit = {},
     settingsViewModel: SettingsViewModel = hiltViewModel()
 ) {
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
@@ -138,6 +140,7 @@ fun RoomScreen(
     // The joystick size chosen in Settings applies here too, not only in the game.
     SideEffect { joystick.setScale(settings.joystickSize) }
     val latestOnExit by rememberUpdatedState(onExit)
+    val latestOnBackToMenu by rememberUpdatedState(onBackToMenu)
 
     // Bumped every frame so the canvas below is drawn again.
     var frameTick by remember { mutableStateOf(0) }
@@ -357,7 +360,7 @@ fun RoomScreen(
             )
         }
 
-        if (introSeen && !director.missionVisible && !director.isDone) {
+        if (introSeen && !director.missionVisible && !director.isDone && !director.infected) {
             StoryButton(
                 label = stringResource(R.string.story_skip),
                 onClick = { director.skip() },
@@ -368,6 +371,25 @@ fun RoomScreen(
         // Fade from and to black.
         val black = director.blackAlpha
         if (black > 0f) Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = black)))
+
+        // The alternative ending sits on top of the fade to black.
+        if (director.isEnding) {
+            StoryEnding(
+                lines = listOf(
+                    stringResource(R.string.story_end_1),
+                    stringResource(R.string.story_end_2),
+                    stringResource(R.string.story_end_3)
+                ),
+                lineAlpha = { director.endingLineAlpha(it) },
+                title = stringResource(R.string.story_end_title),
+                subtitle = stringResource(R.string.story_end_subtitle),
+                titleAlpha = director.endingTitleAlpha,
+                menuLabel = stringResource(R.string.story_end_menu),
+                menuVisible = director.endingMenuVisible,
+                onMenu = { latestOnBackToMenu() },
+                modifier = Modifier.background(Color.Transparent)
+            )
+        }
     }
 }
 

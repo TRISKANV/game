@@ -262,33 +262,73 @@ class StoryDirectorTest {
         assertTrue(s.filesLostIn < Countdown.FILES_LOST_SECONDS)
         assertTrue(s.filesLostIn - s.paymentDoublesIn >= 4L * 86_400 - 1)   // always four days apart
 
-        // closing it goes on with the story (the file opens), the clocks keep going
+        // closing it starts the alternative branch: free room, only the ransom note on the computer
         s.closeRansom()
-        assertTrue(s.fileOpen); assertFalse(s.showRansom)
-        s.closeFile(); s.talkThrough(); s.run(4.5f); s.talkThrough()
+        assertEquals(StoryPhase.ALT_EXPLORE, s.phase)
+        assertFalse(s.fileOpen); assertFalse(s.showRansom); assertTrue(s.canWalk)
+        assertEquals(setOf(Interactable.COMPUTER, Interactable.WINDOW), s.usable)
         val before = s.paymentDoublesIn
-        s.run(10f)
+        s.run(3f)
         assertTrue(s.paymentDoublesIn < before)
+        assertTrue(s.interact(Interactable.COMPUTER))
+        assertTrue(s.showRansom); assertFalse(s.canWalk)       // the only thing the computer does now
+        s.closeRansom()
+        assertFalse(s.showRansom); assertTrue(s.canWalk)
+        assertFalse(s.interact(Interactable.DESK))
+        s.skip()                                               // no way round the ending
+        assertEquals(StoryPhase.ALT_EXPLORE, s.phase)
         assertTrue(s.infected)
     }
 
-    @Test fun theRansomNoteCanBeReadAgainFromTheComputer() {
+    private fun StoryDirector.toAltEnding(): StoryDirector {
+        interact(Interactable.PHONE); answer(); talkThrough(); run(2f)
+        interact(Interactable.COMPUTER); chatYes(); run(StoryDirector.INFECTION_SECONDS + 0.2f)
+        closeRansom()
+        run(StoryDirector.ALT_EXPLORE_SECONDS + 0.2f)
+        return this
+    }
+
+    @Test fun theAlternativeEndingPlaysFromTheCallToTheBlackScreen() {
+        val s = director().toRinging().toAltEnding()
+        assertEquals(StoryPhase.ALT_RINGING, s.phase)
+        assertTrue(s.phoneRinging); assertTrue(Interactable.PHONE in s.usable)
+        assertTrue(s.interact(Interactable.PHONE))
+        assertTrue(s.isCallIncoming)
+        s.answer()
+        assertEquals(StoryPhase.ALT_CALL_TALK, s.phase)
+        assertTrue(s.dialogue != null)
+        s.talkThrough()
+        assertEquals(StoryPhase.ALT_CALL_ENDING, s.phase)
+        s.run(2f)
+        assertEquals(StoryPhase.ALT_FINAL, s.phase)
+        s.talkThrough()
+        assertEquals(StoryPhase.ENDING, s.phase)
+        assertTrue(s.isEnding); assertFalse(s.canWalk); assertTrue(s.usable.isEmpty()); assertNull(s.dialogue)
+        // black first, then the three lines one by one, then the card, then the way back
+        s.run(StoryDirector.ENDING_FADE_OUT_SECONDS + 0.1f)
+        assertEquals(1f, s.blackAlpha, 0f)
+        assertEquals(0, s.endingLinesShown); assertFalse(s.endingMenuVisible)
+        s.run(StoryDirector.ENDING_FIRST_LINE_AT)
+        assertEquals(1, s.endingLinesShown)
+        s.run(StoryDirector.ENDING_LINE_EVERY * 2)
+        assertEquals(3, s.endingLinesShown)
+        assertEquals(1f, s.endingLineAlpha(0), 0f)
+        assertEquals(0f, s.endingTitleAlpha, 0.5f)
+        s.run(20f)
+        assertEquals(1f, s.endingTitleAlpha, 0f); assertTrue(s.endingMenuVisible)
+        assertTrue(s.ambienceVolume < 1f)
+    }
+
+    @Test fun theAlternativeCallHasAllItsLines() {
+        assertEquals(13, StoryDirector.ALT_CALL.count { it is Beat.Say })
+    }
+
+    @Test fun theRansomNoteCanBeReadAgainBeforeAnyInfectionOnlyAsARemark() {
         val s = director()
         s.skip()
         assertFalse(s.infected)
         // before the infection the computer only makes a remark
         s.interact(Interactable.COMPUTER); assertFalse(s.showRansom)
-        val t = director().toRinging()
-        t.interact(Interactable.PHONE); t.answer(); t.talkThrough(); t.run(2f)
-        t.interact(Interactable.COMPUTER); t.chatYes(); t.run(StoryDirector.INFECTION_SECONDS + 0.2f)
-        t.closeRansom(); t.closeFile(); t.talkThrough(); t.run(4.5f); t.talkThrough()
-        t.answer(); t.talkThrough(); t.run(2f); t.run(StoryDirector.LOOK_SECONDS + 0.2f)
-        t.tap(); t.run(StoryDirector.MESSAGE_MIN_SECONDS + 0.1f); t.tap(); t.talkThrough()
-        assertEquals(StoryPhase.MISSION, t.phase)
-        assertTrue(t.interact(Interactable.COMPUTER))
-        assertTrue(t.showRansom); assertFalse(t.canWalk)
-        t.closeRansom()
-        assertFalse(t.showRansom); assertTrue(t.canWalk)
     }
 
     @Test fun yesOutsideThePopupDoesNothing() {

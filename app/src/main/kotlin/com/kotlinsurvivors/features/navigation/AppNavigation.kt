@@ -61,7 +61,9 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
                     navController.navigate(Screen.Game.route) {
                         popUpTo(Screen.Room.route) { inclusive = true }
                     }
-                }
+                },
+                // The alternative ending closes the chapter: back to the main menu.
+                onBackToMenu = { navController.popBackStack(Screen.MainMenu.route, inclusive = false) }
             )
         }
 
