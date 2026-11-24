@@ -605,12 +605,63 @@ class GameRenderer(
         val bob     = if (frame == 1) -h * 0.04f else 0f
 
         if (typeId == EnemyType.FAST.ordinal) { renderDrone(a, buf, i, sx, sy, flashing); return }
+        if (typeId == EnemyType.BASIC.ordinal) { renderGuard(a, buf, i, sx, sy, flashing); return }
 
         drawShadow(sx, sy + h * 0.5f, w * 0.8f)
         drawCell(sheet, frame, 0, frameW, sheet.height, sx, sy + bob, w, h, if (flashing) flashPaint else spritePaint)
 
         if (buf.hasFlag(i, RenderBuffer.FLAG_SHOW_HP_BAR))
             drawHealthBar(sx, sy - h * 0.5f - 10f, w * 0.85f, buf.hpPercent[i])
+    }
+
+    /**
+     * The security guard. His sheet has a walk cycle and a punch for three views (front, back and
+     * side; the left side is the right one mirrored). The engine says where he is heading, whether
+     * he is walking, whether he is raising his fists and how long ago his punch landed.
+     */
+    private fun DrawScope.renderGuard(
+        a: SpriteAtlas, buf: RenderBuffer, i: Int, sx: Float, sy: Float, flashing: Boolean
+    ) {
+        val sheet = a.enemies[EnemyType.BASIC.ordinal]
+        val h     = buf.width[i] * GUARD_SPRITE_SCALE
+        val w     = h * a.guardCellW / a.guardCellH
+        val now   = System.currentTimeMillis()
+
+        val dx = cos(buf.rotation[i]); val dy = sin(buf.rotation[i])
+        val row = when {
+            abs(dy) > abs(dx) * GUARD_SIDE_BIAS -> if (dy < 0f) 1 else 0
+            else -> 2
+        }
+        val mirror = row == 2 && dx < 0f
+
+        val sincePunch = buf.lifetime[i]
+        val punching   = sincePunch < RenderBuffer.GUARD_PUNCH_SECONDS
+        val column = when {
+            punching -> {
+                // four beats: fists up, jab, second jab, back to guard
+                val beat = (sincePunch / RenderBuffer.GUARD_PUNCH_SECONDS * 3.99f).toInt().coerceIn(0, 3)
+                SpriteAtlas.GUARD_WALK_FRAMES + beat
+            }
+            buf.hasFlag(i, RenderBuffer.FLAG_WINDING_UP) -> SpriteAtlas.GUARD_WALK_FRAMES        // guard up
+            buf.hasFlag(i, RenderBuffer.FLAG_MOVING) ->
+                // each guard starts its stride at a different point, so a crowd does not march in step
+                ((now / GUARD_STEP_MS + i * 3) % SpriteAtlas.GUARD_WALK_FRAMES).toInt()
+            else -> 0
+        }
+
+        drawShadow(sx, sy + h * 0.5f, w * 0.7f)
+        val paint = if (flashing) flashPaint else spritePaint
+        if (mirror) {
+            val canvas = drawContext.canvas.nativeCanvas
+            canvas.save(); canvas.scale(-1f, 1f, sx, sy)
+            drawCell(sheet, column, row, a.guardCellW, a.guardCellH, sx, sy, w, h, paint)
+            canvas.restore()
+        } else {
+            drawCell(sheet, column, row, a.guardCellW, a.guardCellH, sx, sy, w, h, paint)
+        }
+
+        if (buf.hasFlag(i, RenderBuffer.FLAG_SHOW_HP_BAR))
+            drawHealthBar(sx, sy - h * 0.5f - 6f, w * 0.7f, buf.hpPercent[i])
     }
 
     /**
@@ -906,6 +957,9 @@ class GameRenderer(
         // Sprite sizes are expressed relative to the collision size of each entity.
         const val PLAYER_SPRITE_SCALE     = 2.5f
         const val ENEMY_SPRITE_SCALE      = 1.9f
+        const val GUARD_SPRITE_SCALE      = 2.2f      // a little shorter than the player (2.5)
+        const val GUARD_SIDE_BIAS         = 1.2f      // side view unless he is clearly going up or down
+        const val GUARD_STEP_MS           = 130L
         const val BOSS_SPRITE_SCALE       = 1.5f
         const val PICKUP_SPRITE_SCALE     = 1.5f
         const val PROJECTILE_SPRITE_SCALE = 1.9f

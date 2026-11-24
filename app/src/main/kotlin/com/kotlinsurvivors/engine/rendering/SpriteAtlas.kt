@@ -12,6 +12,8 @@ import com.kotlinsurvivors.engine.ecs.components.EnemyType
  * The files live in assets/sprites/ and are cut into cells by size:
  *  - player.png      5 columns (idle + 4 walk frames) x 6 rows (see [Facing])
  *  - enemy_*.png     2 animation frames side by side, one file per [EnemyType]
+ *    except enemy_basic.png, the security guard: 8 columns (4 walk, 4 punch) x 3 rows
+ *    (facing the camera, facing away, facing right; left is the mirror image)
  *  - pickups.png     12x12 cells in PickupType order
  *  - projectiles.png 12x12 cells in WeaponType order (the last one is the Bible)
  *  - chest.png       16x16 cells: 4 waiting on the floor, 5 opening
@@ -40,6 +42,9 @@ class SpriteAtlas private constructor(
     /** Width of one animation frame of the enemy sprite for [typeOrdinal]. */
     fun enemyFrameWidth(typeOrdinal: Int) = enemies[typeOrdinal].width / ENEMY_FRAMES
 
+    val guardCellW = enemies[EnemyType.BASIC.ordinal].width / GUARD_COLUMNS
+    val guardCellH = enemies[EnemyType.BASIC.ordinal].height / GUARD_ROWS
+
     companion object {
         private const val TAG = "KS_Sprites"
         private const val DIR = "sprites/"
@@ -47,6 +52,9 @@ class SpriteAtlas private constructor(
         const val PLAYER_COLUMNS = 5
         const val PLAYER_ROWS    = 6
         const val ENEMY_FRAMES   = 2
+        const val GUARD_COLUMNS  = 8
+        const val GUARD_ROWS     = 3
+        const val GUARD_WALK_FRAMES = 4
         const val ITEM_CELL      = 12
         const val CHEST_CELL     = 16
         const val CAN_CELL_W     = 18

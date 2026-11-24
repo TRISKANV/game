@@ -92,6 +92,15 @@ class RenderBuffer {
         const val FLAG_IS_BOSS     = 16
         const val FLAG_MOVING      = 32
         const val FLAG_IS_MINI_BOSS = 64
+        /** The guard is close enough to the player to raise his fists. */
+        const val FLAG_WINDING_UP = 128
+
+        /** The guard's punch lasts this long after the hit lands; [lifetime] holds the seconds since it did. */
+        const val GUARD_PUNCH_SECONDS = 0.42f
+        /** [lifetime] of a guard that has not punched in this cooldown. */
+        const val GUARD_NO_PUNCH = 99f
+        /** Distance (world px) at which a guard starts raising his fists. */
+        const val GUARD_WINDUP_RANGE = 70f
 
         /** [spriteId] of a particle that is the whip cable instead of a dot. */
         const val SPRITE_WHIP_LASH = 100

@@ -662,14 +662,36 @@ class GameEngine(
             if (h.percentage < 1f || isMini) f = f or RenderBuffer.FLAG_SHOW_HP_BAR
             if (isBoss)            f = f or RenderBuffer.FLAG_IS_BOSS
             if (isMini)            f = f or RenderBuffer.FLAG_IS_MINI_BOSS
+
+            // The guard (BASIC) is drawn from his heading and his punch clock, so the picture needs both.
+            val enemy = world.enemies[eid]
+            var heading = t.rotation
+            var sincePunch = 0f
+            var cooldown = 1f
+            if (enemy != null && enemy.type == EnemyType.BASIC) {
+                val v = world.velocities[eid]
+                val vx = v?.vx ?: 0f
+                val vy = v?.vy ?: 0f
+                val moving = vx * vx + vy * vy > FACING_MIN_SPEED_SQ
+                if (moving) f = f or RenderBuffer.FLAG_MOVING
+                cooldown = enemy.attackCooldown
+                sincePunch = if (enemy.attackTimer > 0f) cooldown - enemy.attackTimer else RenderBuffer.GUARD_NO_PUNCH
+                val toPlayerX = playerX - t.x
+                val toPlayerY = playerY - t.y
+                val nearPlayer = toPlayerX * toPlayerX + toPlayerY * toPlayerY < RenderBuffer.GUARD_WINDUP_RANGE * RenderBuffer.GUARD_WINDUP_RANGE
+                // He looks where he walks; when he is about to hit or has just hit, he looks at the player.
+                heading = if (moving && !nearPlayer && sincePunch >= RenderBuffer.GUARD_PUNCH_SECONDS) atan2(vy, vx) else atan2(toPlayerY, toPlayerX)
+                if (nearPlayer && enemy.attackTimer <= 0f) f = f or RenderBuffer.FLAG_WINDING_UP
+            }
             renderBuffer.write(
                 kindOrdinal  = if (isBoss) RenderKind.BOSS else RenderKind.ENEMY,
-                ex = t.x, ey = t.y, eRotation = t.rotation,
+                ex = t.x, ey = t.y, eRotation = heading,
                 eShape = r.shape, eColor = r.color, eSecColor = r.secondaryColor,
                 eWidth = r.width, eHeight = r.height,
                 eGlowRadius = r.glowRadius, eGlowColor = r.glowColor,
                 eFlashTimer = r.flashTimer, eHpPercent = h.percentage, eFlags = f,
-                eSpriteId = world.enemies[eid]?.type?.ordinal ?: -1
+                eLifetime = sincePunch, eMaxLifetime = cooldown,
+                eSpriteId = enemy?.type?.ordinal ?: -1
             )
         }
 
