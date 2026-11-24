@@ -4,6 +4,7 @@ import com.kotlinsurvivors.engine.ecs.systems.ComboTracker
 import com.kotlinsurvivors.core.audio.Sound
 import com.kotlinsurvivors.engine.ecs.components.PickupType
 import com.kotlinsurvivors.engine.ecs.components.EnemyType
+import com.kotlinsurvivors.engine.ecs.components.PatrolState
 import com.kotlinsurvivors.core.audio.SoundEffects
 import android.util.Log
 import com.kotlinsurvivors.core.crash.CrashLogger
@@ -63,6 +64,7 @@ class GameEngine(
         const val MAX_WEAPON_LEVEL = 8
         private const val EVENT_BANNER_SECONDS = 3.5f
         private const val RENDER_BUFFER_COUNT = 8
+        private const val DOG_RUN_SPEED_SQ     = 10_000f   // above 100 px/s the dog gallops
         private const val FACING_MIN_SPEED_SQ  = 25f   // below 5 px/s the player counts as standing still
 
         // Logging
@@ -406,6 +408,7 @@ class GameEngine(
 
         try {
             movementSystem.update(world, dt, joystick.getState())
+            if (movementSystem.consumeAlarms() > 0) sounds.play(Sound.DOG_BARK)
         } catch (e: Exception) {
             Log.e(TAG, "CRASH in movementSystem.update (frame $frameCount)", e)
             Log.e(TAG, world.getDiagnosticString()); throw e
@@ -668,7 +671,7 @@ class GameEngine(
             var heading = t.rotation
             var sincePunch = 0f
             var cooldown = 1f
-            if (enemy != null && enemy.type == EnemyType.BASIC) {
+            if (enemy != null && (enemy.type == EnemyType.BASIC || enemy.type == EnemyType.DOG)) {
                 val v = world.velocities[eid]
                 val vx = v?.vx ?: 0f
                 val vy = v?.vy ?: 0f
@@ -681,7 +684,9 @@ class GameEngine(
                 val nearPlayer = toPlayerX * toPlayerX + toPlayerY * toPlayerY < RenderBuffer.GUARD_WINDUP_RANGE * RenderBuffer.GUARD_WINDUP_RANGE
                 // He looks where he walks; when he is about to hit or has just hit, he looks at the player.
                 heading = if (moving && !nearPlayer && sincePunch >= RenderBuffer.GUARD_PUNCH_SECONDS) atan2(vy, vx) else atan2(toPlayerY, toPlayerX)
-                if (nearPlayer && enemy.attackTimer <= 0f) f = f or RenderBuffer.FLAG_WINDING_UP
+                if (enemy.type == EnemyType.BASIC && nearPlayer && enemy.attackTimer <= 0f) f = f or RenderBuffer.FLAG_WINDING_UP
+                if (enemy.patrol == PatrolState.ALERT) f = f or RenderBuffer.FLAG_ALERTED
+                if (enemy.type == EnemyType.DOG && vx * vx + vy * vy > DOG_RUN_SPEED_SQ) f = f or RenderBuffer.FLAG_RUNNING
             }
             renderBuffer.write(
                 kindOrdinal  = if (isBoss) RenderKind.BOSS else RenderKind.ENEMY,
@@ -693,6 +698,15 @@ class GameEngine(
                 eLifetime = sincePunch, eMaxLifetime = cooldown,
                 eSpriteId = enemy?.type?.ordinal ?: -1
             )
+
+            // The leash of a patrol that has not noticed anything yet, from the guard to his dog.
+            if (enemy != null && enemy.type == EnemyType.BASIC && enemy.patrol == PatrolState.WALK && enemy.partner >= 0) {
+                val dogT = world.transforms[enemy.partner]
+                if (dogT != null) renderBuffer.write(
+                    kindOrdinal = RenderKind.LEASH,
+                    ex = t.x, ey = t.y, eWidth = dogT.x, eHeight = dogT.y
+                )
+            }
         }
 
         for (pid in world.getProjectileSnapshot()) {

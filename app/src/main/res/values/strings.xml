@@ -75,6 +75,8 @@
     <string name="event_swarm">SWARM INCOMING!</string>
     <string name="event_drones">DRONE RAID!</string>
     <string name="event_siege">THEY\'RE SURROUNDING YOU!</string>
+    <string name="event_k9">K9 PATROL!</string>
+    <string name="event_k9_sub">They haven\'t seen you yet. Don\'t get close.</string>
     <string name="event_miniboss">MINI-BOSS!</string>
     <string name="event_wave_sub">Wipe them out for bonus XP</string>
     <string name="event_miniboss_sub">Tough, and it may drop a chest</string>

@@ -29,10 +29,17 @@ class MovementSystem(
     /** Walking distances to the player, so enemies can find their way round obstacles. */
     private var flow: FlowField? = null
 
+    private val patrols = PatrolSystem()
+
+    /** How many K9 patrols noticed the player since the last call (the engine plays a bark for them). */
+    fun consumeAlarms(): Int = patrols.consumeAlarms()
+
     fun update(world: World, dt: Float, joystick: JoystickState) {
         updatePlayer(world, dt, joystick)
+        patrols.update(world, dt, levelMap, worldWidth)
         updateEnemies(world, dt)
         integratePositions(world, dt)
+        patrols.holdLeashes(world)
     }
 
     private fun updatePlayer(world: World, dt: Float, joystick: JoystickState) {
@@ -75,6 +82,7 @@ class MovementSystem(
             enemy.attackTimer = (enemy.attackTimer - dt).coerceAtLeast(0f)
             enemy.stateTimer  = (enemy.stateTimer  - dt).coerceAtLeast(0f)
             enemy.wanderTimer = (enemy.wanderTimer  - dt).coerceAtLeast(0f)
+            if (enemy.patrol != PatrolState.NONE) continue        // a K9 patrol moves by PatrolSystem until it notices the player
 
             var dx   = playerX - transform.x
             var dy   = playerY - transform.y
@@ -103,6 +111,10 @@ class MovementSystem(
 
             when (enemy.type) {
                 EnemyType.FAST -> {
+                    velocity.vx = (dx / dist) * spd
+                    velocity.vy = (dy / dist) * spd
+                }
+                EnemyType.DOG -> {
                     velocity.vx = (dx / dist) * spd
                     velocity.vy = (dy / dist) * spd
                 }
@@ -195,6 +207,7 @@ class MovementSystem(
         EnemyType.BOSS_SHADOW      -> 70f
         EnemyType.BOSS_GOLEM       -> 45f
         EnemyType.BOSS_NECROMANCER -> 65f
+        EnemyType.DOG              -> 175f
     }
 
     private fun integratePositions(world: World, dt: Float) {

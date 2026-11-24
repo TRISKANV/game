@@ -75,6 +75,8 @@
     <string name="event_swarm">¡LLEGA UN ENJAMBRE!</string>
     <string name="event_drones">¡ATAQUE DE DRONES!</string>
     <string name="event_siege">¡TE ESTÁN CERCANDO!</string>
+    <string name="event_k9">¡PATRULLA K9!</string>
+    <string name="event_k9_sub">Todavía no te vieron. No te acerques.</string>
     <string name="event_miniboss">¡MINI-JEFE!</string>
     <string name="event_wave_sub">Acabá con todos para ganar experiencia extra</string>
     <string name="event_miniboss_sub">Aguanta mucho y puede soltar un cofre</string>

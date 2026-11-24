@@ -206,6 +206,10 @@ class GameRenderer(
                     drawCircle(Color(buf.getGlowColor(i)), buf.width[i] * 0.5f + buf.glowRadius[i], Offset(sx, sy))
                 }
             }
+            // Pass 2b: leashes, under the bodies they join
+            for (i in 0 until buf.count) {
+                if (buf.kind[i] == RenderKind.LEASH) renderLeash(buf, i)
+            }
             // Pass 3: Enemies
             for (i in 0 until buf.count) {
                 val k = buf.kind[i]
@@ -606,6 +610,7 @@ class GameRenderer(
 
         if (typeId == EnemyType.FAST.ordinal) { renderDrone(a, buf, i, sx, sy, flashing); return }
         if (typeId == EnemyType.BASIC.ordinal) { renderGuard(a, buf, i, sx, sy, flashing); return }
+        if (typeId == EnemyType.DOG.ordinal)   { renderDog(a, buf, i, sx, sy, flashing); return }
 
         drawShadow(sx, sy + h * 0.5f, w * 0.8f)
         drawCell(sheet, frame, 0, frameW, sheet.height, sx, sy + bob, w, h, if (flashing) flashPaint else spritePaint)
@@ -662,6 +667,91 @@ class GameRenderer(
 
         if (buf.hasFlag(i, RenderBuffer.FLAG_SHOW_HP_BAR))
             drawHealthBar(sx, sy - h * 0.5f - 6f, w * 0.7f, buf.hpPercent[i])
+        if (buf.hasFlag(i, RenderBuffer.FLAG_ALERTED)) drawAlertMark(sx, sy - h * 0.5f - 16f, now)
+    }
+
+    /** The red "!" that jumps over a guard's head when he spots the player. */
+    private fun DrawScope.drawAlertMark(cx: Float, topY: Float, now: Long) {
+        val px = 4f                                           // one "pixel" of the mark
+        val hop = if ((now / 90L) % 2L == 0L) 0f else -px
+        val y = topY + hop
+        drawRect(Color(0xFF120A12), Offset(cx - px * 2f, y - px), Size(px * 4f, px * 9f))
+        drawRect(Color(0xFFFF3B3B), Offset(cx - px, y), Size(px * 2f, px * 5f))
+        drawRect(Color(0xFFFFB0A0), Offset(cx - px, y), Size(px * 0.5f, px * 5f))
+        drawRect(Color(0xFFFF3B3B), Offset(cx - px, y + px * 6f), Size(px * 2f, px * 2f))
+    }
+
+    /**
+     * The guard dog. Same three views as the guard (front, back, side; left is the mirror of
+     * right). It trots on patrol, gallops when it is after the player and bites with its head
+     * thrown forward; the engine says which through the flags and the bite clock in [lifetime].
+     */
+    private fun DrawScope.renderDog(
+        a: SpriteAtlas, buf: RenderBuffer, i: Int, sx: Float, sy: Float, flashing: Boolean
+    ) {
+        val sheet = a.enemies[EnemyType.DOG.ordinal]
+        val h     = buf.width[i] * DOG_SPRITE_SCALE
+        val w     = h * a.dogCellW / a.dogCellH
+        val now   = System.currentTimeMillis()
+
+        val dx = cos(buf.rotation[i]); val dy = sin(buf.rotation[i])
+        val row = when {
+            abs(dy) > abs(dx) * GUARD_SIDE_BIAS -> if (dy < 0f) 1 else 0
+            else -> 2
+        }
+        val mirror = row == 2 && dx < 0f
+
+        val sinceBite = buf.lifetime[i]
+        val biting    = sinceBite < DOG_BITE_SECONDS
+        val running   = buf.hasFlag(i, RenderBuffer.FLAG_RUNNING)
+        val column = when {
+            biting -> SpriteAtlas.DOG_BITE_FIRST + (if (sinceBite < DOG_BITE_SECONDS * 0.5f) 0 else 1)
+            buf.hasFlag(i, RenderBuffer.FLAG_MOVING) && running ->
+                SpriteAtlas.DOG_GALLOP_FIRST + ((now / DOG_GALLOP_MS + i) % 2L).toInt()
+            buf.hasFlag(i, RenderBuffer.FLAG_MOVING) ->
+                ((now / DOG_TROT_MS + i * 3) % SpriteAtlas.DOG_TROT_FRAMES).toInt()
+            else -> 0
+        }
+
+        drawShadow(sx, sy + h * 0.42f, w * 0.7f)
+        val paint = if (flashing) flashPaint else spritePaint
+        if (mirror) {
+            val canvas = drawContext.canvas.nativeCanvas
+            canvas.save(); canvas.scale(-1f, 1f, sx, sy)
+            drawCell(sheet, column, row, a.dogCellW, a.dogCellH, sx, sy, w, h, paint)
+            canvas.restore()
+        } else {
+            drawCell(sheet, column, row, a.dogCellW, a.dogCellH, sx, sy, w, h, paint)
+        }
+        if (buf.hasFlag(i, RenderBuffer.FLAG_SHOW_HP_BAR))
+            drawHealthBar(sx, sy - h * 0.5f - 4f, w * 0.7f, buf.hpPercent[i])
+    }
+
+    /**
+     * The leash between a patrolling guard and his dog: a slightly sagging cord from the guard's
+     * hand to the dog's collar, with a loop around the hand. [buf].x/y is the guard, width/height
+     * the dog, both in world coordinates.
+     */
+    private fun DrawScope.renderLeash(buf: RenderBuffer, i: Int) {
+        val gx = buf.x[i] - cameraX; val gy = buf.y[i] - cameraY
+        val dx = buf.width[i] - cameraX; val dy = buf.height[i] - cameraY
+        if (!inViewport((gx + dx) * 0.5f, (gy + dy) * 0.5f, 300f)) return
+        val side = if (dx >= gx) 1f else -1f
+        val hx = gx + side * LEASH_HAND_X; val hy = gy + LEASH_HAND_Y         // his hand
+        val cx = dx;  val cy = dy - LEASH_COLLAR_UP      // the collar ring
+        val sag = (hypot(cx - hx, cy - hy) * 0.18f).coerceIn(2f, 14f)
+        var px = hx; var py = hy
+        for (s in 1..LEASH_SEGMENTS) {
+            val u = s / LEASH_SEGMENTS.toFloat()
+            val x = hx + (cx - hx) * u
+            val y = hy + (cy - hy) * u + sin(u * PI.toFloat()) * sag
+            drawLine(Color(0xFF120A12), Offset(px, py), Offset(x, y), strokeWidth = 4.5f)
+            drawLine(Color(0xFF8B5A3C), Offset(px, py), Offset(x, y), strokeWidth = 2.5f)
+            px = x; py = y
+        }
+        drawCircle(Color(0xFF120A12), 5f, Offset(hx, hy))
+        drawCircle(Color(0xFF8B5A3C), 3.2f, Offset(hx, hy))
+        drawCircle(Color(0xFFB8C0D0), 2.2f, Offset(cx, cy))
     }
 
     /**
@@ -960,6 +1050,14 @@ class GameRenderer(
         const val GUARD_SPRITE_SCALE      = 3.3f      // 106 px tall: a bit taller than the player (90)
         const val GUARD_SIDE_BIAS         = 1.2f      // side view unless he is clearly going up or down
         const val GUARD_STEP_MS           = 130L
+        const val DOG_SPRITE_SCALE        = 2.55f     // times its width in world px: a dog about 77 px long
+        const val DOG_TROT_MS             = 120L
+        const val DOG_GALLOP_MS           = 85L
+        const val DOG_BITE_SECONDS        = 0.4f
+        const val LEASH_HAND_X            = 13f
+        const val LEASH_HAND_Y            = 10f
+        const val LEASH_COLLAR_UP         = 8f
+        const val LEASH_SEGMENTS          = 8
         const val BOSS_SPRITE_SCALE       = 1.5f
         const val PICKUP_SPRITE_SCALE     = 1.5f
         const val PROJECTILE_SPRITE_SCALE = 1.9f

@@ -141,7 +141,9 @@ data class PlayerComponent(
 // ─────────────────────────────────────────────
 
 enum class EnemyType {
-    BASIC, FAST, TANK, RANGED, EXPLODER, SWARM, BOSS_SHADOW, BOSS_GOLEM, BOSS_NECROMANCER;
+    BASIC, FAST, TANK, RANGED, EXPLODER, SWARM, BOSS_SHADOW, BOSS_GOLEM, BOSS_NECROMANCER,
+    /** The guard's police dog: fast and fragile, it bites. Appears on a leash in the K9 patrol. */
+    DOG;
 
     val isBoss: Boolean
         get() = this == BOSS_SHADOW || this == BOSS_GOLEM || this == BOSS_NECROMANCER
@@ -150,6 +152,9 @@ enum class EnemyType {
     val isFlying: Boolean
         get() = this == FAST
 }
+
+/** Where an enemy is in the K9 patrol: [NONE] is an ordinary enemy. */
+enum class PatrolState { NONE, WALK, ALERT }
 
 enum class AIState {
     CHASE, WANDER, ATTACK, FLEE, IDLE, CHARGE, CIRCLE_STRAFE
@@ -178,7 +183,14 @@ data class EnemyComponent(
     /** A tougher enemy that appears between bosses; it can leave a chest. */
     var isMiniBoss: Boolean = false,
     /** Which special wave this enemy belongs to (0 = none); the wave ends when none with its tag is left. */
-    var waveTag: Int = 0
+    var waveTag: Int = 0,
+    /** K9 patrol: see [PatrolState]. */
+    var patrol: PatrolState = PatrolState.NONE,
+    /** The other half of a guard-and-dog pair while the leash holds, otherwise -1. */
+    var partner: Int = -1,
+    var patrolDir: Float = 0f,
+    var patrolTimer: Float = 0f,
+    var alertTimer: Float = 0f
 ) : Component
 
 // ─────────────────────────────────────────────

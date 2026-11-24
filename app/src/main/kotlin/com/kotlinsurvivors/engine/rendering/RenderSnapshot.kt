@@ -94,6 +94,10 @@ class RenderBuffer {
         const val FLAG_IS_MINI_BOSS = 64
         /** The guard is close enough to the player to raise his fists. */
         const val FLAG_WINDING_UP = 128
+        /** The guard has just noticed the player: a "!" over his head. */
+        const val FLAG_ALERTED = 256
+        /** The dog is running, not trotting. */
+        const val FLAG_RUNNING = 512
 
         /** The guard's punch lasts this long after the hit lands; [lifetime] holds the seconds since it did. */
         const val GUARD_PUNCH_SECONDS = 0.42f
@@ -182,6 +186,8 @@ object RenderKind {
     const val PARTICLE     = 5
     const val DAMAGE_NUMBER= 6
     const val ORBITAL      = 7
+    /** A leash between a patrolling guard and his dog: [x],[y] is the guard, [width],[height] the dog (world coordinates). */
+    const val LEASH        = 8
 }
 
 /** Row of the player sprite sheet for each direction the character can face. */

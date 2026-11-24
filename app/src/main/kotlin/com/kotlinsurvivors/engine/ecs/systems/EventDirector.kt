@@ -11,7 +11,7 @@ import kotlin.math.sqrt
 import kotlin.random.Random
 
 /** What the on-screen announcement is about. */
-enum class EventKind { SWARM_RUSH, DRONE_RAID, SIEGE, MINI_BOSS, WAVE_CLEARED }
+enum class EventKind { SWARM_RUSH, DRONE_RAID, SIEGE, MINI_BOSS, WAVE_CLEARED, K9_PATROL }
 
 /**
  * Decides when something out of the ordinary happens during a run:
@@ -44,6 +44,10 @@ class EventDirector(
         const val SWARM_PER_SECOND   = 6f
         const val DRONE_COUNT        = 14
         const val DRONE_PER_SECOND   = 3f
+        /** Guard-and-dog pairs of a K9 patrol (one more pair after [PATROL_EXTRA_AFTER] seconds). */
+        const val PATROL_PAIRS       = 3
+        const val PATROL_EXTRA_AFTER = 240f
+        const val K9_FROM            = 90f
         const val REWARD_ORBS        = 2
         private const val CLEAR_CHECK_EVERY = 0.5f
         private const val SPAWN_CLEARANCE   = 20f
@@ -100,6 +104,7 @@ class EventDirector(
         kinds.add(EventKind.SWARM_RUSH)
         if (elapsed >= 60f)  kinds.add(EventKind.DRONE_RAID)
         if (elapsed >= 120f) kinds.add(EventKind.SIEGE)
+        if (elapsed >= K9_FROM) kinds.add(EventKind.K9_PATROL)
         if (kinds.size > 1) lastKind?.let { kinds.remove(it) }   // never the same twice in a row
         nextWaveAt += WAVE_EVERY
         launchWave(world, kinds[Random.nextInt(kinds.size)], px, py, elapsed, events)
@@ -134,6 +139,7 @@ class EventDirector(
         when (kind) {
             EventKind.SWARM_RUSH -> { toSpawn = SWARM_COUNT; spawnGap = 1f / SWARM_PER_SECOND }
             EventKind.DRONE_RAID -> { toSpawn = DRONE_COUNT; spawnGap = 1f / DRONE_PER_SECOND }
+            EventKind.K9_PATROL  -> { toSpawn = 0; spawnPatrols(world, px, py, elapsed) }
             else                 -> { toSpawn = 0; spawnRing(world, px, py, elapsed) }
         }
         spawnTimer = 0f
@@ -166,6 +172,34 @@ class EventDirector(
             endWave()
         } else if (waveClock >= WAVE_TIME_LIMIT) {
             endWave()                                          // too slow: no reward, the rest stay as normal enemies
+        }
+    }
+
+    /**
+     * Guard-and-dog pairs placed round the player, just outside the screen, each starting to walk
+     * towards the area. They have not seen him: he can slip away, or be found.
+     */
+    private fun spawnPatrols(world: World, px: Float, py: Float, elapsed: Float) {
+        val radius = sqrt(viewportWidth * viewportWidth + viewportHeight * viewportHeight) * 0.5f + 140f
+        val pairs  = PATROL_PAIRS + if (elapsed >= PATROL_EXTRA_AFTER) 1 else 0
+        val map    = spawner.levelMap
+        val limit  = map?.worldSize ?: worldSize
+        val start  = Random.nextFloat() * 2f * PI.toFloat()
+        for (k in 0 until pairs) {
+            if (world.enemies.size + 2 > ENEMY_CEILING) break
+            // a few tries per pair, in case the first spot is a wall or the edge of the world
+            for (attempt in 0 until 6) {
+                val angle = start + k * 2f * PI.toFloat() / pairs + attempt * 0.35f
+                val x = px + cos(angle) * radius
+                val y = py + sin(angle) * radius
+                if (x < SPAWN_CLEARANCE * 3 || y < SPAWN_CLEARANCE * 3 || x > limit - SPAWN_CLEARANCE * 3 || y > limit - SPAWN_CLEARANCE * 3) continue
+                if (map != null && !map.isBoxFree(x, y, SPAWN_CLEARANCE * 2, SPAWN_CLEARANCE * 2)) continue
+                val guard = EntityFactory.createPatrol(world, x, y, px, py, spawner.difficultyAt(elapsed))
+                val dog   = world.enemies[guard]?.partner ?: -1
+                world.enemies[guard]?.waveTag = activeTag
+                world.enemies[dog]?.waveTag   = activeTag
+                break
+            }
         }
     }
 

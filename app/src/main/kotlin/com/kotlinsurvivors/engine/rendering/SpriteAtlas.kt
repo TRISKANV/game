@@ -45,6 +45,9 @@ class SpriteAtlas private constructor(
     val guardCellW = enemies[EnemyType.BASIC.ordinal].width / GUARD_COLUMNS
     val guardCellH = enemies[EnemyType.BASIC.ordinal].height / GUARD_ROWS
 
+    val dogCellW = enemies[EnemyType.DOG.ordinal].width / DOG_COLUMNS
+    val dogCellH = enemies[EnemyType.DOG.ordinal].height / DOG_ROWS
+
     companion object {
         private const val TAG = "KS_Sprites"
         private const val DIR = "sprites/"
@@ -55,6 +58,12 @@ class SpriteAtlas private constructor(
         const val GUARD_COLUMNS  = 8
         const val GUARD_ROWS     = 3
         const val GUARD_WALK_FRAMES = 4
+        // enemy_dog.png: 8 columns (0-3 trot, 4-5 gallop, 6-7 bite) x 3 rows (front, back, side facing right)
+        const val DOG_COLUMNS = 8
+        const val DOG_ROWS    = 3
+        const val DOG_TROT_FRAMES = 4
+        const val DOG_GALLOP_FIRST = 4
+        const val DOG_BITE_FIRST   = 6
         const val ITEM_CELL      = 12
         const val CHEST_CELL     = 16
         const val CAN_CELL_W     = 18

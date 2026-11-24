@@ -1,6 +1,7 @@
 package com.kotlinsurvivors.engine.ecs
 
 import com.kotlinsurvivors.engine.ecs.components.*
+import kotlin.math.atan2
 import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
@@ -88,6 +89,22 @@ object EntityFactory {
     }
 
     /**
+     * A guard walking his dog on a leash, not yet aware of the player. [towardX]/[towardY] is
+     * where he starts heading. The dog stands a little ahead of him. Returns the guard's id.
+     */
+    fun createPatrol(world: World, x: Float, y: Float, towardX: Float, towardY: Float, waveMultiplier: Float = 1f): Int {
+        val heading = atan2(towardY - y, towardX - x) + (Random.nextFloat() - 0.5f) * 1.2f
+        val guardId = createEnemy(world, EnemyType.BASIC, x, y, waveMultiplier)
+        val dogId   = createEnemy(world, EnemyType.DOG, x + cos(heading) * 40f, y + sin(heading) * 40f, waveMultiplier)
+        world.enemies[guardId]?.let {
+            it.patrol = PatrolState.WALK; it.partner = dogId
+            it.patrolDir = heading; it.patrolTimer = 2.5f + Random.nextFloat() * 2f
+        }
+        world.enemies[dogId]?.let { it.patrol = PatrolState.WALK; it.partner = guardId }
+        return guardId
+    }
+
+    /**
      * A mini-boss: an ordinary [type] grown into something much tougher that gives a lot of
      * experience, always drops coins and sometimes leaves a chest. It is drawn with a gold ring.
      */
@@ -131,6 +148,7 @@ object EntityFactory {
             EnemyType.BOSS_SHADOW -> EnemyCfg(hp(500), 52f, dmg(30), 200, 1f, RenderShape.CIRCLE, 0xFF7C4DFF, 0xFF311B92, 20f, 0x557C4DFF)
             EnemyType.BOSS_GOLEM  -> EnemyCfg(hp(800), 64f, dmg(45), 300, 1f, RenderShape.RECT,   0xFF8D6E63, 0xFF3E2723, 10f, 0x338D6E63)
             EnemyType.BOSS_NECROMANCER -> EnemyCfg(hp(600), 48f, dmg(25), 250, 1f, RenderShape.TRIANGLE, 0xFF26C6DA, 0xFF006064, 18f, 0x5526C6DA)
+            EnemyType.DOG   -> EnemyCfg(hp(14), 11f, dmg(6), 4, 0.06f, RenderShape.CIRCLE, 0xFF8D6E63, 0xFF3E2723, 0f, 0x00000000)
         }
     }
 

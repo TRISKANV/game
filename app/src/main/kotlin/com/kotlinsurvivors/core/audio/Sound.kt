@@ -28,6 +28,7 @@ enum class Sound(val file: String, val minGapMs: Long = 0L, val volume: Float = 
     ENEMY_BLAST   ("enemy_blast",    100, 0.8f),
     BOSS_APPEAR   ("boss_appear",    0,   1f),
     BOSS_DIE      ("boss_die",       0,   1f),
+    DOG_BARK      ("dog_bark",       800, 0.9f),
     PLAYER_HURT   ("player_hurt",    150, 0.9f),
 
     // Events
