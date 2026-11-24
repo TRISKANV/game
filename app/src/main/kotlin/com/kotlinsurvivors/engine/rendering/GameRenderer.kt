@@ -957,7 +957,7 @@ class GameRenderer(
         // Sprite sizes are expressed relative to the collision size of each entity.
         const val PLAYER_SPRITE_SCALE     = 2.5f
         const val ENEMY_SPRITE_SCALE      = 1.9f
-        const val GUARD_SPRITE_SCALE      = 2.2f      // a little shorter than the player (2.5)
+        const val GUARD_SPRITE_SCALE      = 3.3f      // 106 px tall: a bit taller than the player (90)
         const val GUARD_SIDE_BIAS         = 1.2f      // side view unless he is clearly going up or down
         const val GUARD_STEP_MS           = 130L
         const val BOSS_SPRITE_SCALE       = 1.5f
