@@ -32,12 +32,12 @@ class SpawnSystem(
     private val bossInterval     = 180f
 
     // Pre-built pool arrays — allocated once, never recreated
+    // Level 1 only has guards (BASIC) and drones (FAST) as regular enemies; K9 patrols and the
+    // bosses come from the event director. The other types stay in the engine for later levels.
     private val poolEarly  = arrayOf(EnemyType.BASIC, EnemyType.BASIC, EnemyType.BASIC)
-    private val poolMid    = arrayOf(EnemyType.BASIC, EnemyType.BASIC, EnemyType.FAST,
-                                     EnemyType.FAST,  EnemyType.SWARM, EnemyType.SWARM)
-    private val poolLate   = arrayOf(EnemyType.BASIC, EnemyType.FAST,  EnemyType.FAST,
-                                     EnemyType.SWARM,  EnemyType.TANK,  EnemyType.RANGED,
-                                     EnemyType.RANGED, EnemyType.EXPLODER)
+    private val poolMid    = arrayOf(EnemyType.BASIC, EnemyType.BASIC, EnemyType.FAST)
+    private val poolLate   = arrayOf(EnemyType.BASIC, EnemyType.BASIC, EnemyType.BASIC,
+                                     EnemyType.FAST,  EnemyType.FAST)
     private val bossList   = arrayOf(EnemyType.BOSS_SHADOW, EnemyType.BOSS_GOLEM, EnemyType.BOSS_NECROMANCER)
 
     /** Collision grid of the current level; enemies only appear on free ground. */

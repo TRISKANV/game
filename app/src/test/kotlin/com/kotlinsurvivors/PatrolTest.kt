@@ -78,6 +78,7 @@ class PatrolTest {
 
     @Test fun theLooseDogRunsAtThePlayerAndTheGuardFollowsAfterTheAlert() {
         val (g, d) = patrol(250f, PI.toFloat())
+        world.enemies[g]!!.wanderTimer = 100f                 // a chasing guard sometimes takes a random detour; not here
         run(dt * 2)
         val dogV = world.velocities[d]!!
         assertTrue("dog speed ${hypot(dogV.vx, dogV.vy)}", hypot(dogV.vx, dogV.vy) > 150f)

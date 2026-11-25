@@ -39,9 +39,8 @@ class EventDirector(
         /** Seconds, after the last enemy of a wave appeared, to wipe it out for the reward. */
         const val WAVE_TIME_LIMIT    = 75f
         const val RING_COUNT         = 20
-        const val RING_TANKS         = 3
-        const val SWARM_COUNT        = 36
-        const val SWARM_PER_SECOND   = 6f
+                const val SWARM_COUNT        = 24
+        const val SWARM_PER_SECOND   = 4f
         const val DRONE_COUNT        = 14
         const val DRONE_PER_SECOND   = 3f
         /** Guard-and-dog pairs of a K9 patrol (one more pair after [PATROL_EXTRA_AFTER] seconds). */
@@ -155,7 +154,7 @@ class EventDirector(
                 spawnTimer += spawnGap
                 if (world.enemies.size >= ENEMY_CEILING) { toSpawn = 0; break }   // no more room: the wave stays smaller
                 if (!spawner.findSpawnPoint(px, py)) { spawnTimer = 0.1f; break }  // try again shortly
-                val type = if (activeKind == EventKind.DRONE_RAID) EnemyType.FAST else EnemyType.SWARM
+                val type = if (activeKind == EventKind.DRONE_RAID) EnemyType.FAST else EnemyType.BASIC
                 spawnTagged(world, type, spawner.spawnPointX, spawner.spawnPointY, elapsed)
                 toSpawn--
             }
@@ -220,8 +219,7 @@ class EventDirector(
             val y = py + sin(angle) * radius
             if (x < SPAWN_CLEARANCE || y < SPAWN_CLEARANCE || x > limit - SPAWN_CLEARANCE || y > limit - SPAWN_CLEARANCE) continue
             if (map != null && !map.isBoxFree(x, y, SPAWN_CLEARANCE, SPAWN_CLEARANCE)) continue
-            val type = if (placed < RING_TANKS) EnemyType.TANK else EnemyType.BASIC
-            spawnTagged(world, type, x, y, elapsed)
+            spawnTagged(world, EnemyType.BASIC, x, y, elapsed)
             placed++
         }
     }
