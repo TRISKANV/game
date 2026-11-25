@@ -48,6 +48,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.TextStyle
+import com.kotlinsurvivors.features.game.presentation.components.PixelToast
 import com.kotlinsurvivors.features.game.presentation.components.pixelFrame
 import com.kotlinsurvivors.features.game.presentation.components.pixelUnitOf
 import androidx.compose.ui.graphics.graphicsLayer
@@ -202,17 +203,7 @@ fun PhoneCallOverlay(
 /** The notification that pops up on the computer when a file arrives. */
 @Composable
 fun StoryNotification(title: String, body: String, modifier: Modifier = Modifier) {
-    Column(
-        modifier = modifier
-            .widthIn(max = 240.dp)
-            .background(PanelColor, RoundedCornerShape(4.dp))
-            .border(1.dp, Color(0xFF4CE0A0), RoundedCornerShape(4.dp))
-            .padding(10.dp),
-        verticalArrangement = Arrangement.spacedBy(3.dp)
-    ) {
-        Text(title, color = Color(0xFF4CE0A0), fontSize = 11.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-        Text(body, color = Color.White, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
-    }
+    PixelToast(icon = "w_laptop", title = title, subtitle = body, accent = Color(0xFF4CE0A0), modifier = modifier, maxWidth = 260.dp)
 }
 
 /** NO_ABRIR.txt in a terminal-like window; the text is typed out and CLOSE returns to the room. */
@@ -264,26 +255,21 @@ fun StoryFileViewer(
 @Composable
 fun StoryMission(objective: String, showBanner: Boolean, modifier: Modifier = Modifier) {
     Box(modifier = modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopStart)
-                .padding(12.dp)
-                .background(PanelColor, RoundedCornerShape(4.dp))
-                .border(1.dp, Color(0xFFFFD36B), RoundedCornerShape(4.dp))
-                .padding(horizontal = 10.dp, vertical = 6.dp)
-        ) {
-            Text(stringResource(R.string.story_mission_label), color = Color(0xFFFFD36B), fontSize = 9.sp, fontWeight = FontWeight.Bold)
-            Text(objective, color = Color.White, fontSize = 13.sp, fontFamily = FontFamily.Monospace)
-        }
+        PixelToast(
+            icon     = "mission",
+            title    = stringResource(R.string.story_mission_label),
+            subtitle = objective,
+            accent   = Color(0xFFFFD36B),
+            animate  = false,
+            modifier = Modifier.align(Alignment.TopStart).padding(12.dp)
+        )
         if (showBanner) {
-            Text(
-                text = stringResource(R.string.story_mission_updated),
-                color = Color(0xFFFFD36B), fontSize = 18.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .padding(top = 28.dp)
-                    .background(PanelColor, RoundedCornerShape(4.dp))
-                    .padding(horizontal = 16.dp, vertical = 8.dp)
+            PixelToast(
+                icon     = "alert",
+                title    = stringResource(R.string.story_mission_updated),
+                subtitle = objective,
+                accent   = Color(0xFFFFD36B),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 28.dp)
             )
         }
     }

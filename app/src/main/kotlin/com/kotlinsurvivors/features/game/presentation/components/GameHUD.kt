@@ -194,30 +194,13 @@ fun GameHUD(
 /** Small banner shown for a few seconds when an achievement is unlocked. */
 @Composable
 fun AchievementBanner(achievement: Achievement, modifier: Modifier = Modifier) {
-    Row(
+    PixelToast(
+        icon     = achievement.icon,
+        title    = stringResource(R.string.hud_achievement_unlocked),
+        subtitle = achievement.localName(),
+        accent   = Color(0xFFFFD740),
         modifier = modifier
-            .background(Color(0xE61A1A2E), RoundedCornerShape(3.dp))
-            .border(1.dp, Color(0xFFFFD740), RoundedCornerShape(3.dp))
-            .padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment     = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        PixelIcon(achievement.icon, 24.dp)
-        Column {
-            Text(
-                stringResource(R.string.hud_achievement_unlocked),
-                color      = Color(0xFFFFD740),
-                fontSize   = 11.sp,
-                fontWeight = FontWeight.Bold
-            )
-            Text(
-                achievement.localName(),
-                color      = Color(0xFFE0E0E0),
-                fontSize   = 15.sp,
-                fontWeight = FontWeight.SemiBold
-            )
-        }
-    }
+    )
 }
 
 /**
@@ -421,16 +404,14 @@ fun EventBanner(kind: EventKind, modifier: Modifier = Modifier) {
         EventKind.K9_PATROL    -> stringResource(R.string.event_k9_sub)
         else                   -> stringResource(R.string.event_wave_sub)
     }
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
-        modifier = modifier
-            .background(Color(0xE61A1020), RoundedCornerShape(3.dp))
-            .border(2.dp, accent, RoundedCornerShape(3.dp))
-            .padding(horizontal = 22.dp, vertical = 8.dp)
-    ) {
-        Text(title, color = accent, fontSize = 18.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
-        Text(sub, color = Color(0xFFCCCCCC), fontSize = 11.sp)
+    val icon = when (kind) {
+        EventKind.SWARM_RUSH, EventKind.SIEGE -> "alert"
+        EventKind.DRONE_RAID   -> "drone"
+        EventKind.K9_PATROL    -> "k9"
+        EventKind.MINI_BOSS    -> "skull"
+        EventKind.WAVE_CLEARED -> "check"
     }
+    PixelToast(icon = icon, title = title, subtitle = sub, accent = accent, modifier = modifier)
 }
 
 /** The kill streak: its count, colored by tier, over a bar that empties as the streak runs out. */

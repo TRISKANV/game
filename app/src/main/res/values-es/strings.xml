@@ -72,13 +72,13 @@
     <string name="npc_leek_12">Llevo horas esperando a alguien… y no eras tú.</string>
     <string name="npc_leek_13">Si ves algo raro por la calle, es normal. Sigue andando.</string>
     <string name="npc_leek_14">Dicen que los hackers no duermen. Se nota en tus ojeras.</string>
-    <string name="event_swarm">¡LLEGA UN ENJAMBRE!</string>
+    <string name="event_swarm">¡LLEGAN LOS GUARDIAS!</string>
     <string name="event_drones">¡ATAQUE DE DRONES!</string>
     <string name="event_siege">¡TE ESTÁN CERCANDO!</string>
     <string name="event_k9">¡PATRULLA K9!</string>
     <string name="event_k9_sub">Todavía no te vieron. No te acerques.</string>
     <string name="event_miniboss">¡MINI-JEFE!</string>
-    <string name="event_wave_sub">Acabá con todos para ganar experiencia extra</string>
+    <string name="event_wave_sub">Acabá con todos: XP extra</string>
     <string name="event_miniboss_sub">Aguanta mucho y puede soltar un cofre</string>
     <string name="event_cleared">¡OLEADA SUPERADA!</string>
     <string name="event_cleared_sub">Experiencia y monedas de premio</string>

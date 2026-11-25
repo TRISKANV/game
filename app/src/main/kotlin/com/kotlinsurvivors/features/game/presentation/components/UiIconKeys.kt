@@ -52,5 +52,9 @@ val UI_ICON_KEYS: List<String> = listOf(
     "w_laptop",
     "w_ddos",
     "w_zeroday",
-    "w_logicbomb"
+    "w_logicbomb",
+    "k9",
+    "drone",
+    "alert",
+    "mission"
 )
