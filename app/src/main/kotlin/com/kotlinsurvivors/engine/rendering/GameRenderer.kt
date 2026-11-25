@@ -78,7 +78,11 @@ class GameRenderer(
             if (field === value) return
             field = value
             neighbour.lines = value?.npcLines ?: emptyArray()
+            cameraPlaced = false        // a new level: the camera jumps to the player instead of sweeping across the map
         }
+
+    /** Set from the game state every frame: while false, the barrier at the end of the street is drawn. */
+    var exitOpen = false
 
     /** The neighbour of Level 1; only drawn while [levelArt] is set, which also gives him his lines. */
     val neighbour = NeighbourRenderer()
@@ -98,6 +102,12 @@ class GameRenderer(
 
     // Nearest-neighbour paints keep the pixel art crisp when it is scaled up.
     private val spritePaint = Paint().apply { isAntiAlias = false; isFilterBitmap = false }
+    private val exitArrowPaint = Paint().apply {
+        isAntiAlias = false
+        color       = 0xFFFFD36B.toInt()
+        strokeWidth = 8f
+        strokeCap   = Paint.Cap.SQUARE
+    }
     private val flashPaint  = Paint().apply {
         isAntiAlias   = false
         isFilterBitmap = false
@@ -169,8 +179,9 @@ class GameRenderer(
             var targetCY = buf.cameraTargetY - viewportHeight * 0.5f
             if (levelArt != null) {
                 // Never show what lies beyond the edge of the map.
-                targetCX = targetCX.coerceIn(0f, (Level1.WORLD_SIZE - viewportWidth).coerceAtLeast(0f))
-                targetCY = targetCY.coerceIn(0f, (Level1.WORLD_SIZE - viewportHeight).coerceAtLeast(0f))
+                val worldSize = levelArt?.info?.worldSize ?: Level1.WORLD_SIZE
+                targetCX = targetCX.coerceIn(0f, (worldSize - viewportWidth).coerceAtLeast(0f))
+                targetCY = targetCY.coerceIn(0f, (worldSize - viewportHeight).coerceAtLeast(0f))
             }
             if (!cameraPlaced) {            // first frame: start on the player instead of sweeping in from 0,0
                 smoothX = targetCX; smoothY = targetCY; cameraPlaced = true
@@ -227,14 +238,15 @@ class GameRenderer(
             for (i in 0 until buf.count) {
                 if (buf.kind[i] == RenderKind.PLAYER) { playerFeetX = buf.x[i]; playerFeetY = buf.y[i] + MovementSystem.PLAYER_FEET_OFFSET; break }
             }
-            val neighbourDrawn = levelPicture != null && !playerFeetY.isNaN()
+            val hasNeighbour = levelPicture != null && levelPicture.info.number == 1
+            val neighbourDrawn = hasNeighbour && !playerFeetY.isNaN()
             val neighbourBehind = neighbourDrawn && neighbour.isBehindPlayer(playerFeetY)
             if (neighbourDrawn) neighbour.update(playerFeetX, playerFeetY, now)
-            if (levelPicture != null && (neighbourBehind || playerFeetY.isNaN())) with(neighbour) { drawSprite(levelPicture, cameraX, cameraY, now) }
+            if (levelPicture != null && hasNeighbour && (neighbourBehind || playerFeetY.isNaN())) with(neighbour) { drawSprite(levelPicture, cameraX, cameraY, now) }
             for (i in 0 until buf.count) {
                 if (buf.kind[i] == RenderKind.PLAYER) renderPlayer(buf, i)
             }
-            if (levelPicture != null && !neighbourBehind && !playerFeetY.isNaN()) with(neighbour) { drawSprite(levelPicture, cameraX, cameraY, now) }
+            if (levelPicture != null && hasNeighbour && !neighbourBehind && !playerFeetY.isNaN()) with(neighbour) { drawSprite(levelPicture, cameraX, cameraY, now) }
             // Pass 6: Projectiles
             for (i in 0 until buf.count) {
                 if (buf.kind[i] == RenderKind.PROJECTILE) renderProjectile(buf, i)
@@ -248,9 +260,10 @@ class GameRenderer(
             if (art != null) {
                 drawLampGlows(art)
                 drawRain()
+                drawExitArrow(art)
             }
             // Pass 7c: the neighbour's speech bubble, over everything in the world
-            if (art != null) with(neighbour) { drawBubble(cameraX, cameraY, now) }
+            if (art != null && art.info.number == 1) with(neighbour) { drawBubble(cameraX, cameraY, now) }
             // Pass 8: Damage numbers
             if (showDamageNumbers) {
                 for (i in 0 until buf.count) {
@@ -274,7 +287,7 @@ class GameRenderer(
         }
         fpsPaint.textSize = 14.sp.toPx()
         drawContext.canvas.nativeCanvas.drawText(fpsText, size.width - 16f, size.height - 16f, fpsPaint)
-        if (levelArt != null) drawContext.canvas.nativeCanvas.drawText(neighbour.debugLine(), size.width - 16f, size.height - 16f - fpsPaint.textSize * 1.4f, fpsPaint)
+        if (levelArt?.info?.number == 1) drawContext.canvas.nativeCanvas.drawText(neighbour.debugLine(), size.width - 16f, size.height - 16f - fpsPaint.textSize * 1.4f, fpsPaint)
     }
 
     // ── Background ──────────────────────────────────────────────────────────
@@ -311,7 +324,7 @@ class GameRenderer(
     private fun DrawScope.drawLevel(art: LevelArt, vw: Float, vh: Float) {
         val canvas = drawContext.canvas.nativeCanvas
         canvas.drawColor(LEVEL_BACKDROP)
-        val scale = Level1.IMAGE_SCALE
+        val scale = art.info.imageScale
         val bmp   = art.level
         val camX  = floor(cameraX)
         val camY  = floor(cameraY)
@@ -323,6 +336,45 @@ class GameRenderer(
         srcRect.set(left, top, right, bottom)
         dstRect.set(left * scale - camX, top * scale - camY, right * scale - camX, bottom * scale - camY)
         canvas.drawBitmap(bmp, srcRect, dstRect, spritePaint)
+
+        // The end of the street is shut with a barrier until the first boss is down.
+        val barrier = art.exitBarrier
+        if (barrier != null && !exitOpen) {
+            val bx = Level1.BARRIER_DRAW_X - camX
+            val by = Level1.BARRIER_DRAW_Y - camY
+            dstRect.set(bx, by, bx + barrier.width * scale, by + barrier.height * scale)
+            canvas.drawBitmap(barrier, null, dstRect, spritePaint)
+        }
+    }
+
+    /** Once the way out is open, a pulsing arrow at the edge of the screen shows where it is. */
+    private fun DrawScope.drawExitArrow(art: LevelArt) {
+        if (!exitOpen || art.info.number != 1) return
+        val targetX = (Level1.EXIT_X0 + Level1.EXIT_X1) * 0.5f - cameraX
+        val targetY = Level1.EXIT_TRIGGER_Y - cameraY
+        if (targetX in 0f..screenW && targetY in 0f..screenH) return
+        val dx = targetX - screenW * 0.5f
+        val dy = targetY - screenH * 0.5f
+        val len = hypot(dx, dy)
+        if (len < 1f) return
+        val ux = dx / len
+        val uy = dy / len
+        val reachX = if (abs(ux) < 0.001f) Float.MAX_VALUE else (screenW * 0.5f - EXIT_ARROW_MARGIN) / abs(ux)
+        val reachY = if (abs(uy) < 0.001f) Float.MAX_VALUE else (screenH * 0.5f - EXIT_ARROW_MARGIN) / abs(uy)
+        val reach = min(reachX, reachY)
+        val px = screenW * 0.5f + ux * reach
+        val py = screenH * 0.5f + uy * reach
+        val pulse = 0.65f + 0.35f * sin(System.currentTimeMillis() * 0.008f)
+        exitArrowPaint.alpha = (255 * pulse).toInt()
+        val canvas = drawContext.canvas.nativeCanvas
+        val nx = -uy
+        val ny = ux
+        val tipX = px + ux * EXIT_ARROW_SIZE;      val tipY = py + uy * EXIT_ARROW_SIZE
+        val aX   = px - ux * EXIT_ARROW_SIZE + nx * EXIT_ARROW_SIZE; val aY = py - uy * EXIT_ARROW_SIZE + ny * EXIT_ARROW_SIZE
+        val bX   = px - ux * EXIT_ARROW_SIZE - nx * EXIT_ARROW_SIZE; val bY = py - uy * EXIT_ARROW_SIZE - ny * EXIT_ARROW_SIZE
+        canvas.drawLine(aX, aY, tipX, tipY, exitArrowPaint)
+        canvas.drawLine(bX, bY, tipX, tipY, exitArrowPaint)
+        canvas.drawLine(px - ux * EXIT_ARROW_SIZE, py - uy * EXIT_ARROW_SIZE, tipX, tipY, exitArrowPaint)
     }
 
     /** A soft warm light on every lamp that is on screen, added on top of the picture. */
@@ -332,7 +384,7 @@ class GameRenderer(
             glowSource = art.glow
         }
         val glow = glowImage ?: return
-        val lamps = Level1.LAMPS
+        val lamps = art.info.lamps
         val now   = System.currentTimeMillis()
         val size  = GLOW_SIZE.toInt()
         var i = 0
@@ -1077,6 +1129,8 @@ class GameRenderer(
 
         // Ground: each 32px tile is drawn 3x, clutter is placed on a coarse world grid.
         const val LEVEL_BACKDROP = 0xFF0A0A14.toInt()
+        const val EXIT_ARROW_MARGIN = 56f
+        const val EXIT_ARROW_SIZE   = 18f
         const val GLOW_SIZE      = 300f
         const val GLOW_ALPHA     = 0.85f
         const val GLOW_FLICKER   = 0.08f

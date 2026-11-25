@@ -4,17 +4,22 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.util.Log
 import com.kotlinsurvivors.R
+import com.kotlinsurvivors.engine.map.LevelInfo
+import com.kotlinsurvivors.engine.map.Levels
 
 /**
- * The baked picture of Level 1 and the soft light sprite drawn on top of each lamp.
- * level1.png covers the whole world at [com.kotlinsurvivors.engine.map.Level1.IMAGE_SCALE]
- * world pixels per image pixel. Load off the main thread; null when a file is missing,
- * and the renderer then falls back to the plain ground.
+ * The baked picture of a level and the soft light sprite drawn on top of each lamp.
+ * The picture covers the whole world at [LevelInfo.imageScale] world pixels per image pixel.
+ * Load off the main thread; null when a file is missing, and the renderer then falls back to
+ * the plain ground.
  */
 class LevelArt private constructor(
+    val info: LevelInfo,
     val level: Bitmap,
     val glow: Bitmap,
     val npc: Bitmap?,
+    /** The barrier that shuts the end of the street in Level 1 until the first boss is down. */
+    val exitBarrier: Bitmap?,
     /** What the neighbour says, in the language of the phone when the level was loaded. */
     val npcLines: Array<String>
 ) {
@@ -29,17 +34,24 @@ class LevelArt private constructor(
             R.string.npc_leek_13, R.string.npc_leek_14
         )
 
-        fun loadLevel1(context: Context): LevelArt? = try {
+        fun loadLevel1(context: Context): LevelArt? = load(context, Levels.ONE)
+
+        fun load(context: Context, info: LevelInfo): LevelArt? = try {
+            val isFirst = info.number == 1
             LevelArt(
-                level = SpriteAtlas.bitmap(context, "level1.png"),
+                info  = info,
+                level = SpriteAtlas.bitmap(context, info.artFile),
                 glow  = SpriteAtlas.bitmap(context, "glow.png"),
-                npc   = try { SpriteAtlas.bitmap(context, "npc_leek.png") } catch (e: Exception) {
+                npc   = if (!isFirst) null else try { SpriteAtlas.bitmap(context, "npc_leek.png") } catch (e: Exception) {
                     Log.w(TAG, "No picture for the neighbour, he will not appear", e); null
                 },
-                npcLines = Array(NPC_LINES.size) { context.getString(NPC_LINES[it]) }
+                exitBarrier = if (!isFirst) null else try { SpriteAtlas.bitmap(context, "level1_exit_barrier.png") } catch (e: Exception) {
+                    Log.w(TAG, "No picture for the exit barrier", e); null
+                },
+                npcLines = if (isFirst) Array(NPC_LINES.size) { context.getString(NPC_LINES[it]) } else emptyArray()
             )
         } catch (e: Exception) {
-            Log.e(TAG, "Could not load the level 1 art", e)
+            Log.e(TAG, "Could not load the art of level ${info.number}", e)
             null
         }
     }

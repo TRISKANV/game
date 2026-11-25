@@ -32,6 +32,12 @@ sealed interface LabCommand {
     /** Adds this many kills to the combo. */
     data class AddCombo(val kills: Int) : LabCommand
 
+    /** Opens the barrier at the end of the street, as if the first boss had fallen. */
+    object OpenExit : LabCommand
+
+    /** Goes to Level 2 now, with the usual fade. */
+    object GoToLevel2 : LabCommand
+
     object ClearEnemies : LabCommand
     object HealFull : LabCommand
 

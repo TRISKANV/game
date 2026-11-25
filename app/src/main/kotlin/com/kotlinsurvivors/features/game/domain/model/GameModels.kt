@@ -6,6 +6,9 @@ import com.kotlinsurvivors.engine.ecs.systems.GameEvent
 import com.kotlinsurvivors.engine.ChestReward
 import com.kotlinsurvivors.engine.ecs.components.WeaponType
 
+/** A message about the way through the levels, shown for a few seconds as a notification. */
+enum class LevelNotice { EXIT_OPEN, LEVEL_TWO }
+
 /**
  * Immutable snapshot of the game state emitted by GameEngine each frame.
  *
@@ -34,6 +37,12 @@ data class GameState(
     val comboCount       : Int            = 0,
     val comboTier        : Int            = 0,
     val comboFraction    : Float          = 0f,
+
+    /** The level being played (1 or 2), whether the way out of Level 1 is open, and the black fade over a change of level (0..1). */
+    val levelNumber      : Int            = 1,
+    val exitOpen         : Boolean        = false,
+    val levelFade        : Float          = 0f,
+    val levelNotice      : LevelNotice?   = null,
 
     // Time
     val elapsedTime      : Float          = 0f,

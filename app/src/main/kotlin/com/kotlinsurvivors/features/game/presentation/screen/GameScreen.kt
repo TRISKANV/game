@@ -30,6 +30,8 @@ import com.kotlinsurvivors.engine.rendering.LevelArt
 import com.kotlinsurvivors.engine.rendering.SpriteAtlas
 import com.kotlinsurvivors.features.game.domain.model.Achievement
 import com.kotlinsurvivors.features.game.domain.model.GameState
+import com.kotlinsurvivors.features.game.domain.model.LevelNotice
+import com.kotlinsurvivors.engine.map.Levels
 import com.kotlinsurvivors.features.game.presentation.components.*
 import com.kotlinsurvivors.features.game.presentation.viewmodel.GameViewModel
 import com.kotlinsurvivors.features.settings.presentation.viewmodel.SettingsViewModel
@@ -97,8 +99,13 @@ fun GameScreen(
 
         // The picture of the level, decoded the same way. Without it the old ground is drawn.
         var levelArt by remember { mutableStateOf<LevelArt?>(null) }
-        LaunchedEffect(context) {
-            levelArt = withContext(Dispatchers.IO) { LevelArt.loadLevel1(context.applicationContext) }
+        // It follows the level the engine is in: when the run crosses over, the picture of the next
+        // one is decoded here while the screen is black.
+        val levelNumber = gameState.levelNumber
+        var artAttemptedFor by remember { mutableIntStateOf(1) }
+        LaunchedEffect(context, levelNumber) {
+            levelArt = withContext(Dispatchers.IO) { LevelArt.load(context.applicationContext, Levels.of(levelNumber)) }
+            artAttemptedFor = levelNumber
         }
 
         // Settings that act on the game. Plain assignments, safe to repeat every frame.
@@ -107,6 +114,7 @@ fun GameScreen(
             renderer.showFps           = settings.showFps
             renderer.atlas             = sprites
             renderer.levelArt          = levelArt
+            renderer.exitOpen          = gameState.exitOpen
             viewModel.joystick?.setScale(settings.joystickSize)
         }
 
@@ -198,12 +206,33 @@ fun GameScreen(
             EventBanner(kind = kind, modifier = Modifier.align(Alignment.TopCenter).padding(top = 96.dp))
         }
 
+        // ── The way through the levels ─────────────────────────────────────────
+        gameState.levelNotice?.let { notice ->
+            val (icon, title, subtitle) = when (notice) {
+                LevelNotice.EXIT_OPEN -> Triple("mission", stringResource(R.string.level_exit_open), stringResource(R.string.level_exit_open_sub))
+                LevelNotice.LEVEL_TWO -> Triple("alert", stringResource(R.string.level_two_title), stringResource(R.string.level_two_sub))
+            }
+            PixelToast(
+                icon     = icon,
+                title    = title,
+                subtitle = subtitle,
+                accent   = if (notice == LevelNotice.EXIT_OPEN) Color(0xFF7CE04A) else Color(0xFFFFD36B),
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 150.dp)
+            )
+        }
+
         // ── Laboratory panel ──────────────────────────────────────────────────
         if (laboratory && !gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp) {
             LabPanel(
                 onCommand = viewModel::sendLabCommand,
                 modifier  = Modifier.align(Alignment.CenterEnd)
             )
+        }
+
+        // ── Black fade over a change of level (and while the next picture is still being decoded) ──
+        val blackness = if (artAttemptedFor == levelNumber) gameState.levelFade else 1f
+        if (blackness > 0f) {
+            Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = blackness)))
         }
 
         // ── A boss chest was opened: the game waits while the player sees what it holds ──

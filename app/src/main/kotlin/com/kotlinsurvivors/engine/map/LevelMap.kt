@@ -30,6 +30,19 @@ class LevelMap(
     fun isBlockedAt(x: Float, y: Float): Boolean =
         isBlockedCell(floor(x / cellSize).toInt(), floor(y / cellSize).toInt())
 
+    /**
+     * Blocks or frees every cell the rectangle (in world pixels) touches. Used for the gate at the
+     * end of the street, which stays shut until the first boss is down.
+     */
+    fun setRect(x0: Float, y0: Float, x1: Float, y1: Float, isBlocked: Boolean) {
+        val value: Byte = if (isBlocked) 1 else 0
+        val cx0 = floor(x0 / cellSize).toInt().coerceAtLeast(0)
+        val cx1 = floor((x1 - EDGE_EPSILON) / cellSize).toInt().coerceAtMost(cells - 1)
+        val cy0 = floor(y0 / cellSize).toInt().coerceAtLeast(0)
+        val cy1 = floor((y1 - EDGE_EPSILON) / cellSize).toInt().coerceAtMost(cells - 1)
+        for (cy in cy0..cy1) for (cx in cx0..cx1) blocked[cy * cells + cx] = value
+    }
+
     /** True when the box centred on (x, y) with the given half sizes touches no blocked cell. */
     fun isBoxFree(x: Float, y: Float, halfW: Float, halfH: Float): Boolean {
         val x0 = floor((x - halfW) / cellSize).toInt()

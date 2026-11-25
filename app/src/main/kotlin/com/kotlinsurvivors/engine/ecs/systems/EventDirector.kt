@@ -76,6 +76,18 @@ class EventDirector(
         endWave()
     }
 
+    /**
+     * The run moved on to another level: whatever wave was running is dropped and the clock for the
+     * next events starts again from now, so the player gets a breather and the first wave of the new
+     * level is again the K9 patrol.
+     */
+    fun restartSchedule(elapsed: Float) {
+        endWave()
+        lastKind       = null
+        nextWaveAt     = elapsed + FIRST_WAVE_AT
+        nextMiniBossAt = elapsed + FIRST_MINI_BOSS_AT
+    }
+
     fun update(world: World, dt: Float, elapsed: Float, events: MutableList<GameEvent>) {
         val pid = world.getPlayerEntity()
         if (pid == -1) return

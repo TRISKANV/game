@@ -7,12 +7,14 @@ import android.util.Log
 object LevelMapLoader {
     private const val TAG = "KS_LevelMap"
 
-    fun loadLevel1(context: Context): LevelMap? = try {
-        val bytes = context.assets.open("sprites/level1_solid.bin").use { it.readBytes() }
-        Level1Npc.stampSolid(bytes, Level1.CELLS, Level1.CELL_SIZE)   // the neighbour is an obstacle too
-        LevelMap(Level1.CELLS, Level1.CELL_SIZE, bytes)
+    fun loadLevel1(context: Context): LevelMap? = load(context, Levels.ONE)
+
+    fun load(context: Context, info: LevelInfo): LevelMap? = try {
+        val bytes = context.assets.open("sprites/${info.solidFile}").use { it.readBytes() }
+        if (info.number == 1) Level1Npc.stampSolid(bytes, info.cells, info.cellSize)   // the neighbour is an obstacle too
+        LevelMap(info.cells, info.cellSize, bytes)
     } catch (e: Exception) {
-        Log.e(TAG, "Could not load the level 1 collision grid, playing without it", e)
+        Log.e(TAG, "Could not load the collision grid of level ${info.number}, playing without it", e)
         null
     }
 }

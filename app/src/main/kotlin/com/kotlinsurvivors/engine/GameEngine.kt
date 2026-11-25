@@ -12,8 +12,12 @@ import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.systems.*
 import com.kotlinsurvivors.engine.input.VirtualJoystick
+import com.kotlinsurvivors.engine.input.JoystickState
 import com.kotlinsurvivors.engine.map.Level1
+import com.kotlinsurvivors.engine.map.LevelFlow
 import com.kotlinsurvivors.engine.map.LevelMap
+import com.kotlinsurvivors.engine.map.Levels
+import com.kotlinsurvivors.features.game.domain.model.LevelNotice
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
 import com.kotlinsurvivors.features.game.domain.model.UpgradeType
@@ -51,7 +55,9 @@ class GameEngine(
      * The laboratory: nothing spawns by itself, the player cannot die (until the tester says so)
      * and the tester's [LabCommand]s are applied. Never set in a real run.
      */
-    private val laboratory: Boolean = false
+    private val laboratory: Boolean = false,
+    /** Collision grid of Level 2, read at the start of the run so crossing over never waits on a file. */
+    private val loadNextLevelMap: suspend () -> LevelMap? = { null }
 ) {
     companion object {
         const val TARGET_FPS     = 60
@@ -63,6 +69,7 @@ class GameEngine(
         const val WORLD_HEIGHT   = 4096f
         const val MAX_WEAPON_LEVEL = 8
         private const val EVENT_BANNER_SECONDS = 3.5f
+        private const val LEVEL_NOTICE_SECONDS = 5f
         private const val RENDER_BUFFER_COUNT = 8
         private const val DOG_RUN_SPEED_SQ     = 10_000f   // above 100 px/s the dog gallops
         private const val FACING_MIN_SPEED_SQ  = 25f   // below 5 px/s the player counts as standing still
@@ -82,6 +89,14 @@ class GameEngine(
     private val eventDirector    = EventDirector(spawnSystem, WORLD_WIDTH, viewportWidth, viewportHeight)
 
     val joystick = VirtualJoystick()
+
+    // ── Levels ──────────────────────────────────────────────────────────────
+    private val levelFlow = LevelFlow()
+    private var nextLevelMap: LevelMap? = null
+    private var levelNotice: LevelNotice? = null
+    private var levelNoticeTimer = 0f
+    /** While the screen fades out at the end of the street the character keeps walking south, on his own. */
+    private val autoWalkSouth = JoystickState(isActive = true, dx = 0f, dy = 1f, rawX = 0f, rawY = 1f)
 
     // ── Laboratory ──────────────────────────────────────────────────────────
     private val labQueue = java.util.concurrent.ConcurrentLinkedQueue<LabCommand>()
@@ -160,6 +175,7 @@ class GameEngine(
             previous?.join()
             resetState()
             initWorld(readPermanentLevels(), readLevelMap())
+            nextLevelMap = readNextLevelMap()
 
             var lastTime    = System.nanoTime()
             var accumulator = 0f
@@ -322,6 +338,9 @@ class GameEngine(
         chestSeen            = false
         eventBanner          = null
         eventBannerTimer     = 0f
+        levelFlow.reset()
+        levelNotice          = null
+        levelNoticeTimer     = 0f
         directorEvents.clear()
         eventDirector.reset()
         eventDirector.autoStart = !laboratory
@@ -364,8 +383,20 @@ class GameEngine(
             null
         }
 
+    private suspend fun readNextLevelMap(): LevelMap? =
+        try {
+            loadNextLevelMap()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            CrashLogger.logCrash("loading the map of level 2", e)
+            null
+        }
+
     private fun initWorld(permanentLevels: Map<String, Int>, map: LevelMap?) {
         world.clear()
+        // The end of the street starts shut: its barrier opens when the first boss falls.
+        map?.setRect(Level1.EXIT_X0, Level1.BARRIER_Y0, Level1.EXIT_X1, Level1.BARRIER_Y1, true)
         movementSystem.levelMap = map
         spawnSystem.levelMap    = map
         // With a map the run starts just outside the house door, otherwise in the middle.
@@ -407,7 +438,7 @@ class GameEngine(
         }
 
         try {
-            movementSystem.update(world, dt, joystick.getState())
+            movementSystem.update(world, dt, if (levelFlow.phase == LevelFlow.Phase.LEAVING) autoWalkSouth else joystick.getState())
             if (movementSystem.consumeAlarms() > 0) sounds.play(Sound.DOG_BARK)
         } catch (e: Exception) {
             Log.e(TAG, "CRASH in movementSystem.update (frame $frameCount)", e)
@@ -459,6 +490,8 @@ class GameEngine(
             Log.e(TAG, world.getDiagnosticString()); throw e
         }
 
+        updateLevelFlow(dt)
+
         for (event in processed) {
             when (event) {
                 is GameEvent.LevelUp -> {
@@ -484,6 +517,59 @@ class GameEngine(
         }
     }
 
+    /**
+     * Opens the way out of Level 1 once the first boss is down, and carries the run over to Level 2
+     * when the player walks out: the screen fades to black, the next level is put in place and the
+     * screen fades back in.
+     */
+    private fun updateLevelFlow(dt: Float) {
+        val pid = world.getPlayerEntity()
+        val pt  = world.transforms[pid] ?: return
+        if (levelFlow.level == 1 && !levelFlow.exitOpen && (world.players[pid]?.bossKills ?: 0) >= 1) openExit()
+        if (levelFlow.update(dt, pt.x, pt.y)) enterLevelTwo(pid)
+        if (levelNoticeTimer > 0f) {
+            levelNoticeTimer -= dt
+            if (levelNoticeTimer <= 0f) levelNotice = null
+        }
+    }
+
+    private fun openExit() {
+        if (!levelFlow.openExit()) return
+        val map = movementSystem.levelMap
+        if (map != null) {
+            map.setRect(Level1.EXIT_X0, Level1.BARRIER_Y0, Level1.EXIT_X1, Level1.BARRIER_Y1, false)
+            movementSystem.levelMap = map          // the enemies' walking distances are worked out again with the gap
+        }
+        levelNotice      = LevelNotice.EXIT_OPEN
+        levelNoticeTimer = LEVEL_NOTICE_SECONDS
+        sounds.play(Sound.WAVE_CLEAR)
+        CrashLogger.log("EXIT opened at ${elapsedTime.toInt()}s")
+    }
+
+    /** Called on the one frame the screen is black: everything of Level 1 goes, the player and what he carries stay. */
+    private fun enterLevelTwo(pid: Int) {
+        val info = Levels.TWO
+        val gone = ArrayList<Int>(world.enemies.size + world.projectiles.size + world.pickups.size + 64)
+        gone.addAll(world.enemies.keys); gone.addAll(world.projectiles.keys); gone.addAll(world.pickups.keys)
+        gone.addAll(world.particles.keys); gone.addAll(world.blasts.keys); gone.addAll(world.damageNumbers.keys)
+        for (id in gone) if (id != pid) world.destroyEntity(id)
+        world.flushDestroyed()
+
+        val map = nextLevelMap
+        movementSystem.levelMap = map
+        spawnSystem.levelMap    = map
+        world.transforms[pid]?.let { it.x = info.spawnX; it.y = info.spawnY }
+        world.velocities[pid]?.let { it.vx = 0f; it.vy = 0f }
+        spawnSystem.reset()
+        eventDirector.restartSchedule(elapsedTime)
+        directorEvents.clear()
+        eventBanner = null
+        eventBannerTimer = 0f
+        levelNotice      = LevelNotice.LEVEL_TWO
+        levelNoticeTimer = LEVEL_NOTICE_SECONDS
+        CrashLogger.log("LEVEL 2 entered at ${elapsedTime.toInt()}s, map=${if (map != null) "loaded" else "missing"}")
+    }
+
     /** Applies what the tester asked for since the last tick. Laboratory only. */
     private fun drainLabCommands() {
         val pid = world.getPlayerEntity()
@@ -501,6 +587,8 @@ class GameEngine(
                 is LabCommand.GiveWeapon    -> labGiveWeapon(pid, command.type)
                 is LabCommand.LevelUp       -> LabActions.levelUp(world, map)
                 is LabCommand.AddCombo      -> combo.onKills(command.kills)
+                is LabCommand.OpenExit      -> openExit()
+                is LabCommand.GoToLevel2    -> levelFlow.startTrip()
                 is LabCommand.ClearEnemies  -> LabActions.clearEnemies(world)
                 is LabCommand.HealFull      -> LabActions.healFull(world)
                 is LabCommand.SetInvincible -> labInvincible = command.on
@@ -601,6 +689,10 @@ class GameEngine(
             levelUpWinner    = cachedLevelUpWinner,
             chestReward      = pendingChest,
             eventBanner      = eventBanner,
+            levelNumber      = levelFlow.level,
+            exitOpen         = levelFlow.exitOpen,
+            levelFade        = levelFlow.fade,
+            levelNotice      = levelNotice,
             comboCount       = if (combo.isVisible) combo.count else 0,
             comboTier        = combo.tier,
             comboFraction    = if (combo.isVisible) (combo.fraction * 20f).toInt() / 20f else 0f,

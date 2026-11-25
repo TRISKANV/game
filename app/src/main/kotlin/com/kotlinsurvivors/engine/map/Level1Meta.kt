@@ -14,6 +14,15 @@ object Level1 {
     const val DOOR_RIGHT   = 2112.0f
     const val DOOR_Y       = 544.0f
 
+    /** The south end of the road, the way out to Level 2: the barrier stays shut until the first boss is down. */
+    const val EXIT_X0         = 3344.0f
+    const val EXIT_X1         = 3730.0f
+    const val EXIT_TRIGGER_Y  = 3932.0f
+    const val BARRIER_Y0      = 3956.0f
+    const val BARRIER_Y1      = 3996.0f
+    const val BARRIER_DRAW_X  = 3344.0f
+    const val BARRIER_DRAW_Y  = 3956.0f
+
     /** Lamp positions as x, y pairs in world pixels. */
     val LAMPS: FloatArray = floatArrayOf(
         1856.0f, 614.0f,

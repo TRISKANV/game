@@ -232,6 +232,13 @@
     <string name="lab_heal">Heal</string>
     <string name="lab_clear">Clear enemies</string>
     <string name="lab_combo">Add to combo</string>
+    <string name="lab_levels">Levels</string>
+    <string name="lab_open_exit">Open exit</string>
+    <string name="lab_to_level2">Go to level 2</string>
+    <string name="level_exit_open">EXIT OPEN!</string>
+    <string name="level_exit_open_sub">Follow the street south</string>
+    <string name="level_two_title">LEVEL 2 · THE PLAZA</string>
+    <string name="level_two_sub">The police station is to the east</string>
     <string name="chest_boss_title">BOSS CHEST!</string>
     <string name="chest_tap_open">TAP THE CHEST TO OPEN IT</string>
     <string name="chest_tap_continue">Tap to continue</string>

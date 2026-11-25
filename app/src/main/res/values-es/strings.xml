@@ -232,6 +232,13 @@
     <string name="lab_heal">Curar</string>
     <string name="lab_clear">Borrar bichos</string>
     <string name="lab_combo">Sumar al combo</string>
+    <string name="lab_levels">Niveles</string>
+    <string name="lab_open_exit">Abrir salida</string>
+    <string name="lab_to_level2">Ir al nivel 2</string>
+    <string name="level_exit_open">¡SALIDA ABIERTA!</string>
+    <string name="level_exit_open_sub">Seguí la calle hacia el sur</string>
+    <string name="level_two_title">NIVEL 2 · LA PLAZA</string>
+    <string name="level_two_sub">La comisaría queda al este</string>
     <string name="chest_boss_title">¡COFRE DEL JEFE!</string>
     <string name="chest_tap_open">TOCÁ EL COFRE PARA ABRIRLO</string>
     <string name="chest_tap_continue">Tocá para continuar</string>

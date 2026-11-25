@@ -10,6 +10,7 @@ import com.kotlinsurvivors.engine.AchievementEngine
 import com.kotlinsurvivors.engine.GameEngine
 import com.kotlinsurvivors.engine.lab.LabCommand
 import com.kotlinsurvivors.engine.map.LevelMapLoader
+import com.kotlinsurvivors.engine.map.Levels
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
 import com.kotlinsurvivors.features.game.domain.model.RunResult
@@ -49,6 +50,7 @@ class GameViewModel @Inject constructor(
             viewportWidth, viewportHeight,
             loadPermanentLevels = { gameRepository.getPermanentUpgradeLevels() },
             loadLevelMap        = { LevelMapLoader.loadLevel1(appContext) },
+            loadNextLevelMap    = { LevelMapLoader.load(appContext, Levels.TWO) },
             sounds              = soundManager,
             laboratory          = laboratory
         )

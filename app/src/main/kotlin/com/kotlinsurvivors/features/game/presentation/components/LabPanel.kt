@@ -168,6 +168,13 @@ fun LabPanel(
                             stringResource(R.string.lab_clear)    to { onCommand(LabCommand.ClearEnemies) }
                         )
                     )
+                    SectionLabel(stringResource(R.string.lab_levels))
+                    ButtonGrid(
+                        listOf(
+                            stringResource(R.string.lab_open_exit) to { onCommand(LabCommand.OpenExit) },
+                            stringResource(R.string.lab_to_level2) to { onCommand(LabCommand.GoToLevel2) }
+                        )
+                    )
                     SectionLabel(stringResource(R.string.lab_combo))
                     ButtonGrid(COMBO_STEPS.map { kills -> "+$kills" to { onCommand(LabCommand.AddCombo(kills)) } })
                 }
