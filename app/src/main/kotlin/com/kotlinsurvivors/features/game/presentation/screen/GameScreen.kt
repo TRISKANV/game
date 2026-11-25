@@ -111,12 +111,14 @@ fun GameScreen(
         }
 
         // Settings that act on the game. Plain assignments, safe to repeat every frame.
+        val copShout = stringResource(R.string.cop_shout)
         SideEffect {
             renderer.showDamageNumbers = settings.showDamageNumbers
             renderer.showFps           = settings.showFps
             renderer.atlas             = sprites
             renderer.levelArt          = levelArt
             renderer.exitOpen          = gameState.exitOpen
+            renderer.copShout          = copShout
             viewModel.joystick?.setScale(settings.joystickSize)
         }
 
@@ -213,6 +215,7 @@ fun GameScreen(
             val (icon, title, subtitle) = when (notice) {
                 LevelNotice.EXIT_OPEN -> Triple("mission", stringResource(R.string.level_exit_open), stringResource(R.string.level_exit_open_sub))
                 LevelNotice.LEVEL_TWO -> Triple("alert", stringResource(R.string.level_two_title), stringResource(R.string.level_two_sub))
+                LevelNotice.STATION   -> Triple("alert", stringResource(R.string.level_station_title), stringResource(R.string.level_station_sub))
             }
             PixelToast(
                 icon     = icon,

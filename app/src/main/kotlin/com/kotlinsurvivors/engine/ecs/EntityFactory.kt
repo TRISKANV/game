@@ -148,6 +148,7 @@ object EntityFactory {
             EnemyType.BOSS_SHADOW -> EnemyCfg(hp(500), 52f, dmg(30), 200, 1f, RenderShape.CIRCLE, 0xFF7C4DFF, 0xFF311B92, 20f, 0x557C4DFF)
             EnemyType.BOSS_GOLEM  -> EnemyCfg(hp(800), 64f, dmg(45), 300, 1f, RenderShape.RECT,   0xFF8D6E63, 0xFF3E2723, 10f, 0x338D6E63)
             EnemyType.BOSS_NECROMANCER -> EnemyCfg(hp(600), 48f, dmg(25), 250, 1f, RenderShape.TRIANGLE, 0xFF26C6DA, 0xFF006064, 18f, 0x5526C6DA)
+            EnemyType.COP   -> EnemyCfg(hp(40), 16f, dmg(10), 8, 0.12f, RenderShape.CIRCLE, 0xFF3F51B5, 0xFF1A237E, 0f, 0x00000000)
             EnemyType.DOG   -> EnemyCfg(hp(14), 11f, dmg(6), 4, 0.06f, RenderShape.CIRCLE, 0xFF8D6E63, 0xFF3E2723, 0f, 0x00000000)
         }
     }

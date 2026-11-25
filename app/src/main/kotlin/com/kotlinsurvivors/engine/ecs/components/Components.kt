@@ -143,7 +143,9 @@ data class PlayerComponent(
 enum class EnemyType {
     BASIC, FAST, TANK, RANGED, EXPLODER, SWARM, BOSS_SHADOW, BOSS_GOLEM, BOSS_NECROMANCER,
     /** The guard's police dog: fast and fragile, it bites. Appears on a leash in the K9 patrol. */
-    DOG;
+    DOG,
+    /** A police officer inside the station: walks a beat until he sees the player or the alarm goes, then fights like the guard. */
+    COP;
 
     val isBoss: Boolean
         get() = this == BOSS_SHADOW || this == BOSS_GOLEM || this == BOSS_NECROMANCER
@@ -190,7 +192,11 @@ data class EnemyComponent(
     var partner: Int = -1,
     var patrolDir: Float = 0f,
     var patrolTimer: Float = 0f,
-    var alertTimer: Float = 0f
+    var alertTimer: Float = 0f,
+    /** Next point of the beat (an index into the route the patrol system holds for this officer). */
+    var routeIndex: Int = 0,
+    /** The officer who shouts when the alarm goes in the station; he gets a speech bubble. */
+    var shouting: Boolean = false
 ) : Component
 
 // ─────────────────────────────────────────────

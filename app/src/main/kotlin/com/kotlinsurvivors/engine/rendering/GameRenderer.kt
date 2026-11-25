@@ -84,6 +84,9 @@ class GameRenderer(
     /** Set from the game state every frame: while false, the barrier at the end of the street is drawn. */
     var exitOpen = false
 
+    /** What the officer shouts when he recognises the player, in the language of the phone; set by the screen. */
+    var copShout: String = ""
+
     /** The neighbour of Level 1; only drawn while [levelArt] is set, which also gives him his lines. */
     val neighbour = NeighbourRenderer()
 
@@ -107,6 +110,12 @@ class GameRenderer(
         color       = 0xFFFFD36B.toInt()
         strokeWidth = 8f
         strokeCap   = Paint.Cap.SQUARE
+    }
+    private val shoutTextPaint = Paint().apply {
+        isAntiAlias = false
+        color       = 0xFF14101C.toInt()
+        textSize    = 15f
+        typeface    = android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD)
     }
     private val flashPaint  = Paint().apply {
         isAntiAlias   = false
@@ -259,7 +268,7 @@ class GameRenderer(
             val art = levelArt
             if (art != null) {
                 drawLampGlows(art)
-                drawRain()
+                if (art.info.number != 3) drawRain()          // it does not rain indoors
                 drawExitArrow(art)
             }
             // Pass 7c: the neighbour's speech bubble, over everything in the world
@@ -661,7 +670,8 @@ class GameRenderer(
         val bob     = if (frame == 1) -h * 0.04f else 0f
 
         if (typeId == EnemyType.FAST.ordinal) { renderDrone(a, buf, i, sx, sy, flashing); return }
-        if (typeId == EnemyType.BASIC.ordinal) { renderGuard(a, buf, i, sx, sy, flashing); return }
+        if (typeId == EnemyType.BASIC.ordinal) { renderGuard(a, buf, i, sx, sy, flashing, EnemyType.BASIC); return }
+        if (typeId == EnemyType.COP.ordinal)   { renderGuard(a, buf, i, sx, sy, flashing, EnemyType.COP); return }
         if (typeId == EnemyType.DOG.ordinal)   { renderDog(a, buf, i, sx, sy, flashing); return }
 
         drawShadow(sx, sy + h * 0.5f, w * 0.8f)
@@ -677,11 +687,14 @@ class GameRenderer(
      * he is walking, whether he is raising his fists and how long ago his punch landed.
      */
     private fun DrawScope.renderGuard(
-        a: SpriteAtlas, buf: RenderBuffer, i: Int, sx: Float, sy: Float, flashing: Boolean
+        a: SpriteAtlas, buf: RenderBuffer, i: Int, sx: Float, sy: Float, flashing: Boolean, kind: EnemyType
     ) {
-        val sheet = a.enemies[EnemyType.BASIC.ordinal]
+        // the security guard and the police officer share one layout: only the picture differs
+        val sheet = a.enemies[kind.ordinal]
+        val cellW = sheet.width  / SpriteAtlas.GUARD_COLUMNS
+        val cellH = sheet.height / SpriteAtlas.GUARD_ROWS
         val h     = buf.width[i] * GUARD_SPRITE_SCALE
-        val w     = h * a.guardCellW / a.guardCellH
+        val w     = h * cellW / cellH
         val now   = System.currentTimeMillis()
 
         val row = facingRow(buf.rotation[i])
@@ -703,11 +716,12 @@ class GameRenderer(
 
         drawShadow(sx, sy + h * 0.5f, w * 0.7f)
         val paint = if (flashing) flashPaint else spritePaint
-        drawCell(sheet, column, row, a.guardCellW, a.guardCellH, sx, sy, w, h, paint)
+        drawCell(sheet, column, row, cellW, cellH, sx, sy, w, h, paint)
 
         if (buf.hasFlag(i, RenderBuffer.FLAG_SHOW_HP_BAR))
             drawHealthBar(sx, sy - h * 0.5f - 6f, w * 0.7f, buf.hpPercent[i])
-        if (buf.hasFlag(i, RenderBuffer.FLAG_ALERTED)) drawAlertMark(sx, sy - h * 0.5f - 16f, now)
+        if (buf.hasFlag(i, RenderBuffer.FLAG_SHOUTING) && copShout.isNotEmpty()) drawShoutBubble(sx, sy - h * 0.5f - 8f, copShout)
+        else if (buf.hasFlag(i, RenderBuffer.FLAG_ALERTED)) drawAlertMark(sx, sy - h * 0.5f - 16f, now)
     }
 
     /**
@@ -717,6 +731,23 @@ class GameRenderer(
     private fun facingRow(rotation: Float): Int {
         val step = Math.round(rotation / (PI.toFloat() / 4f))
         return ((step % FACING_ROWS) + FACING_ROWS) % FACING_ROWS
+    }
+
+    /** A pixel speech bubble over an officer's head, its tail pointing down at him. */
+    private fun DrawScope.drawShoutBubble(cx: Float, bottomY: Float, message: String) {
+        val px = 3f                                                     // one "pixel" of the frame
+        val textW = shoutTextPaint.measureText(message)
+        val boxW = textW + px * 8f
+        val boxH = shoutTextPaint.textSize + px * 6f
+        val left = cx - boxW * 0.5f
+        val top  = bottomY - px * 4f - boxH
+        drawRect(Color(0xFF14101C), Offset(left, top + px), Size(boxW, boxH))                       // hard shadow
+        drawRect(Color(0xFF14101C), Offset(left - px, top - px), Size(boxW + px * 2f, boxH + px * 2f))
+        drawRect(Color(0xFFFFF6DC), Offset(left, top), Size(boxW, boxH))
+        drawRect(Color(0xFFFF3B3B), Offset(left, top), Size(boxW, px))                              // a red edge, like the alert mark
+        drawRect(Color(0xFF14101C), Offset(cx - px * 3f, top + boxH), Size(px * 6f, px * 3f))       // the tail
+        drawRect(Color(0xFFFFF6DC), Offset(cx - px * 2f, top + boxH), Size(px * 4f, px * 2f))
+        drawContext.canvas.nativeCanvas.drawText(message, left + px * 4f, top + px * 3f + shoutTextPaint.textSize * 0.82f, shoutTextPaint)
     }
 
     /** The red "!" that jumps over a guard's head when he spots the player. */

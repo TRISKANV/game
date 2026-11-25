@@ -33,6 +33,14 @@ class PatrolSystem {
 
     private var clock = 0f
 
+    /** The beat of each officer in the station: x, y pairs in world pixels, keyed by entity id. */
+    val routes = HashMap<Int, FloatArray>()
+
+    /** True from the moment the officers raise the alarm until [consumeStationAlarm] is called. */
+    private var stationAlarm = false
+
+    fun consumeStationAlarm(): Boolean { val a = stationAlarm; stationAlarm = false; return a }
+
     fun consumeAlarms(): Int { val n = alarms; alarms = 0; return n }
 
     fun update(world: World, dt: Float, map: LevelMap?, worldSize: Float) {
@@ -47,6 +55,7 @@ class PatrolSystem {
             when (enemy.type) {
                 EnemyType.BASIC -> updateGuard(world, eid, dt, pt?.x, pt?.y, map, worldSize)
                 EnemyType.DOG   -> updateDog(world, eid, pt?.x, pt?.y, map)
+                EnemyType.COP   -> updateCop(world, eid, dt, pt?.x, pt?.y, map)
                 else            -> { enemy.patrol = PatrolState.NONE }
             }
             // anything that is not a walking patrol must not keep a stale leash
@@ -125,6 +134,94 @@ class PatrolSystem {
         return map == null || map.hasLineOfSight(x, y + radius * 0.8f, px, py + FEET_OFFSET)
     }
 
+    // ── Police officer ──────────────────────────────────────────────────────
+
+    /**
+     * An officer on his beat walks from point to point of his route and waits a moment at each one;
+     * an officer with a single point stands at his post. He sees the player only within [COP_SIGHT], in front of him
+     * and in plain view, so there is time to read the poster before anyone looks round.
+     */
+    private fun updateCop(world: World, eid: Int, dt: Float, px: Float?, py: Float?, map: LevelMap?) {
+        val enemy = world.enemies[eid] ?: return
+        val v     = world.velocities[eid] ?: return
+        val t     = world.transforms[eid] ?: return
+        val hp    = world.healths[eid]
+
+        if (enemy.patrol == PatrolState.ALERT) {
+            v.vx = 0f; v.vy = 0f
+            enemy.alertTimer -= dt
+            if (enemy.alertTimer <= 0f) {
+                enemy.patrol = PatrolState.NONE; enemy.aiState = AIState.CHASE; enemy.shouting = false
+                routes.remove(eid)
+            }
+            return
+        }
+        val hurt = hp != null && hp.current < hp.max
+        if (hurt || (px != null && py != null && copSees(t.x, t.y, enemy.patrolDir, px, py, map, world.colliders[eid]?.radius ?: 16f))) {
+            raiseStationAlarm(world, px ?: t.x, py ?: t.y)
+            return
+        }
+
+        val route = routes[eid]
+        if (route == null || route.size < 4) { v.vx = 0f; v.vy = 0f; return }      // a post: he stands there
+        enemy.patrolTimer -= dt
+        if (enemy.patrolTimer > 0f) { v.vx = 0f; v.vy = 0f; return }                // waiting at a point
+        val count = route.size / 2
+        val i  = enemy.routeIndex.coerceIn(0, count - 1)
+        val tx = route[i * 2]; val ty = route[i * 2 + 1]
+        val dx = tx - t.x; val dy = ty - t.y
+        val d  = sqrt(dx * dx + dy * dy)
+        if (d < COP_ARRIVE) {
+            enemy.routeIndex = (i + 1) % count
+            enemy.patrolTimer = COP_WAIT_MIN + Random.nextFloat() * (COP_WAIT_MAX - COP_WAIT_MIN)
+            v.vx = 0f; v.vy = 0f
+            return
+        }
+        enemy.patrolDir = atan2(dy, dx)
+        v.vx = dx / d * COP_PATROL_SPEED
+        v.vy = dy / d * COP_PATROL_SPEED
+    }
+
+    private fun copSees(x: Float, y: Float, heading: Float, px: Float, py: Float, map: LevelMap?, radius: Float): Boolean {
+        val dx = px - x; val dy = py - y
+        val d2 = dx * dx + dy * dy
+        if (d2 > COP_SIGHT * COP_SIGHT) return false
+        val d = sqrt(d2).coerceAtLeast(0.001f)
+        if (d > COP_SENSE_ALL_ROUND) {
+            val facing = (dx / d) * cos(heading) + (dy / d) * sin(heading)
+            if (facing < COP_CONE_COS) return false
+        }
+        return map == null || map.hasLineOfSight(x, y + radius * 0.8f, px, py + FEET_OFFSET)
+    }
+
+    /**
+     * The alarm of the station: the officer nearest to the player shouts that he is the one they are looking for,
+     * and all the others stop for a moment, one after the other, and then go after him.
+     */
+    fun raiseStationAlarm(world: World, px: Float, py: Float) {
+        var shouter = -1
+        var best = Float.MAX_VALUE
+        for ((eid, enemy) in world.enemies) {
+            if (enemy.type != EnemyType.COP || enemy.patrol != PatrolState.WALK) continue
+            val t = world.transforms[eid] ?: continue
+            val dx = t.x - px; val dy = t.y - py
+            val d = dx * dx + dy * dy
+            if (d < best) { best = d; shouter = eid }
+        }
+        if (shouter < 0) return
+        for ((eid, enemy) in world.enemies) {
+            if (enemy.type != EnemyType.COP || enemy.patrol != PatrolState.WALK) continue
+            enemy.patrol = PatrolState.ALERT
+            if (eid == shouter) {
+                enemy.shouting = true
+                enemy.alertTimer = COP_SHOUT_SECONDS
+            } else {
+                enemy.alertTimer = COP_ALERT_MIN + Random.nextFloat() * (COP_ALERT_MAX - COP_ALERT_MIN)
+            }
+        }
+        stationAlarm = true
+    }
+
     // ── Dog ─────────────────────────────────────────────────────────────────
 
     private fun updateDog(world: World, eid: Int, px: Float?, py: Float?, map: LevelMap?) {
@@ -190,6 +287,16 @@ class PatrolSystem {
         const val TURN_MIN           = 2.5f
         const val TURN_MAX           = 4.5f
         const val EDGE_MARGIN        = 220f
+        const val COP_PATROL_SPEED   = 46f
+        const val COP_ARRIVE         = 10f
+        const val COP_WAIT_MIN       = 1.0f
+        const val COP_WAIT_MAX       = 2.6f
+        const val COP_SIGHT          = 210f
+        const val COP_SENSE_ALL_ROUND = 60f
+        const val COP_CONE_COS       = 0.25f          // about 75 degrees to each side of where he looks
+        const val COP_SHOUT_SECONDS  = 1.7f
+        const val COP_ALERT_MIN      = 0.5f
+        const val COP_ALERT_MAX      = 1.2f
         private const val FEET_OFFSET = 26f           // the player's feet, as MovementSystem uses them
     }
 }

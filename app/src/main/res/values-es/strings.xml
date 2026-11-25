@@ -239,6 +239,10 @@
     <string name="level_exit_open_sub">Seguí la calle hacia el sur</string>
     <string name="level_two_title">NIVEL 2 · LA PLAZA</string>
     <string name="level_two_sub">La comisaría queda al este</string>
+    <string name="lab_to_station">Entrar a la comisaría</string>
+    <string name="level_station_title">COMISARÍA</string>
+    <string name="level_station_sub">Mirá el cartel de buscados... si te animás</string>
+    <string name="cop_shout">¡ES EL QUE ESTAMOS BUSCANDO!</string>
     <string name="chest_boss_title">¡COFRE DEL JEFE!</string>
     <string name="chest_tap_open">TOCÁ EL COFRE PARA ABRIRLO</string>
     <string name="chest_tap_continue">Tocá para continuar</string>

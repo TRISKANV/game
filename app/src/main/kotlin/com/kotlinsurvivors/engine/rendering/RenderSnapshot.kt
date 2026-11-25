@@ -100,6 +100,8 @@ class RenderBuffer {
         const val FLAG_RUNNING = 512
         /** The guard is on patrol, walking slowly: his steps are slower too. */
         const val FLAG_STROLLING = 1024
+        /** The officer who recognised the player is shouting: a speech bubble over his head. */
+        const val FLAG_SHOUTING = 2048
 
         /** The guard's punch lasts this long after the hit lands; [lifetime] holds the seconds since it did. */
         const val GUARD_PUNCH_SECONDS = 0.42f

@@ -7,7 +7,7 @@ import com.kotlinsurvivors.engine.ChestReward
 import com.kotlinsurvivors.engine.ecs.components.WeaponType
 
 /** A message about the way through the levels, shown for a few seconds as a notification. */
-enum class LevelNotice { EXIT_OPEN, LEVEL_TWO }
+enum class LevelNotice { EXIT_OPEN, LEVEL_TWO, STATION }
 
 /**
  * Immutable snapshot of the game state emitted by GameEngine each frame.

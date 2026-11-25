@@ -34,5 +34,12 @@ object Levels {
         artFile = "level2.png", solidFile = "level2_solid.bin"
     )
 
-    fun of(number: Int): LevelInfo = if (number == 2) TWO else ONE
+    /** The inside of the police station. */
+    val STATION = LevelInfo(
+        number = 3, worldSize = Level3.WORLD_SIZE, cellSize = Level3.CELL_SIZE, cells = Level3.CELLS,
+        imageScale = Level3.IMAGE_SCALE, spawnX = Level3.SPAWN_X, spawnY = Level3.SPAWN_Y, lamps = Level3.LAMPS,
+        artFile = "station.png", solidFile = "station_solid.bin"
+    )
+
+    fun of(number: Int): LevelInfo = when (number) { 2 -> TWO; 3 -> STATION; else -> ONE }
 }

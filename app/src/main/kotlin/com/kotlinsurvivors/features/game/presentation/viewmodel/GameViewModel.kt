@@ -51,6 +51,7 @@ class GameViewModel @Inject constructor(
             loadPermanentLevels = { gameRepository.getPermanentUpgradeLevels() },
             loadLevelMap        = { LevelMapLoader.loadLevel1(appContext) },
             loadNextLevelMap    = { LevelMapLoader.load(appContext, Levels.TWO) },
+            loadStationMap      = { LevelMapLoader.load(appContext, Levels.STATION) },
             sounds              = soundManager,
             laboratory          = laboratory
         )

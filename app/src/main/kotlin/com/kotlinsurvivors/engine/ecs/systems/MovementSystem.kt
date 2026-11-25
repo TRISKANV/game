@@ -34,6 +34,15 @@ class MovementSystem(
     /** How many K9 patrols noticed the player since the last call (the engine plays a bark for them). */
     fun consumeAlarms(): Int = patrols.consumeAlarms()
 
+    /** The officers' beats in the police station, keyed by entity id. */
+    val copRoutes: MutableMap<Int, FloatArray> get() = patrols.routes
+
+    /** True once, when the officers of the station have raised the alarm. */
+    fun consumeStationAlarm(): Boolean = patrols.consumeStationAlarm()
+
+    /** The player has been recognised on the wanted poster: the nearest officer shouts and all of them come. */
+    fun raiseStationAlarm(world: World, px: Float, py: Float) = patrols.raiseStationAlarm(world, px, py)
+
     fun update(world: World, dt: Float, joystick: JoystickState) {
         updatePlayer(world, dt, joystick)
         patrols.update(world, dt, levelMap, worldWidth)
@@ -143,7 +152,7 @@ class MovementSystem(
                 EnemyType.BOSS_SHADOW,
                 EnemyType.BOSS_GOLEM,
                 EnemyType.BOSS_NECROMANCER -> updateBossAI(world, eid, dt, dx, dy, dist, spd)
-                EnemyType.BASIC -> {
+                EnemyType.BASIC, EnemyType.COP -> {
                     if (!enemy.followingPath && enemy.wanderTimer <= 0f && Random.nextFloat() < 0.005f) {
                         enemy.wanderTimer     = 0.5f + Random.nextFloat() * 0.5f
                         enemy.wanderDirection = Random.nextFloat() * 2f * PI.toFloat()
@@ -208,6 +217,7 @@ class MovementSystem(
         EnemyType.BOSS_GOLEM       -> 45f
         EnemyType.BOSS_NECROMANCER -> 65f
         EnemyType.DOG              -> 175f
+        EnemyType.COP              -> 95f
     }
 
     private fun integratePositions(world: World, dt: Float) {

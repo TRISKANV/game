@@ -14,6 +14,8 @@ import com.kotlinsurvivors.engine.ecs.systems.*
 import com.kotlinsurvivors.engine.input.VirtualJoystick
 import com.kotlinsurvivors.engine.input.JoystickState
 import com.kotlinsurvivors.engine.map.Level1
+import com.kotlinsurvivors.engine.map.Level2
+import com.kotlinsurvivors.engine.map.Level3
 import com.kotlinsurvivors.engine.map.LevelFlow
 import com.kotlinsurvivors.engine.map.LevelMap
 import com.kotlinsurvivors.engine.map.Levels
@@ -37,6 +39,8 @@ import com.kotlinsurvivors.engine.lab.LabCommand
 import com.kotlinsurvivors.engine.rendering.Facing
 import kotlin.math.abs
 import kotlin.math.atan2
+import kotlin.random.Random
+import kotlin.math.PI
 import kotlin.math.roundToInt
 
 class GameEngine(
@@ -57,7 +61,8 @@ class GameEngine(
      */
     private val laboratory: Boolean = false,
     /** Collision grid of Level 2, read at the start of the run so crossing over never waits on a file. */
-    private val loadNextLevelMap: suspend () -> LevelMap? = { null }
+    private val loadNextLevelMap: suspend () -> LevelMap? = { null },
+    private val loadStationMap: suspend () -> LevelMap? = { null }
 ) {
     companion object {
         const val TARGET_FPS     = 60
@@ -70,6 +75,11 @@ class GameEngine(
         const val MAX_WEAPON_LEVEL = 8
         private const val EVENT_BANNER_SECONDS = 3.5f
         private const val LEVEL_NOTICE_SECONDS = 5f
+        private const val STATION_LEVEL = 3
+        private const val STATION_RETURN_BELOW = 110f      // where the player stands when he comes out of the station
+        /** How close to the wanted poster the player has to stand, and for how long, before the officers recognise him. */
+        private const val POSTER_RADIUS = 170f
+        private const val POSTER_LOOK_SECONDS = 2.5f
         private const val RENDER_BUFFER_COUNT = 8
         private const val DOG_RUN_SPEED_SQ     = 10_000f   // above 100 px/s the dog gallops
         private const val FACING_MIN_SPEED_SQ  = 25f   // below 5 px/s the player counts as standing still
@@ -93,10 +103,19 @@ class GameEngine(
     // ── Levels ──────────────────────────────────────────────────────────────
     private val levelFlow = LevelFlow()
     private var nextLevelMap: LevelMap? = null
+    private var stationMap: LevelMap? = null
+    /** Seconds the player has spent in front of the wanted poster, and whether the officers already know him. */
+    private var posterTimer = 0f
+    private var copsAlarmed = false
     private var levelNotice: LevelNotice? = null
     private var levelNoticeTimer = 0f
     /** While the screen fades out at the end of the street the character keeps walking south, on his own. */
     private val autoWalkSouth = JoystickState(isActive = true, dx = 0f, dy = 1f, rawX = 0f, rawY = 1f)
+    private val standStill    = JoystickState(isActive = true, dx = 0f, dy = 0f, rawX = 0f, rawY = 0f)
+
+    /** What the character does by himself while the screen fades out: he walks on through the way out, or waits at a door. */
+    private fun tripInput(): JoystickState =
+        if (levelFlow.level == 2 && levelFlow.target == STATION_LEVEL) standStill else autoWalkSouth
 
     // ── Laboratory ──────────────────────────────────────────────────────────
     private val labQueue = java.util.concurrent.ConcurrentLinkedQueue<LabCommand>()
@@ -176,6 +195,7 @@ class GameEngine(
             resetState()
             initWorld(readPermanentLevels(), readLevelMap())
             nextLevelMap = readNextLevelMap()
+            stationMap   = readStationMap()
 
             var lastTime    = System.nanoTime()
             var accumulator = 0f
@@ -339,6 +359,9 @@ class GameEngine(
         eventBanner          = null
         eventBannerTimer     = 0f
         levelFlow.reset()
+        posterTimer          = 0f
+        copsAlarmed          = false
+        movementSystem.copRoutes.clear()
         levelNotice          = null
         levelNoticeTimer     = 0f
         directorEvents.clear()
@@ -393,6 +416,16 @@ class GameEngine(
             null
         }
 
+    private suspend fun readStationMap(): LevelMap? =
+        try {
+            loadStationMap()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            CrashLogger.logCrash("loading the map of the police station", e)
+            null
+        }
+
     private fun initWorld(permanentLevels: Map<String, Int>, map: LevelMap?) {
         world.clear()
         // The end of the street starts shut: its barrier opens when the first boss falls.
@@ -438,8 +471,9 @@ class GameEngine(
         }
 
         try {
-            movementSystem.update(world, dt, if (levelFlow.phase == LevelFlow.Phase.LEAVING) autoWalkSouth else joystick.getState())
+            movementSystem.update(world, dt, if (levelFlow.phase == LevelFlow.Phase.LEAVING) tripInput() else joystick.getState())
             if (movementSystem.consumeAlarms() > 0) sounds.play(Sound.DOG_BARK)
+            if (movementSystem.consumeStationAlarm()) { sounds.play(Sound.EVENT_MINIBOSS); CrashLogger.log("STATION alarm at ${elapsedTime.toInt()}s") }
         } catch (e: Exception) {
             Log.e(TAG, "CRASH in movementSystem.update (frame $frameCount)", e)
             Log.e(TAG, world.getDiagnosticString()); throw e
@@ -474,9 +508,11 @@ class GameEngine(
         }
 
         try {
-            if (!laboratory && spawnSystem.update(world, dt, elapsedTime).bossSpawned) sounds.play(Sound.BOSS_APPEAR)
-            eventDirector.update(world, dt, elapsedTime, directorEvents)
-            announceEvents()
+            if (levelFlow.level != STATION_LEVEL) {
+                if (!laboratory && spawnSystem.update(world, dt, elapsedTime).bossSpawned) sounds.play(Sound.BOSS_APPEAR)
+                eventDirector.update(world, dt, elapsedTime, directorEvents)
+                announceEvents()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "CRASH in spawnSystem.update (frame $frameCount)", e)
             Log.e(TAG, world.getDiagnosticString()); throw e
@@ -526,7 +562,8 @@ class GameEngine(
         val pid = world.getPlayerEntity()
         val pt  = world.transforms[pid] ?: return
         if (levelFlow.level == 1 && !levelFlow.exitOpen && (world.players[pid]?.bossKills ?: 0) >= 1) openExit()
-        if (levelFlow.update(dt, pt.x, pt.y)) enterLevelTwo(pid)
+        if (levelFlow.update(dt, pt.x, pt.y)) enterLevel(pid)
+        if (levelFlow.level == STATION_LEVEL && levelFlow.phase == LevelFlow.Phase.PLAYING) watchPoster(pid, pt.x, pt.y, dt)
         if (levelNoticeTimer > 0f) {
             levelNoticeTimer -= dt
             if (levelNoticeTimer <= 0f) levelNotice = null
@@ -546,28 +583,70 @@ class GameEngine(
         CrashLogger.log("EXIT opened at ${elapsedTime.toInt()}s")
     }
 
-    /** Called on the one frame the screen is black: everything of Level 1 goes, the player and what he carries stay. */
-    private fun enterLevelTwo(pid: Int) {
-        val info = Levels.TWO
+    /** The player in front of his own wanted poster: after a few seconds the officers recognise him. */
+    private fun watchPoster(pid: Int, x: Float, y: Float, dt: Float) {
+        if (copsAlarmed) return
+        val dx = x - Level3.POSTER_X; val dy = y - Level3.POSTER_Y
+        if (dx * dx + dy * dy < POSTER_RADIUS * POSTER_RADIUS) posterTimer += dt
+        else posterTimer = (posterTimer - dt).coerceAtLeast(0f)
+        if (posterTimer >= POSTER_LOOK_SECONDS) {
+            copsAlarmed = true
+            movementSystem.raiseStationAlarm(world, x, y)
+        }
+        // an officer who sees him first raises the alarm himself
+        if (!copsAlarmed && world.enemies.values.none { it.type == EnemyType.COP && it.patrol != PatrolState.NONE }) copsAlarmed = true
+    }
+
+    /** Called on the one frame the screen is black: everything of the old level goes, the player and what he carries stay. */
+    private fun enterLevel(pid: Int) {
+        val to   = levelFlow.level
+        val from = levelFlow.previous
         val gone = ArrayList<Int>(world.enemies.size + world.projectiles.size + world.pickups.size + 64)
         gone.addAll(world.enemies.keys); gone.addAll(world.projectiles.keys); gone.addAll(world.pickups.keys)
         gone.addAll(world.particles.keys); gone.addAll(world.blasts.keys); gone.addAll(world.damageNumbers.keys)
         for (id in gone) if (id != pid) world.destroyEntity(id)
         world.flushDestroyed()
+        movementSystem.copRoutes.clear()
 
-        val map = nextLevelMap
+        val info = Levels.of(to)
+        val map  = if (to == STATION_LEVEL) stationMap else nextLevelMap
         movementSystem.levelMap = map
         spawnSystem.levelMap    = map
-        world.transforms[pid]?.let { it.x = info.spawnX; it.y = info.spawnY }
+        // coming back out of the station, the player stands in front of its door
+        val outFromStation = to == 2 && from == STATION_LEVEL
+        val x = if (outFromStation) (Level2.STATION_DOOR_LEFT + Level2.STATION_DOOR_RIGHT) / 2f else info.spawnX
+        val y = if (outFromStation) Level2.STATION_DOOR_Y + STATION_RETURN_BELOW else info.spawnY
+        world.transforms[pid]?.let { it.x = x; it.y = y }
         world.velocities[pid]?.let { it.vx = 0f; it.vy = 0f }
-        spawnSystem.reset()
-        eventDirector.restartSchedule(elapsedTime)
         directorEvents.clear()
         eventBanner = null
         eventBannerTimer = 0f
-        levelNotice      = LevelNotice.LEVEL_TWO
-        levelNoticeTimer = LEVEL_NOTICE_SECONDS
-        CrashLogger.log("LEVEL 2 entered at ${elapsedTime.toInt()}s, map=${if (map != null) "loaded" else "missing"}")
+        if (to == STATION_LEVEL) {
+            posterTimer = 0f
+            copsAlarmed = false
+            spawnCops()
+            levelNotice = LevelNotice.STATION
+        } else {
+            if (!outFromStation) spawnSystem.reset()
+            eventDirector.restartSchedule(elapsedTime)
+            levelNotice = if (outFromStation) null else LevelNotice.LEVEL_TWO
+        }
+        levelNoticeTimer = if (levelNotice != null) LEVEL_NOTICE_SECONDS else 0f
+        CrashLogger.log("LEVEL $to entered from $from at ${elapsedTime.toInt()}s, map=${if (map != null) "loaded" else "missing"}")
+    }
+
+    /** The officers of the station, each on his beat. */
+    private fun spawnCops() {
+        val mult = spawnSystem.difficultyAt(elapsedTime)
+        for (route in Level3.COP_ROUTES) {
+            val id = EntityFactory.createEnemy(world, EnemyType.COP, route[0], route[1], mult)
+            val enemy = world.enemies[id] ?: continue
+            enemy.patrol = PatrolState.WALK
+            enemy.routeIndex = if (route.size >= 4) 1 else 0
+            enemy.patrolDir = if (route.size >= 4) atan2(route[3] - route[1], route[2] - route[0]) else (PI / 2).toFloat()
+            enemy.patrolTimer = 0.5f + Random.nextFloat() * 1.5f
+            movementSystem.copRoutes[id] = route
+        }
     }
 
     /** Applies what the tester asked for since the last tick. Laboratory only. */
@@ -589,6 +668,7 @@ class GameEngine(
                 is LabCommand.AddCombo      -> combo.onKills(command.kills)
                 is LabCommand.OpenExit      -> openExit()
                 is LabCommand.GoToLevel2    -> levelFlow.startTrip()
+                is LabCommand.GoToStation   -> levelFlow.startTripToStation()
                 is LabCommand.ClearEnemies  -> LabActions.clearEnemies(world)
                 is LabCommand.HealFull      -> LabActions.healFull(world)
                 is LabCommand.SetInvincible -> labInvincible = command.on
@@ -763,7 +843,7 @@ class GameEngine(
             var heading = t.rotation
             var sincePunch = 0f
             var cooldown = 1f
-            if (enemy != null && (enemy.type == EnemyType.BASIC || enemy.type == EnemyType.DOG)) {
+            if (enemy != null && (enemy.type == EnemyType.BASIC || enemy.type == EnemyType.DOG || enemy.type == EnemyType.COP)) {
                 val v = world.velocities[eid]
                 val vx = v?.vx ?: 0f
                 val vy = v?.vy ?: 0f
@@ -776,7 +856,10 @@ class GameEngine(
                 val nearPlayer = toPlayerX * toPlayerX + toPlayerY * toPlayerY < RenderBuffer.GUARD_WINDUP_RANGE * RenderBuffer.GUARD_WINDUP_RANGE
                 // He looks where he walks; when he is about to hit or has just hit, he looks at the player.
                 heading = if (moving && !nearPlayer && sincePunch >= RenderBuffer.GUARD_PUNCH_SECONDS) atan2(vy, vx) else atan2(toPlayerY, toPlayerX)
-                if (enemy.type == EnemyType.BASIC && nearPlayer && enemy.attackTimer <= 0f) f = f or RenderBuffer.FLAG_WINDING_UP
+                // an officer on his beat looks where he is going, and goes on looking there when he stops
+                if (enemy.type == EnemyType.COP && enemy.patrol == PatrolState.WALK) heading = enemy.patrolDir
+                if (enemy.shouting && enemy.patrol == PatrolState.ALERT) f = f or RenderBuffer.FLAG_SHOUTING
+                if ((enemy.type == EnemyType.BASIC || enemy.type == EnemyType.COP) && nearPlayer && enemy.attackTimer <= 0f) f = f or RenderBuffer.FLAG_WINDING_UP
                 if (enemy.patrol == PatrolState.ALERT) f = f or RenderBuffer.FLAG_ALERTED
                 if (enemy.patrol == PatrolState.WALK) f = f or RenderBuffer.FLAG_STROLLING
                 if (enemy.type == EnemyType.DOG && vx * vx + vy * vy > DOG_RUN_SPEED_SQ) f = f or RenderBuffer.FLAG_RUNNING

@@ -239,6 +239,10 @@
     <string name="level_exit_open_sub">Follow the street south</string>
     <string name="level_two_title">LEVEL 2 · THE PLAZA</string>
     <string name="level_two_sub">The police station is to the east</string>
+    <string name="lab_to_station">Go into the station</string>
+    <string name="level_station_title">POLICE STATION</string>
+    <string name="level_station_sub">Look for the wanted board... if you dare</string>
+    <string name="cop_shout">THAT\'S THE ONE WE\'RE LOOKING FOR!</string>
     <string name="chest_boss_title">BOSS CHEST!</string>
     <string name="chest_tap_open">TAP THE CHEST TO OPEN IT</string>
     <string name="chest_tap_continue">Tap to continue</string>
