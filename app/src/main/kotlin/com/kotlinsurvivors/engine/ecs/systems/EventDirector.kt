@@ -30,7 +30,7 @@ class EventDirector(
     private val viewportHeight: Float
 ) {
     companion object {
-        const val FIRST_WAVE_AT      = 60f
+        const val FIRST_WAVE_AT      = 70f
         const val WAVE_EVERY         = 90f
         const val FIRST_MINI_BOSS_AT = 90f
         const val MINI_BOSS_EVERY    = 180f
@@ -47,7 +47,7 @@ class EventDirector(
         /** Guard-and-dog pairs of a K9 patrol (one more pair after [PATROL_EXTRA_AFTER] seconds). */
         const val PATROL_PAIRS       = 3
         const val PATROL_EXTRA_AFTER = 240f
-        const val K9_FROM            = 90f
+        const val K9_FROM            = 70f
         const val REWARD_ORBS        = 2
         private const val CLEAR_CHECK_EVERY = 0.5f
         private const val SPAWN_CLEARANCE   = 20f
@@ -107,7 +107,9 @@ class EventDirector(
         if (elapsed >= K9_FROM) kinds.add(EventKind.K9_PATROL)
         if (kinds.size > 1) lastKind?.let { kinds.remove(it) }   // never the same twice in a row
         nextWaveAt += WAVE_EVERY
-        launchWave(world, kinds[Random.nextInt(kinds.size)], px, py, elapsed, events)
+        // the first special wave of a run is always the K9 patrol, so the dogs are the first surprise
+        val kind = if (lastKind == null) EventKind.K9_PATROL else kinds[Random.nextInt(kinds.size)]
+        launchWave(world, kind, px, py, elapsed, events)
     }
 
     /**

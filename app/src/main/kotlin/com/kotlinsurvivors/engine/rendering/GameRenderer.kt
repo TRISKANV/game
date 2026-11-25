@@ -620,8 +620,8 @@ class GameRenderer(
     }
 
     /**
-     * The security guard. His sheet has a walk cycle and a punch for three views (front, back and
-     * side; the left side is the right one mirrored). The engine says where he is heading, whether
+     * The security guard. His sheet has a walk cycle and a punch for each of the eight headings
+     * (see [facingRow]). The engine says where he is heading, whether
      * he is walking, whether he is raising his fists and how long ago his punch landed.
      */
     private fun DrawScope.renderGuard(
@@ -632,12 +632,7 @@ class GameRenderer(
         val w     = h * a.guardCellW / a.guardCellH
         val now   = System.currentTimeMillis()
 
-        val dx = cos(buf.rotation[i]); val dy = sin(buf.rotation[i])
-        val row = when {
-            abs(dy) > abs(dx) * GUARD_SIDE_BIAS -> if (dy < 0f) 1 else 0
-            else -> 2
-        }
-        val mirror = row == 2 && dx < 0f
+        val row = facingRow(buf.rotation[i])
 
         val sincePunch = buf.lifetime[i]
         val punching   = sincePunch < RenderBuffer.GUARD_PUNCH_SECONDS
@@ -650,24 +645,26 @@ class GameRenderer(
             buf.hasFlag(i, RenderBuffer.FLAG_WINDING_UP) -> SpriteAtlas.GUARD_WALK_FRAMES        // guard up
             buf.hasFlag(i, RenderBuffer.FLAG_MOVING) ->
                 // each guard starts its stride at a different point, so a crowd does not march in step
-                ((now / GUARD_STEP_MS + i * 3) % SpriteAtlas.GUARD_WALK_FRAMES).toInt()
+                ((now / (if (buf.hasFlag(i, RenderBuffer.FLAG_STROLLING)) GUARD_STROLL_MS else GUARD_STEP_MS) + i * 3) % SpriteAtlas.GUARD_WALK_FRAMES).toInt()
             else -> 0
         }
 
         drawShadow(sx, sy + h * 0.5f, w * 0.7f)
         val paint = if (flashing) flashPaint else spritePaint
-        if (mirror) {
-            val canvas = drawContext.canvas.nativeCanvas
-            canvas.save(); canvas.scale(-1f, 1f, sx, sy)
-            drawCell(sheet, column, row, a.guardCellW, a.guardCellH, sx, sy, w, h, paint)
-            canvas.restore()
-        } else {
-            drawCell(sheet, column, row, a.guardCellW, a.guardCellH, sx, sy, w, h, paint)
-        }
+        drawCell(sheet, column, row, a.guardCellW, a.guardCellH, sx, sy, w, h, paint)
 
         if (buf.hasFlag(i, RenderBuffer.FLAG_SHOW_HP_BAR))
             drawHealthBar(sx, sy - h * 0.5f - 6f, w * 0.7f, buf.hpPercent[i])
         if (buf.hasFlag(i, RenderBuffer.FLAG_ALERTED)) drawAlertMark(sx, sy - h * 0.5f - 16f, now)
+    }
+
+    /**
+     * Row of the guard and dog sheets for a heading (radians, screen coordinates: 0 = right, a quarter
+     * turn = down). The eight rows run right, down-right, down, down-left, left, up-left, up, up-right.
+     */
+    private fun facingRow(rotation: Float): Int {
+        val step = Math.round(rotation / (PI.toFloat() / 4f))
+        return ((step % FACING_ROWS) + FACING_ROWS) % FACING_ROWS
     }
 
     /** The red "!" that jumps over a guard's head when he spots the player. */
@@ -682,8 +679,7 @@ class GameRenderer(
     }
 
     /**
-     * The guard dog. Same three views as the guard (front, back, side; left is the mirror of
-     * right). It trots on patrol, gallops when it is after the player and bites with its head
+     * The guard dog. Same eight headings as the guard. It trots on patrol, gallops when it is after the player and bites with its head
      * thrown forward; the engine says which through the flags and the bite clock in [lifetime].
      */
     private fun DrawScope.renderDog(
@@ -694,12 +690,7 @@ class GameRenderer(
         val w     = h * a.dogCellW / a.dogCellH
         val now   = System.currentTimeMillis()
 
-        val dx = cos(buf.rotation[i]); val dy = sin(buf.rotation[i])
-        val row = when {
-            abs(dy) > abs(dx) * GUARD_SIDE_BIAS -> if (dy < 0f) 1 else 0
-            else -> 2
-        }
-        val mirror = row == 2 && dx < 0f
+        val row = facingRow(buf.rotation[i])
 
         val sinceBite = buf.lifetime[i]
         val biting    = sinceBite < DOG_BITE_SECONDS
@@ -715,14 +706,7 @@ class GameRenderer(
 
         drawShadow(sx, sy + h * 0.42f, w * 0.7f)
         val paint = if (flashing) flashPaint else spritePaint
-        if (mirror) {
-            val canvas = drawContext.canvas.nativeCanvas
-            canvas.save(); canvas.scale(-1f, 1f, sx, sy)
-            drawCell(sheet, column, row, a.dogCellW, a.dogCellH, sx, sy, w, h, paint)
-            canvas.restore()
-        } else {
-            drawCell(sheet, column, row, a.dogCellW, a.dogCellH, sx, sy, w, h, paint)
-        }
+        drawCell(sheet, column, row, a.dogCellW, a.dogCellH, sx, sy, w, h, paint)
         if (buf.hasFlag(i, RenderBuffer.FLAG_SHOW_HP_BAR))
             drawHealthBar(sx, sy - h * 0.5f - 4f, w * 0.7f, buf.hpPercent[i])
     }
@@ -1048,9 +1032,10 @@ class GameRenderer(
         const val PLAYER_SPRITE_SCALE     = 2.5f
         const val ENEMY_SPRITE_SCALE      = 1.9f
         const val GUARD_SPRITE_SCALE      = 3.3f      // 106 px tall: a bit taller than the player (90)
-        const val GUARD_SIDE_BIAS         = 1.2f      // side view unless he is clearly going up or down
+        const val FACING_ROWS             = 8
         const val GUARD_STEP_MS           = 130L
-        const val DOG_SPRITE_SCALE        = 2.55f     // times its width in world px: a dog about 77 px long
+        const val GUARD_STROLL_MS         = 270L
+        const val DOG_SPRITE_SCALE        = 2.9f      // times its width in world px: a dog about 85 px long
         const val DOG_TROT_MS             = 120L
         const val DOG_GALLOP_MS           = 85L
         const val DOG_BITE_SECONDS        = 0.4f

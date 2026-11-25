@@ -45,7 +45,7 @@ class EventDirectorTest {
     @Test fun aWaveStartsOnTimeAndPutsTaggedEnemiesAroundThePlayer() {
         run(EventDirector.FIRST_WAVE_AT + 10f)
         val first = started().first { it != EventKind.MINI_BOSS }
-        assertTrue(first == EventKind.SWARM_RUSH || first == EventKind.DRONE_RAID)
+        assertEquals(EventKind.K9_PATROL, first)   // the first special wave of a run is always the K9 patrol
         assertTrue("wave enemies: ${tagged().size}", tagged().isNotEmpty())
     }
 

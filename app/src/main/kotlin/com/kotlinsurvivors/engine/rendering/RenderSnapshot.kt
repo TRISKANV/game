@@ -98,6 +98,8 @@ class RenderBuffer {
         const val FLAG_ALERTED = 256
         /** The dog is running, not trotting. */
         const val FLAG_RUNNING = 512
+        /** The guard is on patrol, walking slowly: his steps are slower too. */
+        const val FLAG_STROLLING = 1024
 
         /** The guard's punch lasts this long after the hit lands; [lifetime] holds the seconds since it did. */
         const val GUARD_PUNCH_SECONDS = 0.42f

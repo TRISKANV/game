@@ -686,6 +686,7 @@ class GameEngine(
                 heading = if (moving && !nearPlayer && sincePunch >= RenderBuffer.GUARD_PUNCH_SECONDS) atan2(vy, vx) else atan2(toPlayerY, toPlayerX)
                 if (enemy.type == EnemyType.BASIC && nearPlayer && enemy.attackTimer <= 0f) f = f or RenderBuffer.FLAG_WINDING_UP
                 if (enemy.patrol == PatrolState.ALERT) f = f or RenderBuffer.FLAG_ALERTED
+                if (enemy.patrol == PatrolState.WALK) f = f or RenderBuffer.FLAG_STROLLING
                 if (enemy.type == EnemyType.DOG && vx * vx + vy * vy > DOG_RUN_SPEED_SQ) f = f or RenderBuffer.FLAG_RUNNING
             }
             renderBuffer.write(

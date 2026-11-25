@@ -12,8 +12,8 @@ import com.kotlinsurvivors.engine.ecs.components.EnemyType
  * The files live in assets/sprites/ and are cut into cells by size:
  *  - player.png      5 columns (idle + 4 walk frames) x 6 rows (see [Facing])
  *  - enemy_*.png     2 animation frames side by side, one file per [EnemyType]
- *    except enemy_basic.png, the security guard: 8 columns (4 walk, 4 punch) x 3 rows
- *    (facing the camera, facing away, facing right; left is the mirror image)
+ *    except enemy_basic.png, the security guard: 8 columns (4 walk, 4 punch) x 8 rows,
+ *    one per heading: right, down-right, down, down-left, left, up-left, up, up-right
  *  - pickups.png     12x12 cells in PickupType order
  *  - projectiles.png 12x12 cells in WeaponType order (the last one is the Bible)
  *  - chest.png       16x16 cells: 4 waiting on the floor, 5 opening
@@ -56,11 +56,11 @@ class SpriteAtlas private constructor(
         const val PLAYER_ROWS    = 6
         const val ENEMY_FRAMES   = 2
         const val GUARD_COLUMNS  = 8
-        const val GUARD_ROWS     = 3
+        const val GUARD_ROWS     = 8
         const val GUARD_WALK_FRAMES = 4
-        // enemy_dog.png: 8 columns (0-3 trot, 4-5 gallop, 6-7 bite) x 3 rows (front, back, side facing right)
+        // enemy_dog.png: 8 columns (0-3 trot, 4-5 gallop, 6-7 bite) x 8 rows (one per heading, as the guard)
         const val DOG_COLUMNS = 8
-        const val DOG_ROWS    = 3
+        const val DOG_ROWS    = 8
         const val DOG_TROT_FRAMES = 4
         const val DOG_GALLOP_FIRST = 4
         const val DOG_BITE_FIRST   = 6
