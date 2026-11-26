@@ -18,7 +18,7 @@ class LevelArt private constructor(
     val level: Bitmap,
     val glow: Bitmap,
     val npc: Bitmap?,
-    /** The barrier that shuts the end of the street in Level 1 until the first boss is down. */
+    /** The barrier that shuts the end of the street in Level 1 until the first boss is down, or the shutter of the station's street door. */
     val exitBarrier: Bitmap?,
     /** What the neighbour says, in the language of the phone when the level was loaded. */
     val npcLines: Array<String>
@@ -45,8 +45,14 @@ class LevelArt private constructor(
                 npc   = if (!isFirst) null else try { SpriteAtlas.bitmap(context, "npc_leek.png") } catch (e: Exception) {
                     Log.w(TAG, "No picture for the neighbour, he will not appear", e); null
                 },
-                exitBarrier = if (!isFirst) null else try { SpriteAtlas.bitmap(context, "level1_exit_barrier.png") } catch (e: Exception) {
-                    Log.w(TAG, "No picture for the exit barrier", e); null
+                exitBarrier = when (info.number) {
+                    1    -> "level1_exit_barrier.png"
+                    3    -> "station_shutter.png"
+                    else -> null
+                }?.let { file ->
+                    try { SpriteAtlas.bitmap(context, file) } catch (e: Exception) {
+                        Log.w(TAG, "No picture for the barrier $file", e); null
+                    }
                 },
                 npcLines = if (isFirst) Array(NPC_LINES.size) { context.getString(NPC_LINES[it]) } else emptyArray()
             )

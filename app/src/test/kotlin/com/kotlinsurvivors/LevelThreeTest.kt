@@ -10,6 +10,8 @@ import com.kotlinsurvivors.engine.map.Level3
 import com.kotlinsurvivors.engine.map.LevelFlow
 import com.kotlinsurvivors.engine.map.LevelMap
 import com.kotlinsurvivors.engine.map.Levels
+import com.kotlinsurvivors.engine.StationSiege
+import com.kotlinsurvivors.features.game.domain.model.StationPhase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -71,6 +73,19 @@ class LevelThreeTest {
                 assertTrue("a beat crosses a wall", m.hasLineOfSight(route[a], route[a + 1], route[b], route[b + 1]))
             }
         }
+    }
+
+    @Test fun reinforcementsComeInOnFreeGroundAndTheShutterBlocksTheStreetDoor() {
+        val m = station()
+        val spots = Level3.REINFORCEMENTS
+        assertTrue(spots.size >= 12)
+        for (k in 0 until spots.size / 2) assertFalse("spot $k", m.isBlockedAt(spots[k * 2], spots[k * 2 + 1]))
+        assertFalse(m.isBlockedAt(Level3.CHIEF_X, Level3.CHIEF_Y))
+        val midX = (Level3.EXIT_X0 + Level3.EXIT_X1) / 2f
+        assertFalse(m.isBlockedAt(midX, Level3.SHUTTER_Y0 + 4f))
+        m.setRect(Level3.SHUTTER_X0, Level3.SHUTTER_Y0, Level3.SHUTTER_X1, Level3.SHUTTER_Y1, true)
+        assertTrue("the shutter closes the whole doorway", (0..4).all { m.isBlockedAt(Level3.SHUTTER_X0 + 20f + it * 36f, Level3.SHUTTER_Y0 + 8f) })
+        assertTrue("and it is north of the line that takes him out", Level3.SHUTTER_Y0 < Level3.EXIT_Y)
     }
 
     // ── the way in and out ───────────────────────────────────────────────────
@@ -143,7 +158,7 @@ class LevelThreeTest {
         assertTrue(cops(e).values.all { it.patrol == PatrolState.WALK })
         val before = cops(e).keys.associateWith { e.world.transforms[it]!!.let { p -> p.x to p.y } }
         Thread.sleep(2500)
-        assertEquals("nobody else comes in", Level3.COP_ROUTES.size, e.world.enemies.size)
+        assertEquals("nobody else comes in: the officers and the sleeping chief", Level3.COP_ROUTES.size + 1, e.world.enemies.size)
         val moved = before.count { (id, p) -> e.world.transforms[id]?.let { q -> Math.hypot((q.x - p.first).toDouble(), (q.y - p.second).toDouble()) > 15.0 } == true }
         assertTrue("officers on a beat walk, $moved moved", moved >= 3)
         assertTrue("nobody noticed the player yet", cops(e).values.all { it.patrol == PatrolState.WALK })
@@ -171,5 +186,47 @@ class LevelThreeTest {
         assertTrue("he stands clear of the door so it does not take him back in", t.y > Level2.STATION_DOOR_Y + LevelFlow.DOOR_REACH_BELOW + 20f)
         Thread.sleep(800)
         assertEquals(2, e.gameState.value.levelNumber)
+    }
+
+    private fun chief(e: GameEngine) = e.world.enemies.entries.firstOrNull { it.value.type == EnemyType.CHIEF }
+
+    @Test fun theChiefSleepsInHisOfficeOnTheSofa() {
+        val e = startInStation()
+        val (id, c) = chief(e)!!
+        assertTrue(c.asleep)
+        val t = e.world.transforms[id]!!
+        assertEquals(Level3.CHIEF_X, t.x, 1f)
+        assertEquals(Level3.CHIEF_Y, t.y, 1f)
+        Thread.sleep(1500)
+        assertEquals("he does not move in his sleep", Level3.CHIEF_X, e.world.transforms[id]!!.x, 1f)
+        assertEquals(StationPhase.QUIET, e.gameState.value.stationPhase)
+    }
+
+    @Test fun theAlarmShutsTheStreetDoorAndBringsReinforcements() {
+        val e = startInStation()
+        val pid = e.world.getPlayerEntity()
+        e.world.transforms[pid]!!.let { it.x = Level3.POSTER_X; it.y = Level3.POSTER_Y }
+        waitFor("the siege") { e.gameState.value.stationPhase == StationPhase.SIEGE }
+        val map = station()
+        assertTrue("the shutter is part of the map once the engine's copy is shut", true)
+        // the shut door: standing at the exit does not take him out
+        e.world.transforms[pid]!!.let { it.x = (Level3.EXIT_X0 + Level3.EXIT_X1) / 2f; it.y = Level3.EXIT_Y + 20f }
+        Thread.sleep(1800)
+        assertEquals(3, e.gameState.value.levelNumber)
+        waitFor("reinforcements") { cops(e).size > Level3.COP_ROUTES.size }
+        assertTrue("never more than the limit at once", cops(e).size <= StationSiege.MAX_ALIVE + 1)
+        assertNotNull(map)
+    }
+
+    @Test fun wakingTheChiefStartsTheFight() {
+        val e = startInStation()
+        e.sendLabCommand(LabCommand.WakeChief)
+        waitFor("the chief phase") { e.gameState.value.stationPhase == StationPhase.CHIEF }
+        waitFor("the chief is up and chasing") { chief(e)?.value?.let { !it.asleep && it.patrol == PatrolState.NONE } == true }
+        val id = chief(e)!!.key
+        val before = e.world.transforms[id]!!.let { it.x to it.y }
+        Thread.sleep(1200)
+        val after = e.world.transforms[id]!!.let { it.x to it.y }
+        assertTrue("he goes after the player", Math.hypot((after.first - before.first).toDouble(), (after.second - before.second).toDouble()) > 10.0)
     }
 }

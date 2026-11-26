@@ -226,6 +226,7 @@ class ExperienceSystem {
                     output.add(GameEvent.ChestOpened(at.x, at.y))
                 }
             }
+            PickupType.KEY -> Unit                  // the engine takes it from here: it opens the street door of the station
             PickupType.BOMB -> {
                 if (pt != null) {
                     var count = 0

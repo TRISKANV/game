@@ -20,6 +20,28 @@ object Level3 {
     const val POSTER_X = 785.0f
     const val POSTER_Y = 1241.6f
 
+    /** The street door shuts while the alarm is on: this rectangle is blocked and its picture is drawn over it. */
+    const val SHUTTER_X0 = 928.0f
+    const val SHUTTER_Y0 = 1856.0f
+    const val SHUTTER_X1 = 1120.0f
+    const val SHUTTER_Y1 = 1920.0f
+
+    /** The police chief sleeps here, on the sofa of his office. */
+    const val CHIEF_X = 998.4f
+    const val CHIEF_Y = 710.4f
+
+    /** Where reinforcements come in during the siege: x, y pairs in world pixels. */
+    val REINFORCEMENTS: FloatArray = floatArrayOf(
+        208.0f, 976.0f,
+        1840.0f, 976.0f,
+        448.0f, 844.8f,
+        1632.0f, 844.8f,
+        352.0f, 1126.4f,
+        1664.0f, 1126.4f,
+        1216.0f, 844.8f,
+        1024.0f, 1164.8f
+    )
+
     /** Lamp positions as x, y pairs in world pixels. */
     val LAMPS: FloatArray = floatArrayOf(
         1024.0f, 1296.0f,
@@ -48,7 +70,6 @@ object Level3 {
         floatArrayOf(256.0f, 960.0f, 832.0f, 960.0f),
         floatArrayOf(1216.0f, 960.0f, 1792.0f, 960.0f),
         floatArrayOf(256.0f, 652.8f, 608.0f, 652.8f),
-        floatArrayOf(896.0f, 569.6f, 1184.0f, 569.6f, 1184.0f, 688.0f, 896.0f, 688.0f),
         floatArrayOf(1504.0f, 592.0f),
         floatArrayOf(224.0f, 1657.6f, 512.0f, 1657.6f, 512.0f, 1488.0f, 224.0f, 1488.0f),
         floatArrayOf(1798.4f, 1420.8f, 1798.4f, 1689.6f)

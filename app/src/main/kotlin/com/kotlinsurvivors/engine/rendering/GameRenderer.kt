@@ -27,6 +27,8 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.map.Level1
+import com.kotlinsurvivors.engine.map.Level3
+import com.kotlinsurvivors.features.game.domain.model.StationPhase
 import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.components.EnemyType
 import com.kotlinsurvivors.engine.ecs.components.PickupType
@@ -87,6 +89,12 @@ class GameRenderer(
     /** What the officer shouts when he recognises the player, in the language of the phone; set by the screen. */
     var copShout: String = ""
 
+    /** What the police chief says when he wakes up. */
+    var chiefShout: String = ""
+
+    /** Where the siege of the police station is: it decides the shutter, the alarm lights and the arrow. */
+    var stationPhase: StationPhase = StationPhase.QUIET
+
     /** The neighbour of Level 1; only drawn while [levelArt] is set, which also gives him his lines. */
     val neighbour = NeighbourRenderer()
 
@@ -110,6 +118,11 @@ class GameRenderer(
         color       = 0xFFFFD36B.toInt()
         strokeWidth = 8f
         strokeCap   = Paint.Cap.SQUARE
+    }
+    private val sleepPaint = Paint().apply {
+        isAntiAlias = false
+        color       = 0xFFF4F8FF.toInt()
+        typeface    = android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD)
     }
     private val shoutTextPaint = Paint().apply {
         isAntiAlias = false
@@ -268,6 +281,7 @@ class GameRenderer(
             val art = levelArt
             if (art != null) {
                 drawLampGlows(art)
+                if (art.info.number == 3 && (stationPhase == StationPhase.SIEGE || stationPhase == StationPhase.CHIEF)) drawAlarmLights(now)
                 if (art.info.number != 3) drawRain()          // it does not rain indoors
                 drawExitArrow(art)
             }
@@ -348,19 +362,31 @@ class GameRenderer(
 
         // The end of the street is shut with a barrier until the first boss is down.
         val barrier = art.exitBarrier
-        if (barrier != null && !exitOpen) {
+        if (barrier != null && art.info.number == 1 && !exitOpen) {
             val bx = Level1.BARRIER_DRAW_X - camX
             val by = Level1.BARRIER_DRAW_Y - camY
             dstRect.set(bx, by, bx + barrier.width * scale, by + barrier.height * scale)
             canvas.drawBitmap(barrier, null, dstRect, spritePaint)
         }
+        // The street door of the police station is shut by a shutter from the alarm until the key is taken.
+        if (barrier != null && art.info.number == 3 && stationShut()) {
+            val bx = Level3.SHUTTER_X0 - camX
+            val by = Level3.SHUTTER_Y0 - camY
+            dstRect.set(bx, by, bx + barrier.width * scale, by + barrier.height * scale)
+            canvas.drawBitmap(barrier, null, dstRect, spritePaint)
+        }
     }
+
+    private fun stationShut(): Boolean =
+        stationPhase == StationPhase.SIEGE || stationPhase == StationPhase.CHIEF || stationPhase == StationPhase.KEY
 
     /** Once the way out is open, a pulsing arrow at the edge of the screen shows where it is. */
     private fun DrawScope.drawExitArrow(art: LevelArt) {
-        if (!exitOpen || art.info.number != 1) return
-        val targetX = (Level1.EXIT_X0 + Level1.EXIT_X1) * 0.5f - cameraX
-        val targetY = Level1.EXIT_TRIGGER_Y - cameraY
+        val inStreet  = art.info.number == 1 && exitOpen
+        val inStation = art.info.number == 3 && stationPhase == StationPhase.OPEN
+        if (!inStreet && !inStation) return
+        val targetX = (if (inStreet) (Level1.EXIT_X0 + Level1.EXIT_X1) * 0.5f else (Level3.EXIT_X0 + Level3.EXIT_X1) * 0.5f) - cameraX
+        val targetY = (if (inStreet) Level1.EXIT_TRIGGER_Y else Level3.EXIT_Y) - cameraY
         if (targetX in 0f..screenW && targetY in 0f..screenH) return
         val dx = targetX - screenW * 0.5f
         val dy = targetY - screenH * 0.5f
@@ -672,6 +698,7 @@ class GameRenderer(
         if (typeId == EnemyType.FAST.ordinal) { renderDrone(a, buf, i, sx, sy, flashing); return }
         if (typeId == EnemyType.BASIC.ordinal) { renderGuard(a, buf, i, sx, sy, flashing, EnemyType.BASIC); return }
         if (typeId == EnemyType.COP.ordinal)   { renderGuard(a, buf, i, sx, sy, flashing, EnemyType.COP); return }
+        if (typeId == EnemyType.CHIEF.ordinal) { renderGuard(a, buf, i, sx, sy, flashing, EnemyType.CHIEF); return }
         if (typeId == EnemyType.DOG.ordinal)   { renderDog(a, buf, i, sx, sy, flashing); return }
 
         drawShadow(sx, sy + h * 0.5f, w * 0.8f)
@@ -692,16 +719,20 @@ class GameRenderer(
         // the security guard and the police officer share one layout: only the picture differs
         val sheet = a.enemies[kind.ordinal]
         val cellW = sheet.width  / SpriteAtlas.GUARD_COLUMNS
-        val cellH = sheet.height / SpriteAtlas.GUARD_ROWS
+        // the chief's sheet has one more row: him asleep on his sofa
+        val rows  = if (kind == EnemyType.CHIEF) SpriteAtlas.GUARD_ROWS + 1 else SpriteAtlas.GUARD_ROWS
+        val cellH = sheet.height / rows
         val h     = buf.width[i] * GUARD_SPRITE_SCALE
         val w     = h * cellW / cellH
         val now   = System.currentTimeMillis()
 
-        val row = facingRow(buf.rotation[i])
+        val asleep = buf.hasFlag(i, RenderBuffer.FLAG_SLEEPING)
+        val row = if (asleep) SpriteAtlas.GUARD_ROWS else facingRow(buf.rotation[i])
 
         val sincePunch = buf.lifetime[i]
         val punching   = sincePunch < RenderBuffer.GUARD_PUNCH_SECONDS
         val column = when {
+            asleep -> ((now / SLEEP_BREATH_MS) % 2).toInt()                  // belly up, belly down
             punching -> {
                 // four beats: fists up, jab, second jab, back to guard
                 val beat = (sincePunch / RenderBuffer.GUARD_PUNCH_SECONDS * 3.99f).toInt().coerceIn(0, 3)
@@ -720,7 +751,9 @@ class GameRenderer(
 
         if (buf.hasFlag(i, RenderBuffer.FLAG_SHOW_HP_BAR))
             drawHealthBar(sx, sy - h * 0.5f - 6f, w * 0.7f, buf.hpPercent[i])
-        if (buf.hasFlag(i, RenderBuffer.FLAG_SHOUTING) && copShout.isNotEmpty()) drawShoutBubble(sx, sy - h * 0.5f - 8f, copShout)
+        val shout = if (kind == EnemyType.CHIEF) chiefShout else copShout
+        if (asleep) drawSleepZs(sx + w * 0.22f, sy - h * 0.18f, now)
+        else if (buf.hasFlag(i, RenderBuffer.FLAG_SHOUTING) && shout.isNotEmpty()) drawShoutBubble(sx, sy - h * 0.5f - 8f, shout)
         else if (buf.hasFlag(i, RenderBuffer.FLAG_ALERTED)) drawAlertMark(sx, sy - h * 0.5f - 16f, now)
     }
 
@@ -731,6 +764,26 @@ class GameRenderer(
     private fun facingRow(rotation: Float): Int {
         val step = Math.round(rotation / (PI.toFloat() / 4f))
         return ((step % FACING_ROWS) + FACING_ROWS) % FACING_ROWS
+    }
+
+    /** Three "Z"s that float up from the sleeping chief, one after the other. */
+    private fun DrawScope.drawSleepZs(x: Float, y: Float, now: Long) {
+        val canvas = drawContext.canvas.nativeCanvas
+        for (k in 0 until 3) {
+            val t = ((now / 18L + k * 600L) % 1800L) / 1800f                // 0..1 as it rises and fades
+            sleepPaint.textSize = 12f + k * 4f
+            sleepPaint.alpha = (255 * (1f - t)).toInt().coerceIn(0, 255)
+            canvas.drawText("Z", x + k * 9f + t * 6f, y - t * 34f - k * 6f, sleepPaint)
+        }
+    }
+
+    /** A red and a blue light that take turns over the whole picture while the alarm is on. */
+    private fun DrawScope.drawAlarmLights(now: Long) {
+        val s = sin(now * 0.0075f)
+        val red  = (0.05f + 0.20f * s.coerceAtLeast(0f))
+        val blue = (0.05f + 0.20f * (-s).coerceAtLeast(0f))
+        drawRect(Color(1f, 0.1f, 0.1f, red), Offset.Zero, Size(screenW, screenH))
+        drawRect(Color(0.15f, 0.3f, 1f, blue), Offset.Zero, Size(screenW, screenH))
     }
 
     /** A pixel speech bubble over an officer's head, its tail pointing down at him. */
@@ -1160,6 +1213,7 @@ class GameRenderer(
 
         // Ground: each 32px tile is drawn 3x, clutter is placed on a coarse world grid.
         const val LEVEL_BACKDROP = 0xFF0A0A14.toInt()
+        const val SLEEP_BREATH_MS = 900L
         const val EXIT_ARROW_MARGIN = 56f
         const val EXIT_ARROW_SIZE   = 18f
         const val GLOW_SIZE      = 300f

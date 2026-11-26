@@ -2,6 +2,7 @@ package com.kotlinsurvivors.engine
 
 import com.kotlinsurvivors.engine.ecs.systems.ComboTracker
 import com.kotlinsurvivors.core.audio.Sound
+import com.kotlinsurvivors.engine.ecs.components.AIState
 import com.kotlinsurvivors.engine.ecs.components.PickupType
 import com.kotlinsurvivors.engine.ecs.components.EnemyType
 import com.kotlinsurvivors.engine.ecs.components.PatrolState
@@ -21,6 +22,7 @@ import com.kotlinsurvivors.engine.map.LevelMap
 import com.kotlinsurvivors.engine.map.Levels
 import com.kotlinsurvivors.features.game.domain.model.LevelNotice
 import com.kotlinsurvivors.features.game.domain.model.GameState
+import com.kotlinsurvivors.features.game.domain.model.StationPhase
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
 import com.kotlinsurvivors.features.game.domain.model.UpgradeType
 import kotlinx.coroutines.*
@@ -76,6 +78,8 @@ class GameEngine(
         private const val EVENT_BANNER_SECONDS = 3.5f
         private const val LEVEL_NOTICE_SECONDS = 5f
         private const val STATION_LEVEL = 3
+        private const val SIREN_EVERY_SECONDS = 2.4f
+        private const val REINFORCEMENT_MIN_DISTANCE = 380f
         private const val STATION_RETURN_BELOW = 110f      // where the player stands when he comes out of the station
         /** How close to the wanted poster the player has to stand, and for how long, before the officers recognise him. */
         private const val POSTER_RADIUS = 170f
@@ -107,6 +111,13 @@ class GameEngine(
     /** Seconds the player has spent in front of the wanted poster, and whether the officers already know him. */
     private var posterTimer = 0f
     private var copsAlarmed = false
+
+    /** The siege of the station: the alarm, the quota of officers, the chief and the key. */
+    private val siege = StationSiege()
+    private var chiefId = -1
+    private var chiefX = 0f
+    private var chiefY = 0f
+    private var sirenTimer = 0f
     private var levelNotice: LevelNotice? = null
     private var levelNoticeTimer = 0f
     /** While the screen fades out at the end of the street the character keeps walking south, on his own. */
@@ -362,6 +373,10 @@ class GameEngine(
         posterTimer          = 0f
         copsAlarmed          = false
         movementSystem.copRoutes.clear()
+        siege.reset()
+        chiefId              = -1
+        sirenTimer           = 0f
+        lockStationDoor(false)
         levelNotice          = null
         levelNoticeTimer     = 0f
         directorEvents.clear()
@@ -473,7 +488,7 @@ class GameEngine(
         try {
             movementSystem.update(world, dt, if (levelFlow.phase == LevelFlow.Phase.LEAVING) tripInput() else joystick.getState())
             if (movementSystem.consumeAlarms() > 0) sounds.play(Sound.DOG_BARK)
-            if (movementSystem.consumeStationAlarm()) { sounds.play(Sound.EVENT_MINIBOSS); CrashLogger.log("STATION alarm at ${elapsedTime.toInt()}s") }
+            if (movementSystem.consumeStationAlarm()) { sounds.play(Sound.EVENT_MINIBOSS); startSiege() }
         } catch (e: Exception) {
             Log.e(TAG, "CRASH in movementSystem.update (frame $frameCount)", e)
             Log.e(TAG, world.getDiagnosticString()); throw e
@@ -508,6 +523,7 @@ class GameEngine(
         }
 
         try {
+            if (levelFlow.level == STATION_LEVEL) updateStation(dt)
             if (levelFlow.level != STATION_LEVEL) {
                 if (!laboratory && spawnSystem.update(world, dt, elapsedTime).bossSpawned) sounds.play(Sound.BOSS_APPEAR)
                 eventDirector.update(world, dt, elapsedTime, directorEvents)
@@ -528,6 +544,7 @@ class GameEngine(
 
         updateLevelFlow(dt)
 
+        for (event in processed) siegeEvent(event)
         for (event in processed) {
             when (event) {
                 is GameEvent.LevelUp -> {
@@ -624,7 +641,7 @@ class GameEngine(
         if (to == STATION_LEVEL) {
             posterTimer = 0f
             copsAlarmed = false
-            spawnCops()
+            spawnStationStaff()
             levelNotice = LevelNotice.STATION
         } else {
             if (!outFromStation) spawnSystem.reset()
@@ -633,6 +650,109 @@ class GameEngine(
         }
         levelNoticeTimer = if (levelNotice != null) LEVEL_NOTICE_SECONDS else 0f
         CrashLogger.log("LEVEL $to entered from $from at ${elapsedTime.toInt()}s, map=${if (map != null) "loaded" else "missing"}")
+    }
+
+    /** Whoever is in the station when the player comes in: the chief asleep on his sofa and the officers on their beats. */
+    private fun spawnStationStaff() {
+        if (siege.phase == StationPhase.OPEN) return                  // already cleared: the station stays empty
+        val mult = spawnSystem.difficultyAt(elapsedTime)
+        chiefId = EntityFactory.createChief(world, Level3.CHIEF_X, Level3.CHIEF_Y, mult)
+        chiefX = Level3.CHIEF_X; chiefY = Level3.CHIEF_Y
+        spawnCops()
+    }
+
+    /** Shuts or opens the street door: the cells behind the shutter are blocked and the path-finding map is rebuilt. */
+    private fun lockStationDoor(shut: Boolean) {
+        val map = stationMap ?: return
+        map.setRect(Level3.SHUTTER_X0, Level3.SHUTTER_Y0, Level3.SHUTTER_X1, Level3.SHUTTER_Y1, shut)
+        levelFlow.stationLocked = shut
+        if (levelFlow.level == STATION_LEVEL) movementSystem.levelMap = map
+    }
+
+    /** The officers raised the alarm: lights, siren, the shutter comes down and reinforcements start coming. */
+    private fun startSiege() {
+        if (!siege.alarm()) return
+        lockStationDoor(true)
+        sirenTimer       = 0f
+        levelNotice      = LevelNotice.ALARM
+        levelNoticeTimer = LEVEL_NOTICE_SECONDS
+        sounds.play(Sound.SHUTTER)
+        CrashLogger.log("SIEGE begins at ${elapsedTime.toInt()}s")
+    }
+
+    private fun wakeChiefNow() {
+        movementSystem.wakeChief(world, chiefId)
+        levelNotice      = LevelNotice.CHIEF_AWAKE
+        levelNoticeTimer = LEVEL_NOTICE_SECONDS
+        sounds.play(Sound.CHIEF_WAKE)
+        CrashLogger.log("CHIEF wakes at ${elapsedTime.toInt()}s")
+    }
+
+    /** The chief wakes before the quota: somebody hit him, or the laboratory asked for it. */
+    private fun wakeChiefEarly() {
+        if (!world.enemies.containsKey(chiefId)) return
+        startSiege()
+        if (siege.chiefWoke()) wakeChiefNow()
+    }
+
+    /** What happens in the station from one frame to the next while the siege goes on. */
+    private fun updateStation(dt: Float) {
+        val chief = world.enemies[chiefId]
+        if (chief != null) {
+            world.transforms[chiefId]?.let { chiefX = it.x; chiefY = it.y }
+            val hp = world.healths[chiefId]
+            if (chief.asleep && hp != null && hp.current < hp.max) wakeChiefEarly()
+        }
+        if (siege.alarmOn) {
+            sirenTimer -= dt
+            if (sirenTimer <= 0f) { sounds.play(Sound.SIREN); sirenTimer = SIREN_EVERY_SECONDS }
+        }
+        var alive = 0
+        for (enemy in world.enemies.values) if (enemy.type == EnemyType.COP) alive++
+        val wanted = siege.reinforcements(dt, alive)
+        if (wanted > 0) bringReinforcements(wanted)
+    }
+
+    /** New officers come through the doors of the rooms farthest from the player. */
+    private fun bringReinforcements(count: Int) {
+        val pt   = world.transforms[world.getPlayerEntity()] ?: return
+        val mult = spawnSystem.difficultyAt(elapsedTime)
+        val spots = Level3.REINFORCEMENTS
+        val far = ArrayList<Int>()
+        for (i in 0 until spots.size / 2) {
+            val dx = spots[i * 2] - pt.x; val dy = spots[i * 2 + 1] - pt.y
+            if (dx * dx + dy * dy > REINFORCEMENT_MIN_DISTANCE * REINFORCEMENT_MIN_DISTANCE) far.add(i)
+        }
+        if (far.isEmpty()) return
+        repeat(count) {
+            val i  = far[Random.nextInt(far.size)]
+            val id = EntityFactory.createEnemy(world, EnemyType.COP, spots[i * 2] + Random.nextFloat() * 40f - 20f, spots[i * 2 + 1], mult)
+            world.enemies[id]?.aiState = AIState.CHASE
+        }
+    }
+
+    /** The events that matter to the siege: officers falling, the chief falling and the key being picked up. */
+    private fun siegeEvent(event: GameEvent) {
+        when (event) {
+            is GameEvent.EnemyKilled -> when (event.type) {
+                EnemyType.COP -> if (siege.copKilled()) wakeChiefNow()
+                EnemyType.CHIEF -> if (siege.chiefKilled()) {
+                    EntityFactory.createPickup(world, PickupType.KEY, chiefX, chiefY)
+                    levelNotice      = LevelNotice.KEY_DROPPED
+                    levelNoticeTimer = LEVEL_NOTICE_SECONDS
+                    CrashLogger.log("CHIEF down at ${elapsedTime.toInt()}s, the key is on the floor")
+                }
+                else -> Unit
+            }
+            is GameEvent.PickupCollected -> if (event.type == PickupType.KEY && siege.keyTaken()) {
+                lockStationDoor(false)
+                levelNotice      = LevelNotice.STATION_OPEN
+                levelNoticeTimer = LEVEL_NOTICE_SECONDS
+                sounds.play(Sound.KEY_GET)
+                CrashLogger.log("KEY taken at ${elapsedTime.toInt()}s: the street door is open")
+            }
+            else -> Unit
+        }
     }
 
     /** The officers of the station, each on his beat. */
@@ -669,6 +789,7 @@ class GameEngine(
                 is LabCommand.OpenExit      -> openExit()
                 is LabCommand.GoToLevel2    -> levelFlow.startTrip()
                 is LabCommand.GoToStation   -> levelFlow.startTripToStation()
+                is LabCommand.WakeChief     -> if (levelFlow.level == STATION_LEVEL) wakeChiefEarly()
                 is LabCommand.ClearEnemies  -> LabActions.clearEnemies(world)
                 is LabCommand.HealFull      -> LabActions.healFull(world)
                 is LabCommand.SetInvincible -> labInvincible = command.on
@@ -709,7 +830,7 @@ class GameEngine(
         for (event in events) {
             when (event) {
                 is GameEvent.EnemyKilled -> sounds.play(when {
-                    event.type.isBoss || event.miniBoss -> Sound.BOSS_DIE
+                    event.type.isBoss || event.miniBoss || event.type == EnemyType.CHIEF -> Sound.BOSS_DIE
                     event.type == EnemyType.EXPLODER -> Sound.ENEMY_BLAST
                     else                             -> Sound.ENEMY_DIE
                 })
@@ -721,6 +842,7 @@ class GameEngine(
                     PickupType.MAGNET -> sounds.play(Sound.PICKUP_MAGNET)
                     PickupType.BOMB   -> sounds.play(Sound.ENEMY_BLAST)
                     PickupType.CHEST  -> Unit   // sounds when it finishes opening
+                    PickupType.KEY    -> Unit   // the siege makes its own sound
                 }
                 is GameEvent.PlayerHit -> sounds.play(Sound.PLAYER_HURT)
                 else -> Unit
@@ -773,6 +895,8 @@ class GameEngine(
             exitOpen         = levelFlow.exitOpen,
             levelFade        = levelFlow.fade,
             levelNotice      = levelNotice,
+            stationPhase     = siege.phase,
+            copsDefeated     = siege.kills.coerceAtMost(StationSiege.GOAL),
             comboCount       = if (combo.isVisible) combo.count else 0,
             comboTier        = combo.tier,
             comboFraction    = if (combo.isVisible) (combo.fraction * 20f).toInt() / 20f else 0f,
@@ -843,7 +967,7 @@ class GameEngine(
             var heading = t.rotation
             var sincePunch = 0f
             var cooldown = 1f
-            if (enemy != null && (enemy.type == EnemyType.BASIC || enemy.type == EnemyType.DOG || enemy.type == EnemyType.COP)) {
+            if (enemy != null && (enemy.type == EnemyType.BASIC || enemy.type == EnemyType.DOG || enemy.type == EnemyType.COP || enemy.type == EnemyType.CHIEF)) {
                 val v = world.velocities[eid]
                 val vx = v?.vx ?: 0f
                 val vy = v?.vy ?: 0f
@@ -859,7 +983,8 @@ class GameEngine(
                 // an officer on his beat looks where he is going, and goes on looking there when he stops
                 if (enemy.type == EnemyType.COP && enemy.patrol == PatrolState.WALK) heading = enemy.patrolDir
                 if (enemy.shouting && enemy.patrol == PatrolState.ALERT) f = f or RenderBuffer.FLAG_SHOUTING
-                if ((enemy.type == EnemyType.BASIC || enemy.type == EnemyType.COP) && nearPlayer && enemy.attackTimer <= 0f) f = f or RenderBuffer.FLAG_WINDING_UP
+                if (enemy.asleep) f = f or RenderBuffer.FLAG_SLEEPING
+                if ((enemy.type == EnemyType.BASIC || enemy.type == EnemyType.COP || enemy.type == EnemyType.CHIEF) && nearPlayer && enemy.attackTimer <= 0f) f = f or RenderBuffer.FLAG_WINDING_UP
                 if (enemy.patrol == PatrolState.ALERT) f = f or RenderBuffer.FLAG_ALERTED
                 if (enemy.patrol == PatrolState.WALK) f = f or RenderBuffer.FLAG_STROLLING
                 if (enemy.type == EnemyType.DOG && vx * vx + vy * vy > DOG_RUN_SPEED_SQ) f = f or RenderBuffer.FLAG_RUNNING

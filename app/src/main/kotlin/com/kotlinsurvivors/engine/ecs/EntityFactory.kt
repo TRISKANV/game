@@ -105,6 +105,21 @@ object EntityFactory {
     }
 
     /**
+     * The police chief, asleep. His body is wide (the collider is big) but his picture is drawn at the
+     * same pixel scale as the officers', so only the width of [CHIEF_RENDER_WIDTH] is set by hand.
+     */
+    fun createChief(world: World, x: Float, y: Float, waveMultiplier: Float = 1f): Int {
+        val id = createEnemy(world, EnemyType.CHIEF, x, y, waveMultiplier)
+        world.renders[id]?.let { it.width = CHIEF_RENDER_WIDTH; it.height = CHIEF_RENDER_WIDTH }
+        world.enemies[id]?.let {
+            it.asleep = true
+            it.patrol = PatrolState.WALK            // the patrol system keeps him still while he sleeps
+            it.attackCooldown = 1.3f
+        }
+        return id
+    }
+
+    /**
      * A mini-boss: an ordinary [type] grown into something much tougher that gives a lot of
      * experience, always drops coins and sometimes leaves a chest. It is drawn with a gold ring.
      */
@@ -149,6 +164,7 @@ object EntityFactory {
             EnemyType.BOSS_GOLEM  -> EnemyCfg(hp(800), 64f, dmg(45), 300, 1f, RenderShape.RECT,   0xFF8D6E63, 0xFF3E2723, 10f, 0x338D6E63)
             EnemyType.BOSS_NECROMANCER -> EnemyCfg(hp(600), 48f, dmg(25), 250, 1f, RenderShape.TRIANGLE, 0xFF26C6DA, 0xFF006064, 18f, 0x5526C6DA)
             EnemyType.COP   -> EnemyCfg(hp(40), 16f, dmg(10), 8, 0.12f, RenderShape.CIRCLE, 0xFF3F51B5, 0xFF1A237E, 0f, 0x00000000)
+            EnemyType.CHIEF -> EnemyCfg(hp(450), 26f, dmg(22), 160, 1f, RenderShape.CIRCLE, 0xFF3F51B5, 0xFF1A237E, 0f, 0x00000000)
             EnemyType.DOG   -> EnemyCfg(hp(14), 11f, dmg(6), 4, 0.06f, RenderShape.CIRCLE, 0xFF8D6E63, 0xFF3E2723, 0f, 0x00000000)
         }
     }
@@ -214,6 +230,10 @@ object EntityFactory {
 
     /** How long a boss chest stays on the floor waiting for the player. */
     const val CHEST_WAIT_SECONDS = 120f
+    /** Width of the chief's picture, in the units of [createEnemy]: 76 sprite rows at the officers' 1.77 pixel scale. */
+    const val CHIEF_RENDER_WIDTH = 40.5f
+    /** The key waits until it is picked up. */
+    const val KEY_WAIT_SECONDS = 1.0e6f
 
     /** How long an energy can waits on the floor for the player. */
     const val CAN_WAIT_SECONDS = 90f
@@ -237,6 +257,7 @@ object EntityFactory {
             // 8s for all pickups — prevents XP orb accumulation over time. A boss chest waits much longer.
             lifetime = when {
                 type == PickupType.CHEST -> CHEST_WAIT_SECONDS
+                type == PickupType.KEY   -> KEY_WAIT_SECONDS
                 type.staysPut            -> CAN_WAIT_SECONDS
                 else                     -> 8f
             }
@@ -267,6 +288,7 @@ object EntityFactory {
         PickupType.EXPERIENCE_LARGE  -> 14f
         PickupType.COIN, PickupType.COIN_BAG -> 9f
         PickupType.CHEST -> 22f
+        PickupType.KEY   -> 22f
         PickupType.HEALTH_SMALL, PickupType.HEALTH_LARGE -> 18f     // a can is big: it should not be missed by a hair
         else -> 12f
     }
@@ -283,6 +305,7 @@ object EntityFactory {
             PickupType.MAGNET            -> Triple(0xFF90A4AEL, 0xFF546E7AL, 20f)
             PickupType.BOMB              -> Triple(0xFF212121L, 0xFF616161L, 20f)
             PickupType.CHEST             -> Triple(0xFF26C6DAL, 0xFF006064L, 46f)
+            PickupType.KEY               -> Triple(0xFFFFD740L, 0xFFF57F17L, 40f)
         }
         return RenderComponent(
             shape = RenderShape.CIRCLE,

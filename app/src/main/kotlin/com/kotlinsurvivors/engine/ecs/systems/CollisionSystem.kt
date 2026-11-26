@@ -126,7 +126,7 @@ class CollisionSystem {
             val et      = world.transforms[eid] ?: continue
             val ec      = world.colliders[eid]  ?: continue
             val eHealth = world.healths[eid]    ?: continue
-            if (eHealth.isDead || enemy.attackTimer > 0f) continue
+            if (eHealth.isDead || enemy.attackTimer > 0f || enemy.asleep) continue
 
             val dx = pt.x - et.x; val dy = pt.y - et.y
             val distSq = dx * dx + dy * dy

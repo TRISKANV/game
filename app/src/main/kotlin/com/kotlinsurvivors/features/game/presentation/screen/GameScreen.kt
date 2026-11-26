@@ -33,6 +33,8 @@ import com.kotlinsurvivors.engine.rendering.SpriteAtlas
 import com.kotlinsurvivors.features.game.domain.model.Achievement
 import com.kotlinsurvivors.features.game.domain.model.GameState
 import com.kotlinsurvivors.features.game.domain.model.LevelNotice
+import com.kotlinsurvivors.features.game.domain.model.StationPhase
+import com.kotlinsurvivors.engine.StationSiege
 import com.kotlinsurvivors.engine.map.Levels
 import com.kotlinsurvivors.features.game.presentation.components.*
 import com.kotlinsurvivors.features.game.presentation.viewmodel.GameViewModel
@@ -112,6 +114,7 @@ fun GameScreen(
 
         // Settings that act on the game. Plain assignments, safe to repeat every frame.
         val copShout = stringResource(R.string.cop_shout)
+        val chiefShout = stringResource(R.string.chief_shout)
         SideEffect {
             renderer.showDamageNumbers = settings.showDamageNumbers
             renderer.showFps           = settings.showFps
@@ -119,6 +122,8 @@ fun GameScreen(
             renderer.levelArt          = levelArt
             renderer.exitOpen          = gameState.exitOpen
             renderer.copShout          = copShout
+            renderer.chiefShout        = chiefShout
+            renderer.stationPhase      = gameState.stationPhase
             viewModel.joystick?.setScale(settings.joystickSize)
         }
 
@@ -216,13 +221,38 @@ fun GameScreen(
                 LevelNotice.EXIT_OPEN -> Triple("mission", stringResource(R.string.level_exit_open), stringResource(R.string.level_exit_open_sub))
                 LevelNotice.LEVEL_TWO -> Triple("alert", stringResource(R.string.level_two_title), stringResource(R.string.level_two_sub))
                 LevelNotice.STATION   -> Triple("alert", stringResource(R.string.level_station_title), stringResource(R.string.level_station_sub))
+                LevelNotice.ALARM         -> Triple("alert", stringResource(R.string.level_alarm_title), stringResource(R.string.level_alarm_sub))
+                LevelNotice.CHIEF_AWAKE   -> Triple("skull", stringResource(R.string.level_chief_title), stringResource(R.string.level_chief_sub))
+                LevelNotice.KEY_DROPPED   -> Triple("mission", stringResource(R.string.level_key_title), stringResource(R.string.level_key_sub))
+                LevelNotice.STATION_OPEN  -> Triple("check", stringResource(R.string.level_station_open), stringResource(R.string.level_station_open_sub))
             }
             PixelToast(
                 icon     = icon,
                 title    = title,
                 subtitle = subtitle,
-                accent   = if (notice == LevelNotice.EXIT_OPEN) Color(0xFF7CE04A) else Color(0xFFFFD36B),
+                accent   = when (notice) {
+                    LevelNotice.EXIT_OPEN, LevelNotice.STATION_OPEN -> Color(0xFF7CE04A)
+                    LevelNotice.ALARM, LevelNotice.CHIEF_AWAKE      -> Color(0xFFFF5A5A)
+                    else                                            -> Color(0xFFFFD36B)
+                },
                 modifier = Modifier.align(Alignment.TopCenter).padding(top = 150.dp)
+            )
+        }
+
+        // ── The siege of the police station: what is left to do ───────────────
+        if (gameState.stationPhase == StationPhase.SIEGE || gameState.stationPhase == StationPhase.CHIEF || gameState.stationPhase == StationPhase.KEY) {
+            val (title, sub) = when (gameState.stationPhase) {
+                StationPhase.SIEGE -> stringResource(R.string.siege_counter, gameState.copsDefeated, StationSiege.GOAL) to stringResource(R.string.siege_counter_sub)
+                StationPhase.CHIEF -> stringResource(R.string.siege_chief_obj) to stringResource(R.string.siege_chief_obj_sub)
+                else               -> stringResource(R.string.siege_key_obj) to stringResource(R.string.siege_key_obj_sub)
+            }
+            PixelToast(
+                icon     = if (gameState.stationPhase == StationPhase.KEY) "mission" else "skull",
+                title    = title,
+                subtitle = sub,
+                accent   = Color(0xFFFF5A5A),
+                animate  = false,
+                modifier = Modifier.align(Alignment.TopCenter).padding(top = 88.dp)
             )
         }
 

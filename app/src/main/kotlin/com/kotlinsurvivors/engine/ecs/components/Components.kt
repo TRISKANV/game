@@ -145,7 +145,9 @@ enum class EnemyType {
     /** The guard's police dog: fast and fragile, it bites. Appears on a leash in the K9 patrol. */
     DOG,
     /** A police officer inside the station: walks a beat until he sees the player or the alarm goes, then fights like the guard. */
-    COP;
+    COP,
+    /** The police chief: fat, big and asleep in his office until the siege of the station reaches its point. */
+    CHIEF;
 
     val isBoss: Boolean
         get() = this == BOSS_SHADOW || this == BOSS_GOLEM || this == BOSS_NECROMANCER
@@ -196,7 +198,9 @@ data class EnemyComponent(
     /** Next point of the beat (an index into the route the patrol system holds for this officer). */
     var routeIndex: Int = 0,
     /** The officer who shouts when the alarm goes in the station; he gets a speech bubble. */
-    var shouting: Boolean = false
+    var shouting: Boolean = false,
+    /** The police chief while he sleeps: he does not move and nothing wakes him but a hit or the siege. */
+    var asleep: Boolean = false
 ) : Component
 
 // ─────────────────────────────────────────────
@@ -271,6 +275,8 @@ data class ProjectileComponent(
 enum class PickupType {
     EXPERIENCE_SMALL, EXPERIENCE_MEDIUM, EXPERIENCE_LARGE,
     COIN, COIN_BAG, HEALTH_SMALL, HEALTH_LARGE, MAGNET, BOMB,
+    /** The key the police chief drops; it opens the street door of the station. */
+    KEY,
     /** Dropped by bosses; opens by itself when the player touches it. Keep last: pickups.png has one cell per type before it. */
     CHEST
 }
@@ -280,7 +286,7 @@ enum class PickupType {
  * the chest and the energy cans wait where they fell until the player walks over them.
  */
 val PickupType.staysPut: Boolean
-    get() = this == PickupType.CHEST || this == PickupType.HEALTH_SMALL || this == PickupType.HEALTH_LARGE
+    get() = this == PickupType.CHEST || this == PickupType.KEY || this == PickupType.HEALTH_SMALL || this == PickupType.HEALTH_LARGE
 
 /**
  * Data for collectible items on the ground.

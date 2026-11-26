@@ -38,6 +38,9 @@ sealed interface LabCommand {
     /** Goes to Level 2 now, with the usual fade. */
     object GoToLevel2 : LabCommand
 
+    /** Wakes the police chief at once, as if the quota of officers had been reached. */
+    object WakeChief : LabCommand
+
     /** Goes into the police station now (from Level 2), with the usual fade. */
     object GoToStation : LabCommand
 

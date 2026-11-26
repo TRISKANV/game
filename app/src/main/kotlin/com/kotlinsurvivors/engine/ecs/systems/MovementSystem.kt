@@ -43,6 +43,9 @@ class MovementSystem(
     /** The player has been recognised on the wanted poster: the nearest officer shouts and all of them come. */
     fun raiseStationAlarm(world: World, px: Float, py: Float) = patrols.raiseStationAlarm(world, px, py)
 
+    /** Wakes the police chief: he stops for a moment, shouts, and then goes after the player. */
+    fun wakeChief(world: World, chiefId: Int) = patrols.wakeChief(world, chiefId)
+
     fun update(world: World, dt: Float, joystick: JoystickState) {
         updatePlayer(world, dt, joystick)
         patrols.update(world, dt, levelMap, worldWidth)
@@ -152,7 +155,7 @@ class MovementSystem(
                 EnemyType.BOSS_SHADOW,
                 EnemyType.BOSS_GOLEM,
                 EnemyType.BOSS_NECROMANCER -> updateBossAI(world, eid, dt, dx, dy, dist, spd)
-                EnemyType.BASIC, EnemyType.COP -> {
+                EnemyType.BASIC, EnemyType.COP, EnemyType.CHIEF -> {
                     if (!enemy.followingPath && enemy.wanderTimer <= 0f && Random.nextFloat() < 0.005f) {
                         enemy.wanderTimer     = 0.5f + Random.nextFloat() * 0.5f
                         enemy.wanderDirection = Random.nextFloat() * 2f * PI.toFloat()
@@ -218,6 +221,7 @@ class MovementSystem(
         EnemyType.BOSS_NECROMANCER -> 65f
         EnemyType.DOG              -> 175f
         EnemyType.COP              -> 95f
+        EnemyType.CHIEF            -> 62f
     }
 
     private fun integratePositions(world: World, dt: Float) {

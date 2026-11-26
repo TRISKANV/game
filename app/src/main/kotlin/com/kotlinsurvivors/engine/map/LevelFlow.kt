@@ -20,6 +20,8 @@ class LevelFlow {
     /** Where the trip under way is going. */
     var target   = 1;                private set
     var exitOpen = false;            private set
+    /** True while the shutter of the station is down (the engine sets it). */
+    var stationLocked = false
     /** 0 = clear screen, 1 = black. */
     var fade     = 0f;               private set
     var phase    = Phase.PLAYING;    private set
@@ -28,7 +30,7 @@ class LevelFlow {
     val isTravelling: Boolean get() = phase != Phase.PLAYING
 
     fun reset() {
-        level = 1; previous = 0; target = 1; exitOpen = false; fade = 0f; phase = Phase.PLAYING
+        level = 1; previous = 0; target = 1; exitOpen = false; stationLocked = false; fade = 0f; phase = Phase.PLAYING
     }
 
     /** Opens the way out. True only the first time, so the engine announces it once. */
@@ -58,7 +60,7 @@ class LevelFlow {
 
     /** The street door of the station, seen from inside. */
     fun isInStationExit(x: Float, y: Float): Boolean =
-        level == 3 && x in Level3.EXIT_X0..Level3.EXIT_X1 && y >= Level3.EXIT_Y
+        level == 3 && !stationLocked && x in Level3.EXIT_X0..Level3.EXIT_X1 && y >= Level3.EXIT_Y
 
     private fun destinationAt(x: Float, y: Float): Int = when {
         isInExit(x, y)        -> 2

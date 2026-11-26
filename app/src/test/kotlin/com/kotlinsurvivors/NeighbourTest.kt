@@ -171,6 +171,7 @@ class EnergyCanTest {
     @Test fun cansAndChestsStayPutOthersDoNot() {
         for (t in com.kotlinsurvivors.engine.ecs.components.PickupType.values()) {
             val expected = t == com.kotlinsurvivors.engine.ecs.components.PickupType.CHEST ||
+                t == com.kotlinsurvivors.engine.ecs.components.PickupType.KEY ||
                 t == com.kotlinsurvivors.engine.ecs.components.PickupType.HEALTH_SMALL ||
                 t == com.kotlinsurvivors.engine.ecs.components.PickupType.HEALTH_LARGE
             assertEquals(t.name, expected, t.staysPut)

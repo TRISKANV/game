@@ -56,6 +56,7 @@ class PatrolSystem {
                 EnemyType.BASIC -> updateGuard(world, eid, dt, pt?.x, pt?.y, map, worldSize)
                 EnemyType.DOG   -> updateDog(world, eid, pt?.x, pt?.y, map)
                 EnemyType.COP   -> updateCop(world, eid, dt, pt?.x, pt?.y, map)
+                EnemyType.CHIEF -> updateChief(world, eid, dt)
                 else            -> { enemy.patrol = PatrolState.NONE }
             }
             // anything that is not a walking patrol must not keep a stale leash
@@ -222,6 +223,29 @@ class PatrolSystem {
         stationAlarm = true
     }
 
+    // ── Police chief ────────────────────────────────────────────────────────
+
+    /** The chief sleeps where he is; once woken he stops for [CHIEF_WAKE_SECONDS] with his speech bubble and then fights. */
+    private fun updateChief(world: World, eid: Int, dt: Float) {
+        val enemy = world.enemies[eid] ?: return
+        val v     = world.velocities[eid] ?: return
+        v.vx = 0f; v.vy = 0f
+        if (enemy.patrol != PatrolState.ALERT) return              // asleep
+        enemy.alertTimer -= dt
+        if (enemy.alertTimer <= 0f) {
+            enemy.patrol = PatrolState.NONE; enemy.aiState = AIState.CHASE; enemy.shouting = false
+        }
+    }
+
+    fun wakeChief(world: World, chiefId: Int) {
+        val enemy = world.enemies[chiefId] ?: return
+        if (enemy.type != EnemyType.CHIEF || !enemy.asleep) return
+        enemy.asleep     = false
+        enemy.patrol     = PatrolState.ALERT
+        enemy.shouting   = true
+        enemy.alertTimer = CHIEF_WAKE_SECONDS
+    }
+
     // ── Dog ─────────────────────────────────────────────────────────────────
 
     private fun updateDog(world: World, eid: Int, px: Float?, py: Float?, map: LevelMap?) {
@@ -287,6 +311,7 @@ class PatrolSystem {
         const val TURN_MIN           = 2.5f
         const val TURN_MAX           = 4.5f
         const val EDGE_MARGIN        = 220f
+        const val CHIEF_WAKE_SECONDS = 3.2f
         const val COP_PATROL_SPEED   = 46f
         const val COP_ARRIVE         = 10f
         const val COP_WAIT_MIN       = 1.0f

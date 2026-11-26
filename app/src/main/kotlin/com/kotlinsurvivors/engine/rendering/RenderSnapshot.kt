@@ -102,6 +102,8 @@ class RenderBuffer {
         const val FLAG_STROLLING = 1024
         /** The officer who recognised the player is shouting: a speech bubble over his head. */
         const val FLAG_SHOUTING = 2048
+        /** The police chief is asleep: he is drawn lying on his sofa, with "Z"s over him. */
+        const val FLAG_SLEEPING = 4096
 
         /** The guard's punch lasts this long after the hit lands; [lifetime] holds the seconds since it did. */
         const val GUARD_PUNCH_SECONDS = 0.42f
