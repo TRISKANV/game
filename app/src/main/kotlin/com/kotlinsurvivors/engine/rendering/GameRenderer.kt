@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.map.Level1
 import com.kotlinsurvivors.engine.map.Level3
+import com.kotlinsurvivors.engine.map.LevelCars
 import com.kotlinsurvivors.features.game.domain.model.StationPhase
 import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.components.EnemyType
@@ -129,6 +130,10 @@ class GameRenderer(
         color       = 0xFF14101C.toInt()
         textSize    = 15f
         typeface    = android.graphics.Typeface.create(android.graphics.Typeface.MONOSPACE, android.graphics.Typeface.BOLD)
+    }
+    private val wreckPaint = Paint().apply {
+        isAntiAlias = false; isFilterBitmap = false
+        colorFilter = android.graphics.LightingColorFilter(0xFF4A4A52.toInt(), 0)
     }
     private val flashPaint  = Paint().apply {
         isAntiAlias   = false
@@ -242,6 +247,10 @@ class GameRenderer(
             // Pass 2b: leashes, under the bodies they join
             for (i in 0 until buf.count) {
                 if (buf.kind[i] == RenderKind.LEASH) renderLeash(buf, i)
+            }
+            // Pass 2c: cars, on the ground under everything that walks
+            for (i in 0 until buf.count) {
+                if (buf.kind[i] == RenderKind.CAR) renderCar(buf, i)
             }
             // Pass 3: Enemies
             for (i in 0 until buf.count) {
@@ -514,6 +523,59 @@ class GameRenderer(
         srcRect.set(col * cellW, row * cellH, (col + 1) * cellW, (row + 1) * cellH)
         dstRect.set(cx - w * 0.5f, cy - h * 0.5f, cx + w * 0.5f, cy + h * 0.5f)
         drawContext.canvas.nativeCanvas.drawBitmap(sheet, srcRect, dstRect, paint)
+    }
+
+    // ── Cars ────────────────────────────────────────────────────────────────
+
+    /**
+     * A car: its shadow, the picture turned to the heading and, when it is hurt or burnt out, smoke.
+     * The width and height in the buffer are the body in world pixels; the heading is in radians.
+     */
+    private fun DrawScope.renderCar(buf: RenderBuffer, i: Int) {
+        val sx = buf.x[i] - cameraX; val sy = buf.y[i] - cameraY
+        val w = buf.width[i]; val h = buf.height[i]
+        if (!inViewport(sx, sy, w + 80f)) return
+        val flags = buf.flags[i]
+        val wreck = flags and RenderBuffer.FLAG_CAR_WRECK != 0
+        val heading = buf.rotation[i]
+        val c = cos(heading); val s = sin(heading)
+        val halfX = abs(c) * w * 0.5f + abs(s) * h * 0.5f
+        val halfY = abs(s) * w * 0.5f + abs(c) * h * 0.5f
+        drawOval(Color(0x66000000), topLeft = Offset(sx - halfX * 0.95f, sy - halfY * 0.8f + 7f), size = Size(halfX * 1.9f, halfY * 1.7f))
+
+        val sheet = atlas?.cars
+        val look = buf.spriteId[i]
+        val canvas = drawContext.canvas.nativeCanvas
+        canvas.save()
+        canvas.rotate(Math.toDegrees(heading.toDouble()).toFloat(), sx, sy)
+        if (sheet != null && look >= 0 && (look + 1) * LevelCars.CELL_W <= sheet.width) {
+            val pixel = w / LevelCars.LOOK_SIZE[look * 2]
+            val cw = LevelCars.CELL_W * pixel; val ch = LevelCars.CELL_H * pixel
+            srcRect.set(look * LevelCars.CELL_W, 0, (look + 1) * LevelCars.CELL_W, LevelCars.CELL_H)
+            dstRect.set(sx - cw * 0.5f, sy - ch * 0.5f, sx + cw * 0.5f, sy + ch * 0.5f)
+            val paint = when {
+                flags and RenderBuffer.FLAG_FLASHING != 0 -> flashPaint
+                wreck -> wreckPaint
+                else  -> spritePaint
+            }
+            canvas.drawBitmap(sheet, srcRect, dstRect, paint)
+        } else {
+            drawRect(if (wreck) Color(0xFF2A2A30) else Color(0xFF446688), Offset(sx - w * 0.5f, sy - h * 0.5f), Size(w, h))
+        }
+        canvas.restore()
+
+        // Smoke from a burnt-out car, and from one that has little left
+        val hurt = buf.hpPercent[i] < SMOKING_BELOW_HEALTH
+        if (wreck || hurt) {
+            val t = System.currentTimeMillis() / 1000f
+            for (k in 0 until 3) {
+                val phase = (t * 0.55f + k / 3f) % 1f
+                val alpha = ((1f - phase) * (if (wreck) 0.55f else 0.35f) * 255f).toInt()
+                drawCircle(Color((alpha shl 24) or 0x2A2A2A), 9f + phase * 20f,
+                    Offset(sx + sin(k * 2.1f + t) * 9f, sy - 10f - phase * 74f))
+            }
+            if (wreck) drawCircle(Color(0x55FF8A2A), 8f + sin(t * 18f) * 3f, Offset(sx + 6f, sy - 4f))
+        }
     }
 
     private fun DrawScope.drawShadow(cx: Float, feetY: Float, w: Float) {
@@ -1169,6 +1231,8 @@ class GameRenderer(
     private companion object {
         const val NUMBER_CACHE_SIZE = 1000
         const val SHAKE_DURATION    = 0.25f
+        /** A car with less health than this smokes. */
+        const val SMOKING_BELOW_HEALTH = 0.35f
         const val SHAKE_STRENGTH    = 10f
         const val FPS_WINDOW_NANOS  = 500_000_000L
 

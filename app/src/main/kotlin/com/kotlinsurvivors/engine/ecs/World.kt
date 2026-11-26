@@ -30,6 +30,7 @@ class World {
     val orbitals      = HashMap<Int, MutableList<OrbitalComponent>>(8)
     val bosses        = HashMap<Int, BossComponent>(4)
     val blasts        = HashMap<Int, BlastComponent>(8)
+    val cars          = HashMap<Int, CarComponent>(16)
     val playerTags    = HashSet<Int>(2)
     val destroyedTags = HashSet<Int>(128)
 
@@ -86,7 +87,7 @@ class World {
         damageNumbers.remove(id); particles.remove(id)
         auras.remove(id);         orbitals.remove(id)
         bosses.remove(id);        playerTags.remove(id)
-        blasts.remove(id)
+        blasts.remove(id);        cars.remove(id)
     }
 
     fun isAlive(id: Int): Boolean = id in liveEntities && id !in destroyedTags

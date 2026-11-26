@@ -278,6 +278,17 @@ fun GameScreen(
             ChestOverlay(reward = reward, onFinished = viewModel::confirmChest)
         }
 
+        // ── The car: pick a lock, get in, get out, and the health of the car being driven ──
+        if (!gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp) {
+            CarButton(
+                prompt    = gameState.carPrompt,
+                progress  = gameState.carProgress,
+                carHealth = gameState.carHealth,
+                onButton  = viewModel::onCarButton,
+                modifier  = Modifier.align(Alignment.BottomEnd).padding(end = 36.dp, bottom = 36.dp)
+            )
+        }
+
         // ── Level-up waiting: a button the player opens when ready ───────────
         val canShowBadge = !gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp
         if (canShowBadge && gameState.levelUpsWaiting > 0) {

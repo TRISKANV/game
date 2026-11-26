@@ -259,6 +259,10 @@
     <string name="siege_key_obj">AGARRÁ LA LLAVE</string>
     <string name="siege_key_obj_sub">Cayó donde él</string>
     <string name="lab_wake_chief">Despertar al comisario</string>
+    <string name="car_lockpick">GANZÚA</string>
+    <string name="car_enter">SUBIR</string>
+    <string name="car_exit">BAJAR</string>
+    <string name="car_health">AUTO</string>
     <string name="chest_boss_title">¡COFRE DEL JEFE!</string>
     <string name="chest_tap_open">TOCÁ EL COFRE PARA ABRIRLO</string>
     <string name="chest_tap_continue">Tocá para continuar</string>

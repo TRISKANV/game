@@ -43,6 +43,13 @@ enum class Sound(val file: String, val minGapMs: Long = 0L, val volume: Float = 
     KEY_GET       ("key_get",        0,   1f),
     SHIELD_BREAK  ("shield_break",   0,   1f),
 
+    // Cars
+    CAR_PICK      ("car_pick",       0,   0.6f),
+    CAR_DOOR      ("car_door",       0,   0.9f),
+    CAR_CRASH     ("car_crash",      60,  1f),
+    CAR_WRECK     ("car_wreck",      0,   1f),
+    CAR_ENGINE    ("car_engine",     0,   0.5f),
+
     // Kill streak: one blip per tier, each higher than the last
     COMBO_1       ("combo_1",        0,   0.7f),
     COMBO_2       ("combo_2",        0,   0.75f),

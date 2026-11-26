@@ -259,6 +259,10 @@
     <string name="siege_key_obj">GRAB THE KEY</string>
     <string name="siege_key_obj_sub">It fell where he did</string>
     <string name="lab_wake_chief">Wake the chief</string>
+    <string name="car_lockpick">PICK LOCK</string>
+    <string name="car_enter">GET IN</string>
+    <string name="car_exit">GET OUT</string>
+    <string name="car_health">CAR</string>
     <string name="chest_boss_title">BOSS CHEST!</string>
     <string name="chest_tap_open">TAP THE CHEST TO OPEN IT</string>
     <string name="chest_tap_continue">Tap to continue</string>

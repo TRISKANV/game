@@ -252,6 +252,21 @@ object EntityFactory {
     const val MINI_BOSS_DAMAGE_FACTOR = 1.5f
     const val MINI_BOSS_XP            = 40
 
+    /**
+     * A car of the level. [x], [y] is its centre; [box] is the parking place it blocks on the collision
+     * grid (x0, y0, x1, y1). It has no collider of its own: enemies cannot hurt a car that stands, and a
+     * driven one takes the hits meant for the player.
+     */
+    fun createCar(world: World, x: Float, y: Float, heading: Float, look: Int, hp: Int, box: FloatArray): Int {
+        val id = world.createEntity()
+        world.transforms[id] = TransformComponent(x = x, y = y)
+        world.cars[id] = CarComponent(
+            look = look, heading = heading, hp = hp, maxHp = hp,
+            boxX0 = box[0], boxY0 = box[1], boxX1 = box[2], boxY1 = box[3]
+        )
+        return id
+    }
+
     fun createPickup(world: World, type: PickupType, x: Float, y: Float): Int {
         val id = world.createEntity()
         // slight random scatter

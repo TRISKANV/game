@@ -12,6 +12,7 @@ class CollisionSystem {
 
     companion object {
         private const val TAG = "KS_Collision"
+        private const val RUN_OVER_GRACE_SECONDS = 0.5f
     }
 
     private val grid        = SpatialGrid(cellSize = 128f)
@@ -27,6 +28,11 @@ class CollisionSystem {
             checkProjectileVsEnemies(world, events)
         } catch (e: Exception) {
             Log.e(TAG, "CRASH in checkProjectileVsEnemies: proj=${world.projectiles.size} enemies=${world.enemies.size}", e); throw e
+        }
+        try {
+            checkCarRunOver(world, events)
+        } catch (e: Exception) {
+            Log.e(TAG, "CRASH in checkCarRunOver", e); throw e
         }
         try {
             checkPlayerVsEnemies(world, dt, events)
@@ -106,6 +112,41 @@ class CollisionSystem {
         }
     }
 
+    /** A car at speed hurts whoever it drives into, and loses a little of its own health for each one. */
+    private fun checkCarRunOver(world: World, events: MutableList<GameEvent>) {
+        val playerId = world.getPlayerEntity()
+        val carId = world.players[playerId]?.drivingCar ?: return
+        if (carId < 0) return
+        val car = world.cars[carId] ?: return
+        val ct  = world.transforms[carId] ?: return
+        if (car.speed < CarRules.RUN_OVER_SPEED) return
+
+        queryResult.clear()
+        grid.query(ct.x, ct.y, CarRules.BODY_RADIUS + 60f, queryResult)
+        for (qi in 0 until queryResult.size) {
+            val eid = queryResult[qi]
+            if (world.enemies[eid] == null) continue
+            val et = world.transforms[eid] ?: continue
+            val ec = world.colliders[eid]  ?: continue
+            val eHealth = world.healths[eid] ?: continue
+            if (!world.isAlive(eid) || eHealth.isDead || eHealth.invincibleTimer > 0f) continue
+            val dx = et.x - ct.x; val dy = et.y - ct.y
+            val reach = CarRules.BODY_RADIUS + ec.radius
+            val distSq = dx * dx + dy * dy
+            if (distSq > reach * reach) continue
+
+            val damage = CarRules.runOverDamage(car.speed)
+            applyDamage(world, eid, damage, false, events)
+            eHealth.invincibleTimer = RUN_OVER_GRACE_SECONDS          // one pass, one hit
+            val dist = sqrt(distSq).coerceAtLeast(0.001f)
+            world.velocities[eid]?.let { it.vx += dx / dist * car.speed * 1.2f; it.vy += dy / dist * car.speed * 1.2f }
+            EntityFactory.createDamageNumber(world, et.x, et.y - ec.radius, damage, false)
+            EntityFactory.createParticleBurst(world, et.x, et.y, ParticleType.BLOOD, 5)
+            car.hp = (car.hp - 1).coerceAtLeast(0)
+            car.hurtTimer = 0.1f
+        }
+    }
+
     private fun checkPlayerVsEnemies(world: World, dt: Float, events: MutableList<GameEvent>) {
         val playerId = world.getPlayerEntity()
         if (playerId == -1) return
@@ -131,6 +172,16 @@ class CollisionSystem {
             val dx = pt.x - et.x; val dy = pt.y - et.y
             val distSq = dx * dx + dy * dy
             if (distSq > (pc.radius + ec.radius) * (pc.radius + ec.radius)) continue
+
+            // Inside a car, the blows land on the car and the driver is not touched.
+            val car = if (pComp.drivingCar >= 0) world.cars[pComp.drivingCar] else null
+            if (car != null) {
+                car.hp = (car.hp - enemy.attackDamage).coerceAtLeast(0)
+                car.hurtTimer = 0.15f
+                enemy.attackTimer = enemy.attackCooldown
+                EntityFactory.createParticleBurst(world, pt.x, pt.y, ParticleType.BLOOD, 3)
+                continue
+            }
 
             val dmg = (enemy.attackDamage - pComp.armor).coerceAtLeast(1)
             pHealth.current         = (pHealth.current - dmg).coerceAtLeast(0)

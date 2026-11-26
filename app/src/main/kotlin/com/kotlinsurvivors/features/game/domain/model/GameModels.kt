@@ -12,6 +12,9 @@ enum class LevelNotice { EXIT_OPEN, LEVEL_TWO, STATION, ALARM, CHIEF_AWAKE, KEY_
 /** Where the siege of the police station is: see [com.kotlinsurvivors.engine.StationSiege]. */
 enum class StationPhase { QUIET, SIEGE, CHIEF, KEY, OPEN }
 
+/** What the car button offers right now: nothing, picking a lock (hold), getting into an open car, or getting out. */
+enum class CarPrompt { NONE, LOCKPICK, ENTER, EXIT }
+
 /**
  * Immutable snapshot of the game state emitted by GameEngine each frame.
  *
@@ -49,6 +52,10 @@ data class GameState(
     /** The siege of the police station and how many officers have been put down in it. */
     val stationPhase     : StationPhase   = StationPhase.QUIET,
     val copsDefeated     : Int            = 0,
+    /** The car button: what it offers, how far the lock is picked (0..1) and the health of the car being driven (-1 on foot). */
+    val carPrompt        : CarPrompt      = CarPrompt.NONE,
+    val carProgress      : Float          = 0f,
+    val carHealth        : Float          = -1f,
 
     // Time
     val elapsedTime      : Float          = 0f,

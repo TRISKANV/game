@@ -106,6 +106,11 @@ class GameViewModel @Inject constructor(
         engine?.restart(viewModelScope)
     }
 
+    /** The car button went down (true) or up (false). */
+    fun onCarButton(down: Boolean) {
+        engine?.setCarButton(down)
+    }
+
     fun openLevelUp() {
         Log.d(TAG, "openLevelUp()")
         engine?.openLevelUp()

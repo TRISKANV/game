@@ -106,6 +106,10 @@ class RenderBuffer {
         const val FLAG_SLEEPING = 4096
         /** The riot officer still has his shield. */
         const val FLAG_SHIELDED = 8192
+        /** Cars: somebody is driving it, it is burnt out, its doors are locked. */
+        const val FLAG_CAR_DRIVEN = 16384
+        const val FLAG_CAR_WRECK  = 32768
+        const val FLAG_CAR_LOCKED = 65536
 
         /** The guard's punch lasts this long after the hit lands; [lifetime] holds the seconds since it did. */
         const val GUARD_PUNCH_SECONDS = 0.42f
@@ -196,6 +200,8 @@ object RenderKind {
     const val ORBITAL      = 7
     /** A leash between a patrolling guard and his dog: [x],[y] is the guard, [width],[height] the dog (world coordinates). */
     const val LEASH        = 8
+    /** A car: [rotation] is its heading, [width] x [height] its size in world pixels, [spriteId] its look, [lifetime] its speed. */
+    const val CAR          = 9
 }
 
 /** Row of the player sprite sheet for each direction the character can face. */

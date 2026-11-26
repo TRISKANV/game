@@ -107,6 +107,8 @@ data class RenderComponent(
  * Player-specific stats and progression data.
  */
 data class PlayerComponent(
+    /** Entity id of the car the player is driving, or -1 on foot. */
+    var drivingCar: Int = -1,
     var speed: Float = 220f,
     var level: Int = 1,
     var experience: Int = 0,
@@ -426,3 +428,35 @@ object DestroyedTag : Component
 
 /** Marks entity as active in the current wave. */
 object ActiveTag : Component
+
+
+// ─────────────────────────────────────────────
+// CARS
+// ─────────────────────────────────────────────
+
+enum class CarState {
+    /** Standing still, with its doors locked until somebody picks the lock. */
+    LOCKED,
+    /** Its lock is picked and nobody is in it. */
+    OPEN,
+    DRIVEN,
+    /** Burnt out: it does not run any more and nobody can get in. */
+    WRECK
+}
+
+/**
+ * A car of the level. It is a real object, not part of the picture: it can be broken into, driven,
+ * hurt and ruined. [look] is the cell of cars.png; [boxX0]..[boxY1] is the parking place it blocks on
+ * the level's collision grid while it stands there.
+ */
+data class CarComponent(
+    val look: Int,
+    var heading: Float,
+    var state: CarState = CarState.LOCKED,
+    var speed: Float = 0f,
+    var hp: Int = 120,
+    val maxHp: Int = 120,
+    var boxX0: Float = 0f, var boxY0: Float = 0f, var boxX1: Float = 0f, var boxY1: Float = 0f,
+    /** Seconds since the car last took a hit, for the flash. */
+    var hurtTimer: Float = 0f
+) : Component

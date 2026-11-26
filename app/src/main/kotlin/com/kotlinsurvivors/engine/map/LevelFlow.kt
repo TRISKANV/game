@@ -73,11 +73,12 @@ class LevelFlow {
      * Advances the fade by [dt] seconds. Returns true on the one frame the screen is fully black and
      * the next level has to be put in place; [level] already holds the new number by then.
      */
-    fun update(dt: Float, playerX: Float, playerY: Float): Boolean {
+    fun update(dt: Float, playerX: Float, playerY: Float, driving: Boolean = false): Boolean {
         when (phase) {
             Phase.PLAYING -> {
                 val to = destinationAt(playerX, playerY)
-                if (to != 0) { target = to; phase = Phase.LEAVING }
+                // nobody drives a car into the police station
+                if (to != 0 && !(driving && to == 3)) { target = to; phase = Phase.LEAVING }
             }
             Phase.LEAVING -> {
                 fade = (fade + dt / FADE_OUT_SECONDS).coerceAtMost(1f)

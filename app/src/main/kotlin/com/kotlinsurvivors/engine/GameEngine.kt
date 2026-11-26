@@ -14,6 +14,9 @@ import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.systems.*
 import com.kotlinsurvivors.engine.input.VirtualJoystick
 import com.kotlinsurvivors.engine.input.JoystickState
+import com.kotlinsurvivors.engine.ecs.components.CarState
+import com.kotlinsurvivors.engine.map.LevelCars
+import com.kotlinsurvivors.features.game.domain.model.CarPrompt
 import com.kotlinsurvivors.engine.map.Level1
 import com.kotlinsurvivors.engine.map.Level2
 import com.kotlinsurvivors.engine.map.Level3
@@ -97,6 +100,7 @@ class GameEngine(
     val world = World()
 
     private val movementSystem   = MovementSystem(WORLD_WIDTH, WORLD_HEIGHT)
+    private val carSystem        = CarSystem(sounds)
     private val collisionSystem  = CollisionSystem()
     private val weaponSystem     = WeaponSystem(sounds)
     private val spawnSystem      = SpawnSystem(viewportWidth, viewportHeight)
@@ -362,6 +366,8 @@ class GameEngine(
     /** Puts every engine-owned field back to its initial value. Engine thread only. */
     private fun resetState() {
         spawnSystem.reset()
+        carSystem.reset()
+        carHeld = false; carPressQueued = false
         elapsedTime          = 0f
         isPaused             = false
         pendingLevelUp       = false
@@ -448,6 +454,8 @@ class GameEngine(
         map?.setRect(Level1.EXIT_X0, Level1.BARRIER_Y0, Level1.EXIT_X1, Level1.BARRIER_Y1, true)
         movementSystem.levelMap = map
         spawnSystem.levelMap    = map
+        carSystem.levelMap      = map
+        carSystem.spawn(world, 1)
         // With a map the run starts just outside the house door, otherwise in the middle.
         val startX = if (map != null) Level1.SPAWN_X else WORLD_WIDTH  / 2f
         val startY = if (map != null) Level1.SPAWN_Y else WORLD_HEIGHT / 2f
@@ -487,7 +495,13 @@ class GameEngine(
         }
 
         try {
-            movementSystem.update(world, dt, if (levelFlow.phase == LevelFlow.Phase.LEAVING) tripInput() else joystick.getState())
+            val input = if (levelFlow.phase == LevelFlow.Phase.LEAVING) tripInput() else joystick.getState()
+            val pressed = carPressQueued; carPressQueued = false
+            carSystem.update(world, dt, input, pressed, carHeld)
+            // at the wheel the car goes where the stick says; the character himself stands still
+            movementSystem.update(world, dt, if (isDriving()) JoystickState() else input)
+            carSystem.keepDriverInCar(world)
+            if (carSystem.consumeMapChange()) movementSystem.levelMap = carSystem.levelMap
             if (movementSystem.consumeAlarms() > 0) sounds.play(Sound.DOG_BARK)
             if (movementSystem.consumeStationAlarm()) { sounds.play(Sound.EVENT_MINIBOSS); startSiege() }
         } catch (e: Exception) {
@@ -582,7 +596,7 @@ class GameEngine(
         val pid = world.getPlayerEntity()
         val pt  = world.transforms[pid] ?: return
         if (levelFlow.level == 1 && !levelFlow.exitOpen && (world.players[pid]?.bossKills ?: 0) >= 1) openExit()
-        if (levelFlow.update(dt, pt.x, pt.y)) enterLevel(pid)
+        if (levelFlow.update(dt, pt.x, pt.y, isDriving())) enterLevel(pid)
         if (levelFlow.level == STATION_LEVEL && levelFlow.phase == LevelFlow.Phase.PLAYING) watchPoster(pid, pt.x, pt.y, dt)
         if (levelNoticeTimer > 0f) {
             levelNoticeTimer -= dt
@@ -621,6 +635,7 @@ class GameEngine(
     private fun enterLevel(pid: Int) {
         val to   = levelFlow.level
         val from = levelFlow.previous
+        carSystem.leave(world, from)
         val gone = ArrayList<Int>(world.enemies.size + world.projectiles.size + world.pickups.size + 64)
         gone.addAll(world.enemies.keys); gone.addAll(world.projectiles.keys); gone.addAll(world.pickups.keys)
         gone.addAll(world.particles.keys); gone.addAll(world.blasts.keys); gone.addAll(world.damageNumbers.keys)
@@ -632,6 +647,8 @@ class GameEngine(
         val map  = if (to == STATION_LEVEL) stationMap else nextLevelMap
         movementSystem.levelMap = map
         spawnSystem.levelMap    = map
+        carSystem.levelMap      = map
+        carSystem.spawn(world, to)
         // coming back out of the station, the player stands in front of its door
         val outFromStation = to == 2 && from == STATION_LEVEL
         val x = if (outFromStation) (Level2.STATION_DOOR_LEFT + Level2.STATION_DOOR_RIGHT) / 2f else info.spawnX
@@ -654,6 +671,17 @@ class GameEngine(
         levelNoticeTimer = if (levelNotice != null) LEVEL_NOTICE_SECONDS else 0f
         CrashLogger.log("LEVEL $to entered from $from at ${elapsedTime.toInt()}s, map=${if (map != null) "loaded" else "missing"}")
     }
+
+    private fun isDriving(): Boolean = (world.players[world.getPlayerEntity()]?.drivingCar ?: -1) >= 0
+
+    /** The car button went down or up (UI thread). A press on a lock is held; a press on a door is one action. */
+    fun setCarButton(down: Boolean) {
+        if (down && !carHeld) carPressQueued = true
+        carHeld = down
+    }
+
+    @Volatile private var carHeld = false
+    @Volatile private var carPressQueued = false
 
     /** Breaks the shield of any riot officer whose shield has been used up, with a sound and a flash. */
     private fun settleRiots() {
@@ -917,6 +945,9 @@ class GameEngine(
             levelNotice      = levelNotice,
             stationPhase     = siege.phase,
             copsDefeated     = siege.kills.coerceAtMost(StationSiege.GOAL),
+            carPrompt        = carSystem.prompt,
+            carProgress      = carSystem.progress,
+            carHealth        = carSystem.drivenHealth(world),
             comboCount       = if (combo.isVisible) combo.count else 0,
             comboTier        = combo.tier,
             comboFraction    = if (combo.isVisible) (combo.fraction * 20f).toInt() / 20f else 0f,
@@ -1047,6 +1078,26 @@ class GameEngine(
             )
         }
 
+        val scale = Levels.of(levelFlow.level).imageScale
+        for ((cid, car) in world.cars) {
+            val t = world.transforms[cid] ?: continue
+            var f = 0
+            if (car.hurtTimer > 0f) f = f or RenderBuffer.FLAG_FLASHING
+            when (car.state) {
+                CarState.DRIVEN -> f = f or RenderBuffer.FLAG_CAR_DRIVEN
+                CarState.WRECK  -> f = f or RenderBuffer.FLAG_CAR_WRECK
+                CarState.LOCKED -> f = f or RenderBuffer.FLAG_CAR_LOCKED
+                CarState.OPEN   -> Unit
+            }
+            renderBuffer.write(
+                kindOrdinal = RenderKind.CAR,
+                ex = t.x, ey = t.y, eRotation = car.heading,
+                eWidth = LevelCars.LOOK_SIZE[car.look * 2] * scale, eHeight = LevelCars.LOOK_SIZE[car.look * 2 + 1] * scale,
+                eHpPercent = car.hp.toFloat() / car.maxHp, eFlags = f, eSpriteId = car.look,
+                eLifetime = car.speed
+            )
+        }
+
         for (pkId in world.getPickupSnapshot()) {
             val t = world.transforms[pkId] ?: continue
             val r = world.renders[pkId]    ?: continue
@@ -1061,7 +1112,7 @@ class GameEngine(
             )
         }
 
-        if (playerId != -1) {
+        if (playerId != -1 && !isDriving()) {
             val t        = world.transforms[playerId]
             val r        = world.renders[playerId]
             val h        = world.healths[playerId]

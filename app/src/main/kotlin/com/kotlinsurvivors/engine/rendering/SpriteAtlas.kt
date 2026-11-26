@@ -33,7 +33,9 @@ class SpriteAtlas private constructor(
     val chest: Bitmap,
     val energyCan: Bitmap,
     val ground: Bitmap,
-    val decals: Bitmap
+    val decals: Bitmap,
+    /** cars.png: one cell of [LevelCars.CELL_W] x [LevelCars.CELL_H] per look, the car facing right. Optional: without it cars are plain boxes. */
+    val cars: Bitmap?
 ) {
     val playerCellW = player.width / PLAYER_COLUMNS
     val playerCellH = player.height / PLAYER_ROWS
@@ -83,7 +85,8 @@ class SpriteAtlas private constructor(
                 chest       = bitmap(context, "chest.png"),
                 energyCan   = bitmap(context, "energy_can.png"),
                 ground      = bitmap(context, "ground.png"),
-                decals      = bitmap(context, "decals.png")
+                decals      = bitmap(context, "decals.png"),
+                cars        = try { bitmap(context, "cars.png") } catch (e: Exception) { Log.w(TAG, "No car sprites", e); null }
             )
         } catch (e: Exception) {
             Log.e(TAG, "Could not load sprites, using shapes instead", e)
