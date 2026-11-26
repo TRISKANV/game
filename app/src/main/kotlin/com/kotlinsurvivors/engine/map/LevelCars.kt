@@ -11,6 +11,8 @@ object LevelCars {
     const val LOOKS = 7
     const val CELL_W = 100
     const val CELL_H = 44
+    /** Rows of the sheet: clean, battered, nearly dead. */
+    const val ROWS = 3
 
     val LEVEL1: FloatArray = floatArrayOf(
         960.0f, 774.0f, 0.0f, 0.0f, 896.0f, 744.0f, 1032.0f, 814.0f

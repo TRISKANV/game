@@ -551,7 +551,12 @@ class GameRenderer(
         if (sheet != null && look >= 0 && (look + 1) * LevelCars.CELL_W <= sheet.width) {
             val pixel = w / LevelCars.LOOK_SIZE[look * 2]
             val cw = LevelCars.CELL_W * pixel; val ch = LevelCars.CELL_H * pixel
-            srcRect.set(look * LevelCars.CELL_W, 0, (look + 1) * LevelCars.CELL_W, LevelCars.CELL_H)
+            val row = when {
+                wreck || buf.hpPercent[i] < DAMAGE_HEAVY_BELOW -> 2
+                buf.hpPercent[i] < DAMAGE_LIGHT_BELOW           -> 1
+                else                                            -> 0
+            }.coerceAtMost(sheet.height / LevelCars.CELL_H - 1)
+            srcRect.set(look * LevelCars.CELL_W, row * LevelCars.CELL_H, (look + 1) * LevelCars.CELL_W, (row + 1) * LevelCars.CELL_H)
             dstRect.set(sx - cw * 0.5f, sy - ch * 0.5f, sx + cw * 0.5f, sy + ch * 0.5f)
             val paint = when {
                 flags and RenderBuffer.FLAG_FLASHING != 0 -> flashPaint
@@ -564,17 +569,44 @@ class GameRenderer(
         }
         canvas.restore()
 
-        // Smoke from a burnt-out car, and from one that has little left
-        val hurt = buf.hpPercent[i] < SMOKING_BELOW_HEALTH
-        if (wreck || hurt) {
-            val t = System.currentTimeMillis() / 1000f
+        renderCarEngineDamage(sx, sy, w, c, s, buf.hpPercent[i], wreck, buf.spriteId[i] * 31 + i)
+    }
+
+    /**
+     * What comes out of the engine as the car gets worse: thin grey wisps first, then thick black smoke with
+     * sparks, then flames. The engine sits under the hood, at the nose of the car, so the effect follows the heading.
+     */
+    private fun DrawScope.renderCarEngineDamage(sx: Float, sy: Float, w: Float, c: Float, s: Float, hp: Float, wreck: Boolean, seed: Int) {
+        if (!wreck && hp >= DAMAGE_LIGHT_BELOW) return
+        val t = System.currentTimeMillis() / 1000f
+        val hx = sx + c * w * ENGINE_OFFSET; val hy = sy + s * w * ENGINE_OFFSET
+        val heavy = wreck || hp < DAMAGE_HEAVY_BELOW
+        val puffs = if (wreck) 6 else if (heavy) 5 else 3
+        val rise = if (heavy) 96f else 64f
+        for (k in 0 until puffs) {
+            val phase = (t * (if (heavy) 0.7f else 0.5f) + k.toFloat() / puffs + seed * 0.13f) % 1f
+            val alpha = ((1f - phase) * (if (wreck) 0.7f else if (heavy) 0.6f else 0.35f) * 255f).toInt()
+            val grey = if (heavy) 0x1C1C1C else 0x8A8A8A
+            drawCircle(Color((alpha shl 24) or grey), (if (heavy) 10f else 7f) + phase * (if (heavy) 26f else 16f),
+                Offset(hx + sin(k * 2.1f + t * 1.3f) * (6f + phase * 14f), hy - 8f - phase * rise))
+        }
+        if (heavy) {
+            // Sparks jump now and then; the flicker is a hash of the time so nothing is allocated
+            val tick = (t * 14f).toInt()
             for (k in 0 until 3) {
-                val phase = (t * 0.55f + k / 3f) % 1f
-                val alpha = ((1f - phase) * (if (wreck) 0.55f else 0.35f) * 255f).toInt()
-                drawCircle(Color((alpha shl 24) or 0x2A2A2A), 9f + phase * 20f,
-                    Offset(sx + sin(k * 2.1f + t) * 9f, sy - 10f - phase * 74f))
+                val hash = (tick * 7 + k * 13 + seed) and 7
+                if (hash < 3) {
+                    val ang = (tick * 1.7f + k * 2.3f)
+                    drawCircle(Color(if (hash == 0) 0xFFFFD25A else 0xFFFF8A2A), 2.2f,
+                        Offset(hx + cos(ang) * (8f + hash * 5f), hy + sin(ang) * (8f + hash * 4f)))
+                }
             }
-            if (wreck) drawCircle(Color(0x55FF8A2A), 8f + sin(t * 18f) * 3f, Offset(sx + 6f, sy - 4f))
+        }
+        if (wreck || hp < DAMAGE_FIRE_BELOW) {
+            val flick = sin(t * 19f + seed) * 0.5f + 0.5f
+            drawCircle(Color(0x66FF5A14), 15f + flick * 5f, Offset(hx, hy - 4f))
+            drawCircle(Color(0xAAFF9A2A), 9f + flick * 4f, Offset(hx, hy - 7f - flick * 4f))
+            drawCircle(Color(0xFFFFE08A), 4f + flick * 2f, Offset(hx, hy - 9f - flick * 6f))
         }
     }
 
@@ -1232,7 +1264,10 @@ class GameRenderer(
         const val NUMBER_CACHE_SIZE = 1000
         const val SHAKE_DURATION    = 0.25f
         /** A car with less health than this smokes. */
-        const val SMOKING_BELOW_HEALTH = 0.35f
+        const val DAMAGE_LIGHT_BELOW = 0.66f     // dents, scratches, a cracked windscreen, wisps of smoke
+        const val DAMAGE_HEAVY_BELOW = 0.33f     // crumpled hood, black smoke and sparks
+        const val DAMAGE_FIRE_BELOW  = 0.15f     // the engine is on fire
+        const val ENGINE_OFFSET      = 0.33f     // of the car's length, from its centre towards the nose
         const val SHAKE_STRENGTH    = 10f
         const val FPS_WINDOW_NANOS  = 500_000_000L
 
