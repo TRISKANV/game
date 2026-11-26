@@ -44,7 +44,8 @@ private val ToastDeep = Color(0xFF0A0A14)
  * events and unlocked achievements, so they all read as one family.
  *
  * It slides in from the left edge and, when it has a [lifetimeMs], slides back out just before that time
- * is over while a thin bar along the bottom runs out. Without a lifetime (the current objective) it stays.
+ * is over while a thin bar along the bottom runs out. Without a lifetime (the current objective) it stays;
+ * with [animate] off it is simply there from the first frame.
  */
 @Composable
 fun PixelToast(
@@ -54,6 +55,7 @@ fun PixelToast(
     accent     : Color,
     modifier   : Modifier = Modifier,
     lifetimeMs : Long?    = null,
+    animate    : Boolean  = true,
     maxWidth   : androidx.compose.ui.unit.Dp = 236.dp
 ) {
     val unit  = pixelUnitOf(2.dp)
@@ -62,10 +64,10 @@ fun PixelToast(
     val body  = lerp(accent, ToastDeep, 0.92f)
 
     // 0 = off the screen edge, 1 = in place
-    val slide = remember { Animatable(0f) }
+    val slide = remember { Animatable(if (animate) 0f else 1f) }
     val drain = remember { Animatable(1f) }
     LaunchedEffect(Unit) {
-        slide.animateTo(1f, tween(TOAST_SLIDE_MS, easing = FastOutSlowInEasing))
+        if (animate) slide.animateTo(1f, tween(TOAST_SLIDE_MS, easing = FastOutSlowInEasing))
         if (lifetimeMs != null) {
             val rest = (lifetimeMs - 2L * TOAST_SLIDE_MS).coerceAtLeast(0L)
             launch { drain.animateTo(0f, tween(rest.toInt(), easing = LinearEasing)) }
