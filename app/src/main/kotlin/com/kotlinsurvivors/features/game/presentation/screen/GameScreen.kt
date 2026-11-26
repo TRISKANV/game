@@ -155,17 +155,17 @@ fun GameScreen(
             onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
         }
 
-        // Banner for achievements unlocked during the run, one at a time.
-        var unlockedBanner by remember { mutableStateOf<Achievement?>(null) }
+        // Every notice (levels, events, achievements) waits in one queue and is drawn one at a time.
+        val notices = remember { NoticeQueue() }
         val sounds = LocalSoundEffects.current
         LaunchedEffect(viewModel) {
             viewModel.newAchievements.collect { achievement ->
                 sounds.play(Sound.ACHIEVEMENT)
-                unlockedBanner = achievement
-                delay(ACHIEVEMENT_BANNER_MS)
-                unlockedBanner = null
+                notices.post(achievementNotice(context, achievement))
             }
         }
+        LaunchedEffect(gameState.levelNotice) { gameState.levelNotice?.let { notices.post(levelNotice(context, it)) } }
+        LaunchedEffect(gameState.eventBanner) { gameState.eventBanner?.let { notices.post(eventNotice(context, it)) } }
 
         // ── Game Canvas ───────────────────────────────────────────────────
         Canvas(
@@ -203,61 +203,13 @@ fun GameScreen(
             )
         }
 
-        // ── Notifications: one column, so none can cover another ──────────────
-        // The objective of the siege stays on top; under it goes at most one passing notice
-        // (level, then event, then achievement), so they never pile up.
-        Column(
-            modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-        if (gameState.stationPhase == StationPhase.SIEGE || gameState.stationPhase == StationPhase.CHIEF || gameState.stationPhase == StationPhase.KEY) {
-            val (title, sub) = when (gameState.stationPhase) {
-                StationPhase.SIEGE -> stringResource(R.string.siege_counter, gameState.copsDefeated, StationSiege.GOAL) to stringResource(R.string.siege_counter_sub)
-                StationPhase.CHIEF -> stringResource(R.string.siege_chief_obj) to stringResource(R.string.siege_chief_obj_sub)
-                else               -> stringResource(R.string.siege_key_obj) to stringResource(R.string.siege_key_obj_sub)
-            }
-            PixelToast(
-                icon     = if (gameState.stationPhase == StationPhase.KEY) "mission" else "skull",
-                title    = title,
-                subtitle = sub,
-                accent   = Color(0xFFFF5A5A),
-                animate  = false,
-                modifier = Modifier
-            )
-        }
-
-
-        val notice = gameState.levelNotice
-        val banner = gameState.eventBanner
-        val unlocked = unlockedBanner
-        if (notice != null) {
-            val (icon, title, subtitle) = when (notice) {
-                LevelNotice.EXIT_OPEN -> Triple("mission", stringResource(R.string.level_exit_open), stringResource(R.string.level_exit_open_sub))
-                LevelNotice.LEVEL_TWO -> Triple("alert", stringResource(R.string.level_two_title), stringResource(R.string.level_two_sub))
-                LevelNotice.STATION   -> Triple("alert", stringResource(R.string.level_station_title), stringResource(R.string.level_station_sub))
-                LevelNotice.ALARM         -> Triple("alert", stringResource(R.string.level_alarm_title), stringResource(R.string.level_alarm_sub))
-                LevelNotice.CHIEF_AWAKE   -> Triple("skull", stringResource(R.string.level_chief_title), stringResource(R.string.level_chief_sub))
-                LevelNotice.KEY_DROPPED   -> Triple("mission", stringResource(R.string.level_key_title), stringResource(R.string.level_key_sub))
-                LevelNotice.STATION_OPEN  -> Triple("check", stringResource(R.string.level_station_open), stringResource(R.string.level_station_open_sub))
-            }
-            PixelToast(
-                icon     = icon,
-                title    = title,
-                subtitle = subtitle,
-                accent   = when (notice) {
-                    LevelNotice.EXIT_OPEN, LevelNotice.STATION_OPEN -> Color(0xFF7CE04A)
-                    LevelNotice.ALARM, LevelNotice.CHIEF_AWAKE      -> Color(0xFFFF5A5A)
-                    else                                            -> Color(0xFFFFD36B)
-                },
-                modifier = Modifier
-            )
-        } else if (banner != null) {
-            EventBanner(kind = banner)
-        } else if (unlocked != null) {
-            AchievementBanner(achievement = unlocked)
-        }
-        }
+        // ── Notifications: one slot under the health bars; the siege objective shows in it between notices ──
+        NotificationHost(
+            queue     = notices,
+            objective = objectiveNotice(context, gameState.stationPhase, gameState.copsDefeated, StationSiege.GOAL),
+            visible   = !gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp && gameState.chestReward == null,
+            modifier  = Modifier.align(Alignment.TopStart)
+        )
 
         // ── Laboratory panel ──────────────────────────────────────────────────
         if (laboratory && !gameState.isPaused && !gameState.isGameOver && !gameState.isPendingLevelUp) {
@@ -354,7 +306,6 @@ fun GameScreen(
 
 private const val HIT_VIBRATION_MS = 40L
 private const val LEVEL_UP_VIBRATION_MS = 70L
-private const val ACHIEVEMENT_BANNER_MS = 2200L
 
 private fun Modifier.joystickInput(
     viewModel    : GameViewModel,

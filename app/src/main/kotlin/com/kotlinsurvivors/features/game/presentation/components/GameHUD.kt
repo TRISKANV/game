@@ -191,18 +191,6 @@ fun GameHUD(
     }
 }
 
-/** Small banner shown for a few seconds when an achievement is unlocked. */
-@Composable
-fun AchievementBanner(achievement: Achievement, modifier: Modifier = Modifier) {
-    PixelToast(
-        icon     = achievement.icon,
-        title    = stringResource(R.string.hud_achievement_unlocked),
-        subtitle = achievement.localName(),
-        accent   = Color(0xFFFFD740),
-        modifier = modifier
-    )
-}
-
 /**
  * A pixel-art bar: ui_bar_<art>.png is the frame with its icon and empty track,
  * ui_bar_<art>_fill.png is cropped to the current value and drawn inside the track.
@@ -379,39 +367,6 @@ fun LevelUpBadge(count: Int, onOpen: () -> Unit, modifier: Modifier = Modifier) 
         )
         PixelIcon("star", 22.dp)
     }
-}
-
-/** Announces a special wave, a mini-boss or a cleared wave for a few seconds. */
-@Composable
-fun EventBanner(kind: EventKind, modifier: Modifier = Modifier) {
-    val accent = when (kind) {
-        EventKind.SWARM_RUSH, EventKind.DRONE_RAID, EventKind.SIEGE -> Color(0xFFFF7043)
-        EventKind.K9_PATROL   -> Color(0xFF4FC3F7)
-        EventKind.MINI_BOSS    -> Color(0xFFFFC107)
-        EventKind.WAVE_CLEARED -> Color(0xFF7CE04A)
-    }
-    val title = when (kind) {
-        EventKind.SWARM_RUSH   -> stringResource(R.string.event_swarm)
-        EventKind.DRONE_RAID   -> stringResource(R.string.event_drones)
-        EventKind.SIEGE        -> stringResource(R.string.event_siege)
-        EventKind.K9_PATROL    -> stringResource(R.string.event_k9)
-        EventKind.MINI_BOSS    -> stringResource(R.string.event_miniboss)
-        EventKind.WAVE_CLEARED -> stringResource(R.string.event_cleared)
-    }
-    val sub = when (kind) {
-        EventKind.MINI_BOSS    -> stringResource(R.string.event_miniboss_sub)
-        EventKind.WAVE_CLEARED -> stringResource(R.string.event_cleared_sub)
-        EventKind.K9_PATROL    -> stringResource(R.string.event_k9_sub)
-        else                   -> stringResource(R.string.event_wave_sub)
-    }
-    val icon = when (kind) {
-        EventKind.SWARM_RUSH, EventKind.SIEGE -> "alert"
-        EventKind.DRONE_RAID   -> "drone"
-        EventKind.K9_PATROL    -> "k9"
-        EventKind.MINI_BOSS    -> "skull"
-        EventKind.WAVE_CLEARED -> "check"
-    }
-    PixelToast(icon = icon, title = title, subtitle = sub, accent = accent, modifier = modifier)
 }
 
 /** The kill streak: its count, colored by tier, over a bar that empties as the streak runs out. */
