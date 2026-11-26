@@ -75,8 +75,8 @@ class GameEngine(
         const val WORLD_WIDTH    = 4096f
         const val WORLD_HEIGHT   = 4096f
         const val MAX_WEAPON_LEVEL = 8
-        private const val EVENT_BANNER_SECONDS = 3.5f
-        private const val LEVEL_NOTICE_SECONDS = 5f
+        private const val EVENT_BANNER_SECONDS = 2.5f
+        private const val LEVEL_NOTICE_SECONDS = 3.2f
         private const val STATION_LEVEL = 3
         private const val RIOT_SHARE = 0.18f
         private const val SIREN_EVERY_SECONDS = 2.4f

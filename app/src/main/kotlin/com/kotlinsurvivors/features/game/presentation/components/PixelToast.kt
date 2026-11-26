@@ -49,7 +49,7 @@ fun PixelToast(
     accent   : Color,
     modifier : Modifier = Modifier,
     animate  : Boolean  = true,
-    maxWidth : androidx.compose.ui.unit.Dp = 300.dp
+    maxWidth : androidx.compose.ui.unit.Dp = 270.dp
 ) {
     val unit  = pixelUnitOf(2.dp)
     val frame = lerp(accent, Color.Black, 0.35f)
@@ -69,7 +69,7 @@ fun PixelToast(
             }
             .widthIn(max = maxWidth)
             .pixelFrame(unit, frame, body, light)
-            .padding(horizontal = unit * 6, vertical = unit * 5),
+            .padding(horizontal = unit * 5, vertical = unit * 3),
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(unit * 5)
     ) {
@@ -83,17 +83,17 @@ fun PixelToast(
                 }
                 .padding(unit * 3),
             contentAlignment = Alignment.Center
-        ) { PixelIcon(icon, 26.dp) }
+        ) { PixelIcon(icon, 20.dp) }
 
         Column(verticalArrangement = Arrangement.spacedBy(unit)) {
             Text(
                 text  = title,
-                style = toastStyle(accent, 13.sp, FontWeight.Bold)
+                style = toastStyle(accent, 12.sp, FontWeight.Bold)
             )
             if (subtitle.isNotEmpty()) {
                 Text(
                     text  = subtitle,
-                    style = toastStyle(Color(0xFFF4F0E6), 11.sp, FontWeight.Normal)
+                    style = toastStyle(Color(0xFFF4F0E6), 10.sp, FontWeight.Normal)
                 )
             }
         }

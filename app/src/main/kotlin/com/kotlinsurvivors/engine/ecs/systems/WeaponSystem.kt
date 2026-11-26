@@ -22,6 +22,8 @@ class WeaponSystem(private val sounds: SoundEffects = SoundEffects.None) {
     private val toDestroy = ArrayList<Int>(128)
 
     private companion object {
+        /** Shooting weapons only fire when an enemy is this close, about what fits on the screen. */
+        const val SIGHT_RANGE       = 520f
         const val WHIP_LASH_GAP     = 0.08f   // seconds between lashes in different directions
         const val WHIP_REACH        = 130f
         const val WHIP_HALF_WIDTH   = 40f
@@ -56,6 +58,8 @@ class WeaponSystem(private val sounds: SoundEffects = SoundEffects.None) {
             val whipDirections = if (weapon.type == WeaponType.WHIP)
                 whipDirectionsWithEnemies(world, pt.x, pt.y, weapon.area * player.areaMultiplier) else 0
             if (weapon.type == WeaponType.WHIP && whipDirections == 0) { weapon.timer = 0f; continue }
+            // The shooting weapons hold their fire until an enemy is in sight, and stay ready until then.
+            if (firesAtSight(weapon.type) && !enemyInSight(world, pt.x, pt.y)) { weapon.timer = 0f; continue }
             // The chest weapons, like the whip, wait until there is something to hit.
             if (weapon.type.isChestOnly && !hasChestWeaponTarget(world, weapon, pt.x, pt.y, weapon.area * player.areaMultiplier)) {
                 weapon.timer = 0f; continue
@@ -94,6 +98,23 @@ class WeaponSystem(private val sounds: SoundEffects = SoundEffects.None) {
         updateProjectileLifetimes(world, dt)
         updateRenderTimers(world, dt)
         updateEnemyIFrames(world, dt)
+    }
+
+    private fun firesAtSight(type: WeaponType) = when (type) {
+        WeaponType.MAGIC_WAND, WeaponType.KNIFE, WeaponType.CROSS, WeaponType.FIRE_WAND,
+        WeaponType.AXE, WeaponType.LIGHTNING, WeaponType.SANTA_WATER -> true
+        else -> false
+    }
+
+    private fun enemyInSight(world: World, ox: Float, oy: Float): Boolean {
+        val r2 = SIGHT_RANGE * SIGHT_RANGE
+        for (eid in world.getEnemySnapshot()) {
+            if (world.healths[eid]?.isDead != false) continue
+            val t = world.transforms[eid] ?: continue
+            val dx = t.x - ox; val dy = t.y - oy
+            if (dx * dx + dy * dy <= r2) return true
+        }
+        return false
     }
 
     /** The sound a shot of [type] makes. The auras (garlic, bible) hit continuously and stay silent. */

@@ -203,20 +203,35 @@ fun GameScreen(
             )
         }
 
-        unlockedBanner?.let { achievement ->
-            AchievementBanner(
-                achievement = achievement,
-                modifier    = Modifier.align(Alignment.TopCenter).padding(top = 84.dp)
+        // ── Notifications: one column, so none can cover another ──────────────
+        // The objective of the siege stays on top; under it goes at most one passing notice
+        // (level, then event, then achievement), so they never pile up.
+        Column(
+            modifier = Modifier.align(Alignment.TopCenter).padding(top = 64.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+        if (gameState.stationPhase == StationPhase.SIEGE || gameState.stationPhase == StationPhase.CHIEF || gameState.stationPhase == StationPhase.KEY) {
+            val (title, sub) = when (gameState.stationPhase) {
+                StationPhase.SIEGE -> stringResource(R.string.siege_counter, gameState.copsDefeated, StationSiege.GOAL) to stringResource(R.string.siege_counter_sub)
+                StationPhase.CHIEF -> stringResource(R.string.siege_chief_obj) to stringResource(R.string.siege_chief_obj_sub)
+                else               -> stringResource(R.string.siege_key_obj) to stringResource(R.string.siege_key_obj_sub)
+            }
+            PixelToast(
+                icon     = if (gameState.stationPhase == StationPhase.KEY) "mission" else "skull",
+                title    = title,
+                subtitle = sub,
+                accent   = Color(0xFFFF5A5A),
+                animate  = false,
+                modifier = Modifier
             )
         }
 
-        // ── A special wave or a mini-boss was just announced ──────────────────
-        gameState.eventBanner?.let { kind ->
-            EventBanner(kind = kind, modifier = Modifier.align(Alignment.TopCenter).padding(top = 96.dp))
-        }
 
-        // ── The way through the levels ─────────────────────────────────────────
-        gameState.levelNotice?.let { notice ->
+        val notice = gameState.levelNotice
+        val banner = gameState.eventBanner
+        val unlocked = unlockedBanner
+        if (notice != null) {
             val (icon, title, subtitle) = when (notice) {
                 LevelNotice.EXIT_OPEN -> Triple("mission", stringResource(R.string.level_exit_open), stringResource(R.string.level_exit_open_sub))
                 LevelNotice.LEVEL_TWO -> Triple("alert", stringResource(R.string.level_two_title), stringResource(R.string.level_two_sub))
@@ -235,25 +250,13 @@ fun GameScreen(
                     LevelNotice.ALARM, LevelNotice.CHIEF_AWAKE      -> Color(0xFFFF5A5A)
                     else                                            -> Color(0xFFFFD36B)
                 },
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 150.dp)
+                modifier = Modifier
             )
+        } else if (banner != null) {
+            EventBanner(kind = banner)
+        } else if (unlocked != null) {
+            AchievementBanner(achievement = unlocked)
         }
-
-        // ── The siege of the police station: what is left to do ───────────────
-        if (gameState.stationPhase == StationPhase.SIEGE || gameState.stationPhase == StationPhase.CHIEF || gameState.stationPhase == StationPhase.KEY) {
-            val (title, sub) = when (gameState.stationPhase) {
-                StationPhase.SIEGE -> stringResource(R.string.siege_counter, gameState.copsDefeated, StationSiege.GOAL) to stringResource(R.string.siege_counter_sub)
-                StationPhase.CHIEF -> stringResource(R.string.siege_chief_obj) to stringResource(R.string.siege_chief_obj_sub)
-                else               -> stringResource(R.string.siege_key_obj) to stringResource(R.string.siege_key_obj_sub)
-            }
-            PixelToast(
-                icon     = if (gameState.stationPhase == StationPhase.KEY) "mission" else "skull",
-                title    = title,
-                subtitle = sub,
-                accent   = Color(0xFFFF5A5A),
-                animate  = false,
-                modifier = Modifier.align(Alignment.TopCenter).padding(top = 88.dp)
-            )
         }
 
         // ── Laboratory panel ──────────────────────────────────────────────────
@@ -340,7 +343,7 @@ fun GameScreen(
 
 private const val HIT_VIBRATION_MS = 40L
 private const val LEVEL_UP_VIBRATION_MS = 70L
-private const val ACHIEVEMENT_BANNER_MS = 3000L
+private const val ACHIEVEMENT_BANNER_MS = 2200L
 
 private fun Modifier.joystickInput(
     viewModel    : GameViewModel,
