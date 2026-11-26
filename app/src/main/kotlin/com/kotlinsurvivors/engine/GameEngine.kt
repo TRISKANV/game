@@ -78,6 +78,7 @@ class GameEngine(
         private const val EVENT_BANNER_SECONDS = 3.5f
         private const val LEVEL_NOTICE_SECONDS = 5f
         private const val STATION_LEVEL = 3
+        private const val RIOT_SHARE = 0.18f
         private const val SIREN_EVERY_SECONDS = 2.4f
         private const val REINFORCEMENT_MIN_DISTANCE = 380f
         private const val STATION_RETURN_BELOW = 110f      // where the player stands when he comes out of the station
@@ -524,7 +525,9 @@ class GameEngine(
 
         try {
             if (levelFlow.level == STATION_LEVEL) updateStation(dt)
-            if (levelFlow.level != STATION_LEVEL) {
+            spawnSystem.riotShare = if (levelFlow.level == 2 && siege.phase == StationPhase.OPEN) RIOT_SHARE else 0f
+            settleRiots()
+            if (levelFlow.level != STATION_LEVEL && levelIsHostile()) {
                 if (!laboratory && spawnSystem.update(world, dt, elapsedTime).bossSpawned) sounds.play(Sound.BOSS_APPEAR)
                 eventDirector.update(world, dt, elapsedTime, directorEvents)
                 announceEvents()
@@ -652,6 +655,22 @@ class GameEngine(
         CrashLogger.log("LEVEL $to entered from $from at ${elapsedTime.toInt()}s, map=${if (map != null) "loaded" else "missing"}")
     }
 
+    /** Breaks the shield of any riot officer whose shield has been used up, with a sound and a flash. */
+    private fun settleRiots() {
+        for ((eid, enemy) in world.enemies) {
+            if (enemy.type != EnemyType.RIOT || !enemy.shieldUp) continue
+            val health = world.healths[eid] ?: continue
+            if (RiotRules.settle(enemy, health)) {
+                sounds.play(Sound.SHIELD_BREAK)
+                world.renders[eid]?.flashTimer = 0.3f
+            }
+        }
+    }
+
+    /** Level 2 is peaceful on arrival: enemies only come once the station's siege is over (the key is taken). */
+    private fun levelIsHostile(): Boolean =
+        laboratory || levelFlow.level != 2 || siege.phase == StationPhase.OPEN
+
     /** Whoever is in the station when the player comes in: the chief asleep on his sofa and the officers on their beats. */
     private fun spawnStationStaff() {
         if (siege.phase == StationPhase.OPEN) return                  // already cleared: the station stays empty
@@ -749,6 +768,7 @@ class GameEngine(
                 levelNotice      = LevelNotice.STATION_OPEN
                 levelNoticeTimer = LEVEL_NOTICE_SECONDS
                 sounds.play(Sound.KEY_GET)
+                eventDirector.restartSchedule(elapsedTime)   // the plaza stops being peaceful once the station is cleared
                 CrashLogger.log("KEY taken at ${elapsedTime.toInt()}s: the street door is open")
             }
             else -> Unit
@@ -967,7 +987,7 @@ class GameEngine(
             var heading = t.rotation
             var sincePunch = 0f
             var cooldown = 1f
-            if (enemy != null && (enemy.type == EnemyType.BASIC || enemy.type == EnemyType.DOG || enemy.type == EnemyType.COP || enemy.type == EnemyType.CHIEF)) {
+            if (enemy != null && (enemy.type == EnemyType.BASIC || enemy.type == EnemyType.DOG || enemy.type == EnemyType.COP || enemy.type == EnemyType.CHIEF || enemy.type == EnemyType.RIOT)) {
                 val v = world.velocities[eid]
                 val vx = v?.vx ?: 0f
                 val vy = v?.vy ?: 0f
@@ -984,7 +1004,8 @@ class GameEngine(
                 if (enemy.type == EnemyType.COP && enemy.patrol == PatrolState.WALK) heading = enemy.patrolDir
                 if (enemy.shouting && enemy.patrol == PatrolState.ALERT) f = f or RenderBuffer.FLAG_SHOUTING
                 if (enemy.asleep) f = f or RenderBuffer.FLAG_SLEEPING
-                if ((enemy.type == EnemyType.BASIC || enemy.type == EnemyType.COP || enemy.type == EnemyType.CHIEF) && nearPlayer && enemy.attackTimer <= 0f) f = f or RenderBuffer.FLAG_WINDING_UP
+                if (enemy.shieldUp) f = f or RenderBuffer.FLAG_SHIELDED
+                if ((enemy.type == EnemyType.BASIC || enemy.type == EnemyType.COP || enemy.type == EnemyType.CHIEF || (enemy.type == EnemyType.RIOT && !enemy.shieldUp)) && nearPlayer && enemy.attackTimer <= 0f) f = f or RenderBuffer.FLAG_WINDING_UP
                 if (enemy.patrol == PatrolState.ALERT) f = f or RenderBuffer.FLAG_ALERTED
                 if (enemy.patrol == PatrolState.WALK) f = f or RenderBuffer.FLAG_STROLLING
                 if (enemy.type == EnemyType.DOG && vx * vx + vy * vy > DOG_RUN_SPEED_SQ) f = f or RenderBuffer.FLAG_RUNNING

@@ -699,6 +699,7 @@ class GameRenderer(
         if (typeId == EnemyType.BASIC.ordinal) { renderGuard(a, buf, i, sx, sy, flashing, EnemyType.BASIC); return }
         if (typeId == EnemyType.COP.ordinal)   { renderGuard(a, buf, i, sx, sy, flashing, EnemyType.COP); return }
         if (typeId == EnemyType.CHIEF.ordinal) { renderGuard(a, buf, i, sx, sy, flashing, EnemyType.CHIEF); return }
+        if (typeId == EnemyType.RIOT.ordinal)  { renderGuard(a, buf, i, sx, sy, flashing, EnemyType.RIOT); return }
         if (typeId == EnemyType.DOG.ordinal)   { renderDog(a, buf, i, sx, sy, flashing); return }
 
         drawShadow(sx, sy + h * 0.5f, w * 0.8f)
@@ -720,14 +721,21 @@ class GameRenderer(
         val sheet = a.enemies[kind.ordinal]
         val cellW = sheet.width  / SpriteAtlas.GUARD_COLUMNS
         // the chief's sheet has one more row: him asleep on his sofa
-        val rows  = if (kind == EnemyType.CHIEF) SpriteAtlas.GUARD_ROWS + 1 else SpriteAtlas.GUARD_ROWS
+        // the riot officer's sheet holds two sets of eight rows: with his shield, and without it
+        val rows  = when (kind) {
+            EnemyType.CHIEF -> SpriteAtlas.GUARD_ROWS + 1
+            EnemyType.RIOT  -> SpriteAtlas.GUARD_ROWS * 2
+            else            -> SpriteAtlas.GUARD_ROWS
+        }
         val cellH = sheet.height / rows
         val h     = buf.width[i] * GUARD_SPRITE_SCALE
         val w     = h * cellW / cellH
         val now   = System.currentTimeMillis()
 
         val asleep = buf.hasFlag(i, RenderBuffer.FLAG_SLEEPING)
-        val row = if (asleep) SpriteAtlas.GUARD_ROWS else facingRow(buf.rotation[i])
+        val unshielded = kind == EnemyType.RIOT && !buf.hasFlag(i, RenderBuffer.FLAG_SHIELDED)
+        val row = if (asleep) SpriteAtlas.GUARD_ROWS
+                  else facingRow(buf.rotation[i]) + if (unshielded) SpriteAtlas.GUARD_ROWS else 0
 
         val sincePunch = buf.lifetime[i]
         val punching   = sincePunch < RenderBuffer.GUARD_PUNCH_SECONDS

@@ -1,5 +1,6 @@
 package com.kotlinsurvivors.engine.ecs
 
+import com.kotlinsurvivors.engine.ecs.systems.RiotRules
 import com.kotlinsurvivors.engine.ecs.components.*
 import kotlin.math.atan2
 import kotlin.math.cos
@@ -82,6 +83,12 @@ object EntityFactory {
             coinDropChance = cfg.coinChance
         )
 
+        if (type == EnemyType.RIOT) {
+            val body = cfg.hp
+            val shield = RiotRules.shieldHp(waveMultiplier)
+            world.healths[id]?.let { it.max = body + shield; it.current = body + shield }
+            world.enemies[id]?.let { it.bodyHp = body; it.shieldUp = true }
+        }
         if (type == EnemyType.BOSS_SHADOW || type == EnemyType.BOSS_GOLEM || type == EnemyType.BOSS_NECROMANCER) {
             world.bosses[id] = BossComponent(type = type)
         }
@@ -164,6 +171,7 @@ object EntityFactory {
             EnemyType.BOSS_GOLEM  -> EnemyCfg(hp(800), 64f, dmg(45), 300, 1f, RenderShape.RECT,   0xFF8D6E63, 0xFF3E2723, 10f, 0x338D6E63)
             EnemyType.BOSS_NECROMANCER -> EnemyCfg(hp(600), 48f, dmg(25), 250, 1f, RenderShape.TRIANGLE, 0xFF26C6DA, 0xFF006064, 18f, 0x5526C6DA)
             EnemyType.COP   -> EnemyCfg(hp(40), 16f, dmg(10), 8, 0.12f, RenderShape.CIRCLE, 0xFF3F51B5, 0xFF1A237E, 0f, 0x00000000)
+            EnemyType.RIOT  -> EnemyCfg(hp(45), 17f, dmg(16), 14, 0.2f, RenderShape.CIRCLE, 0xFF4A3F9C, 0xFF2A2460, 0f, 0x00000000)
             EnemyType.CHIEF -> EnemyCfg(hp(450), 26f, dmg(22), 160, 1f, RenderShape.CIRCLE, 0xFF3F51B5, 0xFF1A237E, 0f, 0x00000000)
             EnemyType.DOG   -> EnemyCfg(hp(14), 11f, dmg(6), 4, 0.06f, RenderShape.CIRCLE, 0xFF8D6E63, 0xFF3E2723, 0f, 0x00000000)
         }

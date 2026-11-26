@@ -147,7 +147,9 @@ enum class EnemyType {
     /** A police officer inside the station: walks a beat until he sees the player or the alarm goes, then fights like the guard. */
     COP,
     /** The police chief: fat, big and asleep in his office until the siege of the station reaches its point. */
-    CHIEF;
+    CHIEF,
+    /** Riot-control officer: a shield soaks the first hits, then he breaks into a run and hits hard. */
+    RIOT;
 
     val isBoss: Boolean
         get() = this == BOSS_SHADOW || this == BOSS_GOLEM || this == BOSS_NECROMANCER
@@ -200,7 +202,10 @@ data class EnemyComponent(
     /** The officer who shouts when the alarm goes in the station; he gets a speech bubble. */
     var shouting: Boolean = false,
     /** The police chief while he sleeps: he does not move and nothing wakes him but a hit or the siege. */
-    var asleep: Boolean = false
+    var asleep: Boolean = false,
+    /** Riot officer: his health is [bodyHp] plus the shield on top; the shield is up while health is above [bodyHp]. */
+    var bodyHp: Int = 0,
+    var shieldUp: Boolean = false
 ) : Component
 
 // ─────────────────────────────────────────────

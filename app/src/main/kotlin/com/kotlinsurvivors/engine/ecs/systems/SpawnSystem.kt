@@ -40,6 +40,9 @@ class SpawnSystem(
                                      EnemyType.FAST,  EnemyType.FAST)
     private val bossList   = arrayOf(EnemyType.BOSS_SHADOW, EnemyType.BOSS_GOLEM, EnemyType.BOSS_NECROMANCER)
 
+    /** Chance that an ordinary spawn is a riot officer (level 2, once the station is cleared). */
+    var riotShare: Float = 0f
+
     /** Collision grid of the current level; enemies only appear on free ground. */
     var levelMap: LevelMap? = null
 
@@ -116,6 +119,7 @@ class SpawnSystem(
     }
 
     private fun pickEnemyType(elapsed: Float): EnemyType {
+        if (riotShare > 0f && Random.nextFloat() < riotShare) return EnemyType.RIOT
         val pool = when {
             elapsed < 30f  -> poolEarly
             elapsed < 120f -> poolMid

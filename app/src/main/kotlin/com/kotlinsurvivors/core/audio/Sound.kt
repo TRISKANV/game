@@ -41,6 +41,7 @@ enum class Sound(val file: String, val minGapMs: Long = 0L, val volume: Float = 
     SHUTTER       ("shutter",        0,   1f),
     CHIEF_WAKE    ("chief_wake",     0,   1f),
     KEY_GET       ("key_get",        0,   1f),
+    SHIELD_BREAK  ("shield_break",   0,   1f),
 
     // Kill streak: one blip per tier, each higher than the last
     COMBO_1       ("combo_1",        0,   0.7f),
