@@ -260,6 +260,13 @@
     <string name="siege_chief_obj_sub">He has the key</string>
     <string name="siege_key_obj">GRAB THE KEY</string>
     <string name="siege_key_obj_sub">It fell where he did</string>
+    <string name="level_cell_key_title">THE CELL KEY!</string>
+    <string name="level_cell_key_sub">Take it to the cells and let the dog out</string>
+    <string name="level_dog_locked_title">A POLICE DOG, LOCKED UP</string>
+    <string name="level_dog_locked_sub">Find the cell key somewhere in the station</string>
+    <string name="level_dog_title">K9 FREE!</string>
+    <string name="level_dog_sub">He fights at your side from now on</string>
+    <string name="lab_call_dog">Call the K9</string>
     <string name="lab_wake_chief">Wake the chief</string>
     <string name="car_lockpick">PICK LOCK</string>
     <string name="car_enter">GET IN</string>

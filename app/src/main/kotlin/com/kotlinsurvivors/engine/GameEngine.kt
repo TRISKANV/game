@@ -15,6 +15,7 @@ import com.kotlinsurvivors.engine.ecs.systems.*
 import com.kotlinsurvivors.engine.input.VirtualJoystick
 import com.kotlinsurvivors.engine.input.JoystickState
 import com.kotlinsurvivors.engine.ecs.components.CarState
+import com.kotlinsurvivors.engine.ecs.components.CompanionState
 import com.kotlinsurvivors.engine.map.LevelCars
 import com.kotlinsurvivors.features.game.domain.model.CarPrompt
 import com.kotlinsurvivors.engine.map.Level1
@@ -43,6 +44,7 @@ import com.kotlinsurvivors.engine.lab.LabActions
 import com.kotlinsurvivors.engine.lab.LabCommand
 import com.kotlinsurvivors.engine.rendering.Facing
 import kotlin.math.abs
+import kotlin.math.hypot
 import kotlin.math.atan2
 import kotlin.random.Random
 import kotlin.math.PI
@@ -80,6 +82,8 @@ class GameEngine(
         const val MAX_WEAPON_LEVEL = 8
         private const val EVENT_BANNER_SECONDS = 2.5f
         private const val LEVEL_NOTICE_SECONDS = 3.2f
+        private const val CELL_HINT_REACH      = 190f      // close enough to see the dog behind the bars
+        private const val CELL_DOOR_REACH      = 70f       // how close to the bars the player must stand with the key
         private const val STATION_LEVEL = 3
         private const val RIOT_SHARE = 0.18f
         private const val SIREN_EVERY_SECONDS = 2.4f
@@ -101,6 +105,7 @@ class GameEngine(
 
     private val movementSystem   = MovementSystem(WORLD_WIDTH, WORLD_HEIGHT)
     private val carSystem        = CarSystem(sounds)
+    private val companionSystem  = CompanionSystem()
     private val collisionSystem  = CollisionSystem()
     private val weaponSystem     = WeaponSystem(sounds)
     private val spawnSystem      = SpawnSystem(viewportWidth, viewportHeight)
@@ -120,6 +125,12 @@ class GameEngine(
     /** The siege of the station: the alarm, the quota of officers, the chief and the key. */
     private val siege = StationSiege()
     private var chiefId = -1
+
+    /** The police dog: the entity while he exists (caged or free), whether the player holds the cell key, whether he has been let out. */
+    private var companionId = -1
+    private var cellKeyHeld = false
+    private var dogFreed = false
+    private var dogHintShown = false
     private var chiefX = 0f
     private var chiefY = 0f
     private var sirenTimer = 0f
@@ -389,6 +400,11 @@ class GameEngine(
         movementSystem.copRoutes.clear()
         siege.reset()
         chiefId              = -1
+        companionId          = -1
+        cellKeyHeld          = false
+        dogFreed             = false
+        dogHintShown         = false
+        shutDogCell(true)
         sirenTimer           = 0f
         lockStationDoor(false)
         levelNotice          = null
@@ -528,6 +544,8 @@ class GameEngine(
             Log.e(TAG, world.getDiagnosticString()); throw e
         }
 
+        companionSystem.update(world, dt, movementSystem.levelMap, frameEvents)
+        if (companionSystem.consumeBites() > 0) sounds.play(Sound.DOG_BARK)
         if (laboratory && labInvincible) LabActions.healFull(world)
         // Deaths from the whip, auras and the like only get their event here; count them with the rest.
         experienceSystem.reapUnreportedKills(world, frameEvents)
@@ -646,7 +664,10 @@ class GameEngine(
         val gone = ArrayList<Int>(world.enemies.size + world.projectiles.size + world.pickups.size + 64)
         gone.addAll(world.enemies.keys); gone.addAll(world.projectiles.keys); gone.addAll(world.pickups.keys)
         gone.addAll(world.particles.keys); gone.addAll(world.blasts.keys); gone.addAll(world.damageNumbers.keys)
+        // the cell key is a pickup of the station and the caged dog stays in his cell; a dog that is out comes along
+        if (!dogFreed) companionId = -1
         for (id in gone) if (id != pid) world.destroyEntity(id)
+        if (!dogFreed) for (id in world.companions.keys.toList()) world.destroyEntity(id)
         world.flushDestroyed()
         movementSystem.copRoutes.clear()
 
@@ -672,11 +693,13 @@ class GameEngine(
         }
         if (seamless) seamCount++
         world.transforms[pid]?.let { it.x = x; it.y = y }
+        if (dogFreed && world.companions.containsKey(companionId)) companionSystem.placeNear(world, companionId, map, x, y)
         if (!seamless) world.velocities[pid]?.let { it.vx = 0f; it.vy = 0f }
         directorEvents.clear()
         eventBanner = null
         eventBannerTimer = 0f
         if (to == STATION_LEVEL) {
+            spawnCellDog()
             posterTimer = 0f
             copsAlarmed = false
             spawnStationStaff()
@@ -765,6 +788,17 @@ class GameEngine(
 
     /** What happens in the station from one frame to the next while the siege goes on. */
     private fun updateStation(dt: Float) {
+        if (!dogFreed && levelFlow.phase == LevelFlow.Phase.PLAYING) {
+            val pt = world.transforms[world.getPlayerEntity()]
+            val near = if (pt == null) Float.MAX_VALUE else hypot(pt.x - Level3.CELL_DOOR_X, pt.y - Level3.CELL_DOOR_Y)
+            if (cellKeyHeld && near < CELL_DOOR_REACH) freeDog()
+            else if (!cellKeyHeld && !dogHintShown && near < CELL_HINT_REACH) {
+                dogHintShown = true
+                levelNotice      = LevelNotice.DOG_LOCKED
+                levelNoticeTimer = LEVEL_NOTICE_SECONDS
+                sounds.play(Sound.DOG_BARK)
+            }
+        }
         val chief = world.enemies[chiefId]
         if (chief != null) {
             world.transforms[chiefId]?.let { chiefX = it.x; chiefY = it.y }
@@ -812,7 +846,13 @@ class GameEngine(
                 }
                 else -> Unit
             }
-            is GameEvent.PickupCollected -> if (event.type == PickupType.KEY && siege.keyTaken()) {
+            is GameEvent.PickupCollected -> if (event.type == PickupType.CELL_KEY) {
+                cellKeyHeld = true
+                levelNotice      = LevelNotice.CELL_KEY
+                levelNoticeTimer = LEVEL_NOTICE_SECONDS
+                sounds.play(Sound.KEY_GET)
+                CrashLogger.log("CELL KEY taken at ${elapsedTime.toInt()}s")
+            } else if (event.type == PickupType.KEY && siege.keyTaken()) {
                 lockStationDoor(false)
                 levelNotice      = LevelNotice.STATION_OPEN
                 levelNoticeTimer = LEVEL_NOTICE_SECONDS
@@ -822,6 +862,53 @@ class GameEngine(
             }
             else -> Unit
         }
+    }
+
+    /** The dog of the station, in his cell, and the key that opens it lying in the locker room, until the player has them. */
+    private fun spawnCellDog() {
+        if (dogFreed) return
+        shutDogCell(true)
+        companionId = EntityFactory.createCompanion(world, Level3.CELL_DOG_X, Level3.CELL_DOG_Y, caged = true)
+        world.transforms[companionId]?.let { it.x = Level3.CELL_DOG_X; it.y = Level3.CELL_DOG_Y }
+        world.companions[companionId]?.heading = (PI / 2).toFloat()          // looking out of the bars
+        if (!cellKeyHeld) {
+            val key = EntityFactory.createPickup(world, PickupType.CELL_KEY, Level3.CELL_KEY_X, Level3.CELL_KEY_Y)
+            world.transforms[key]?.let { it.x = Level3.CELL_KEY_X; it.y = Level3.CELL_KEY_Y }   // not scattered: it is in a fixed place
+        }
+    }
+
+    /** Closes or opens the inside of the dog's cell in the collision map. */
+    private fun shutDogCell(shut: Boolean) {
+        val map = stationMap ?: return
+        map.setRect(Level3.CELL_FREE_X0, Level3.CELL_FREE_Y0, Level3.CELL_FREE_X1, Level3.CELL_FREE_Y1, shut)
+        if (levelFlow.level == STATION_LEVEL) movementSystem.levelMap = map
+    }
+
+    /** The key turns: the cell opens and the dog is the player's from now on, in every level of the run. */
+    private fun freeDog() {
+        val comp = world.companions[companionId] ?: return
+        dogFreed = true
+        shutDogCell(false)
+        comp.state = CompanionState.FOLLOW
+        comp.hurtTimer = 1f
+        levelNotice      = LevelNotice.DOG_FREED
+        levelNoticeTimer = LEVEL_NOTICE_SECONDS
+        sounds.play(Sound.KEY_GET)
+        sounds.play(Sound.DOG_BARK)
+        CrashLogger.log("K9 freed at ${elapsedTime.toInt()}s")
+    }
+
+    /** Laboratory: a dog at the player's side, whatever level this is. */
+    private fun labCallDog(pid: Int) {
+        val pt = world.transforms[pid] ?: return
+        if (world.companions.containsKey(companionId)) {
+            world.companions[companionId]?.let { it.state = CompanionState.FOLLOW; it.hp = it.maxHp }
+        } else {
+            companionId = EntityFactory.createCompanion(world, pt.x, pt.y, caged = false)
+        }
+        dogFreed = true
+        shutDogCell(false)
+        companionSystem.placeNear(world, companionId, movementSystem.levelMap, pt.x, pt.y)
     }
 
     /** The officers of the station, each on his beat. */
@@ -858,6 +945,7 @@ class GameEngine(
                 is LabCommand.OpenExit      -> openExit()
                 is LabCommand.GoToLevel2    -> levelFlow.startTrip()
                 is LabCommand.GoToStation   -> levelFlow.startTripToStation()
+                is LabCommand.CallDog       -> labCallDog(pid)
                 is LabCommand.WakeChief     -> if (levelFlow.level == STATION_LEVEL) wakeChiefEarly()
                 is LabCommand.ClearEnemies  -> LabActions.clearEnemies(world)
                 is LabCommand.HealFull      -> LabActions.healFull(world)
@@ -912,6 +1000,7 @@ class GameEngine(
                     PickupType.BOMB   -> sounds.play(Sound.ENEMY_BLAST)
                     PickupType.CHEST  -> Unit   // sounds when it finishes opening
                     PickupType.KEY    -> Unit   // the siege makes its own sound
+                    PickupType.CELL_KEY -> Unit // the engine plays it when the key is taken
                 }
                 is GameEvent.PlayerHit -> sounds.play(Sound.PLAYER_HURT)
                 else -> Unit
@@ -1100,6 +1189,30 @@ class GameEngine(
             )
         }
 
+        // The police dog: drawn like the guard dog (the picture is the same), but he never has a leash or a health bar.
+        val driver = (world.players[playerId]?.drivingCar ?: -1) >= 0
+        for ((did, dog) in world.companions) {
+            val t = world.transforms[did] ?: continue
+            val r = world.renders[did] ?: continue
+            if (driver && dog.state != CompanionState.CAGED) continue          // he rides along in the car
+            var f = 0
+            if (dog.vx * dog.vx + dog.vy * dog.vy > FACING_MIN_SPEED_SQ) f = f or RenderBuffer.FLAG_MOVING
+            if (dog.vx * dog.vx + dog.vy * dog.vy > DOG_RUN_SPEED_SQ) f = f or RenderBuffer.FLAG_RUNNING
+            // hurt and lying down: he blinks
+            val blinkOff = dog.state == CompanionState.DOWNED && (elapsedTime * 4f).toInt() % 2 == 0
+            if (r.flashTimer > 0f || (dog.state == CompanionState.DOWNED && !blinkOff)) f = f or RenderBuffer.FLAG_FLASHING
+            renderBuffer.write(
+                kindOrdinal  = RenderKind.ENEMY,
+                ex = t.x, ey = t.y, eRotation = dog.heading,
+                eShape = r.shape, eColor = r.color, eSecColor = r.secondaryColor,
+                eWidth = r.width, eHeight = r.height,
+                eFlashTimer = r.flashTimer, eHpPercent = 1f, eFlags = f,
+                eLifetime = dog.sinceBite, eMaxLifetime = 1f,
+                eSpriteId = EnemyType.DOG.ordinal
+            )
+        }
+
+        renderBuffer.cellOpen = dogFreed
         val scale = Levels.of(levelFlow.level).imageScale
         for ((cid, car) in world.cars) {
             val t = world.transforms[cid] ?: continue

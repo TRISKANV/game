@@ -111,6 +111,9 @@ fun levelNotice(context: Context, notice: LevelNotice): Notice = when (notice) {
     LevelNotice.ALARM        -> make("level_alarm", "alert", R.string.level_alarm_title, R.string.level_alarm_sub, Red, context, urgent = true)
     LevelNotice.CHIEF_AWAKE  -> make("level_chief", "skull", R.string.level_chief_title, R.string.level_chief_sub, Red, context, urgent = true)
     LevelNotice.KEY_DROPPED  -> make("level_key", "mission", R.string.level_key_title, R.string.level_key_sub, Gold, context)
+    LevelNotice.CELL_KEY     -> make("level_cell_key", "mission", R.string.level_cell_key_title, R.string.level_cell_key_sub, Blue, context)
+    LevelNotice.DOG_LOCKED   -> make("level_dog_locked", "alert", R.string.level_dog_locked_title, R.string.level_dog_locked_sub, Gold, context)
+    LevelNotice.DOG_FREED    -> make("level_dog", "check", R.string.level_dog_title, R.string.level_dog_sub, Green, context)
     LevelNotice.STATION_OPEN -> make("level_station_open", "check", R.string.level_station_open, R.string.level_station_open_sub, Green, context)
 }
 

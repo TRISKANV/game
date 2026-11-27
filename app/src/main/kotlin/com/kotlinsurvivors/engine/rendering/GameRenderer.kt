@@ -235,6 +235,7 @@ class GameRenderer(
             screenH = size.height
 
             pickArt(buf.level, buf.seamCount)
+            cellOpenNow = buf.cellOpen
 
             // Smooth camera follow
             var targetCX = buf.cameraTargetX - viewportWidth  * 0.5f
@@ -419,7 +420,17 @@ class GameRenderer(
             dstRect.set(bx, by, bx + barrier.width * scale, by + barrier.height * scale)
             canvas.drawBitmap(barrier, null, dstRect, spritePaint)
         }
+        // The police dog's cell, once the key has turned: the open gate is drawn over the bars.
+        val open = art.cellOpen
+        if (open != null && art.info.number == 3 && cellOpenNow) {
+            val ox = Level3.CELL_OPEN_DRAW_X - camX
+            val oy = Level3.CELL_OPEN_DRAW_Y - camY
+            dstRect.set(ox, oy, ox + open.width * scale, oy + open.height * scale)
+            canvas.drawBitmap(open, null, dstRect, spritePaint)
+        }
     }
+
+    private var cellOpenNow = false
 
     private fun stationShut(): Boolean =
         stationPhase == StationPhase.SIEGE || stationPhase == StationPhase.CHIEF || stationPhase == StationPhase.KEY
@@ -665,9 +676,11 @@ class GameRenderer(
             renderEnergyCan(sprites.energyCan, sx, sy, if (id == PickupType.HEALTH_LARGE.ordinal) CAN_LARGE_SCALE else CAN_SMALL_SCALE)
             return
         }
-        if (sprites != null && id >= 0 && id * SpriteAtlas.ITEM_CELL < sprites.pickups.width) {
+        // the cell key is the same little key as the one of the street door; its cyan glow tells them apart
+        val cell = if (id == PickupType.CELL_KEY.ordinal) PickupType.KEY.ordinal else id
+        if (sprites != null && cell >= 0 && cell * SpriteAtlas.ITEM_CELL < sprites.pickups.width) {
             val size = sz * PICKUP_SPRITE_SCALE
-            drawCell(sprites.pickups, id, 0, SpriteAtlas.ITEM_CELL, sprites.pickups.height, sx, sy, size, size, spritePaint)
+            drawCell(sprites.pickups, cell, 0, SpriteAtlas.ITEM_CELL, sprites.pickups.height, sx, sy, size, size, spritePaint)
             return
         }
         drawCircle(Color(buf.getColor(i)), sz * 0.5f, Offset(sx, sy))

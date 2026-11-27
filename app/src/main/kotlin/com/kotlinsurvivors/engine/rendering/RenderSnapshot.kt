@@ -49,6 +49,9 @@ class RenderBuffer {
     var level: Int = 1
     var seamCount: Int = 0
 
+    /** True once the police dog's cell has been opened (its picture changes). */
+    var cellOpen: Boolean = false
+
     // Camera target (for smooth follow)
     var cameraTargetX: Float = 0f
     var cameraTargetY: Float = 0f

@@ -31,6 +31,7 @@ class World {
     val bosses        = HashMap<Int, BossComponent>(4)
     val blasts        = HashMap<Int, BlastComponent>(8)
     val cars          = HashMap<Int, CarComponent>(16)
+    val companions    = HashMap<Int, CompanionComponent>(2)
     val playerTags    = HashSet<Int>(2)
     val destroyedTags = HashSet<Int>(128)
 
@@ -88,6 +89,7 @@ class World {
         auras.remove(id);         orbitals.remove(id)
         bosses.remove(id);        playerTags.remove(id)
         blasts.remove(id);        cars.remove(id)
+        companions.remove(id)
     }
 
     fun isAlive(id: Int): Boolean = id in liveEntities && id !in destroyedTags
@@ -137,7 +139,7 @@ class World {
         enemies.clear();      weapons.clear();    projectiles.clear()
         pickups.clear();      damageNumbers.clear(); particles.clear()
         auras.clear();        orbitals.clear();   bosses.clear()
-        blasts.clear()
+        blasts.clear();       cars.clear();       companions.clear()
         playerTags.clear()
         Log.d(TAG, "World cleared")
     }

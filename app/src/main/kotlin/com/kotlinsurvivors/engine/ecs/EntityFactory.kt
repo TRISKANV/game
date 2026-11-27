@@ -127,6 +127,24 @@ object EntityFactory {
     }
 
     /**
+     * The police dog of the station. [caged] = standing in his cell, waiting for the key; otherwise he is
+     * already at the player's side. His picture is the guard dog's, drawn at [COMPANION_RENDER_WIDTH].
+     */
+    fun createCompanion(world: World, x: Float, y: Float, caged: Boolean): Int {
+        val id = world.createEntity()
+        world.transforms[id] = TransformComponent(x = x, y = y)
+        world.renders[id] = RenderComponent(
+            shape = RenderShape.CIRCLE, color = 0xFF8D6E63, secondaryColor = 0xFF3E2723,
+            width = COMPANION_RENDER_WIDTH, height = COMPANION_RENDER_WIDTH
+        )
+        world.companions[id] = CompanionComponent(
+            state = if (caged) CompanionState.CAGED else CompanionState.FOLLOW,
+            hp = COMPANION_HP, maxHp = COMPANION_HP
+        )
+        return id
+    }
+
+    /**
      * A mini-boss: an ordinary [type] grown into something much tougher that gives a lot of
      * experience, always drops coins and sometimes leaves a chest. It is drawn with a gold ring.
      */
@@ -242,6 +260,8 @@ object EntityFactory {
     const val CHIEF_RENDER_WIDTH = 40.5f
     /** The key waits until it is picked up. */
     const val KEY_WAIT_SECONDS = 1.0e6f
+    const val COMPANION_HP = 120
+    const val COMPANION_RENDER_WIDTH = 24f
 
     /** How long an energy can waits on the floor for the player. */
     const val CAN_WAIT_SECONDS = 90f
@@ -280,7 +300,7 @@ object EntityFactory {
             // 8s for all pickups — prevents XP orb accumulation over time. A boss chest waits much longer.
             lifetime = when {
                 type == PickupType.CHEST -> CHEST_WAIT_SECONDS
-                type == PickupType.KEY   -> KEY_WAIT_SECONDS
+                type == PickupType.KEY || type == PickupType.CELL_KEY -> KEY_WAIT_SECONDS
                 type.staysPut            -> CAN_WAIT_SECONDS
                 else                     -> 8f
             }
@@ -311,7 +331,7 @@ object EntityFactory {
         PickupType.EXPERIENCE_LARGE  -> 14f
         PickupType.COIN, PickupType.COIN_BAG -> 9f
         PickupType.CHEST -> 22f
-        PickupType.KEY   -> 22f
+        PickupType.KEY, PickupType.CELL_KEY -> 22f
         PickupType.HEALTH_SMALL, PickupType.HEALTH_LARGE -> 18f     // a can is big: it should not be missed by a hair
         else -> 12f
     }
@@ -329,6 +349,7 @@ object EntityFactory {
             PickupType.BOMB              -> Triple(0xFF212121L, 0xFF616161L, 20f)
             PickupType.CHEST             -> Triple(0xFF26C6DAL, 0xFF006064L, 46f)
             PickupType.KEY               -> Triple(0xFFFFD740L, 0xFFF57F17L, 40f)
+            PickupType.CELL_KEY          -> Triple(0xFF4FC3F7L, 0xFF0277BDL, 40f)
         }
         return RenderComponent(
             shape = RenderShape.CIRCLE,

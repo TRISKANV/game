@@ -44,6 +44,9 @@ sealed interface LabCommand {
     /** Goes into the police station now (from Level 2), with the usual fade. */
     object GoToStation : LabCommand
 
+    /** A police dog at the player's side, whichever level this is. */
+    object CallDog : LabCommand
+
     object ClearEnemies : LabCommand
     object HealFull : LabCommand
 

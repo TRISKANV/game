@@ -284,6 +284,8 @@ enum class PickupType {
     COIN, COIN_BAG, HEALTH_SMALL, HEALTH_LARGE, MAGNET, BOMB,
     /** The key the police chief drops; it opens the street door of the station. */
     KEY,
+    /** The key to the cell of the police dog; it is hidden in the station and does nothing else. */
+    CELL_KEY,
     /** Dropped by bosses; opens by itself when the player touches it. Keep last: pickups.png has one cell per type before it. */
     CHEST
 }
@@ -293,7 +295,7 @@ enum class PickupType {
  * the chest and the energy cans wait where they fell until the player walks over them.
  */
 val PickupType.staysPut: Boolean
-    get() = this == PickupType.CHEST || this == PickupType.KEY || this == PickupType.HEALTH_SMALL || this == PickupType.HEALTH_LARGE
+    get() = this == PickupType.CHEST || this == PickupType.KEY || this == PickupType.CELL_KEY || this == PickupType.HEALTH_SMALL || this == PickupType.HEALTH_LARGE
 
 /**
  * Data for collectible items on the ground.
@@ -459,4 +461,38 @@ data class CarComponent(
     var boxX0: Float = 0f, var boxY0: Float = 0f, var boxX1: Float = 0f, var boxY1: Float = 0f,
     /** Seconds since the car last took a hit, for the flash. */
     var hurtTimer: Float = 0f
+) : Component
+
+
+// ─────────────────────────────────────────────
+// COMPANION
+// ─────────────────────────────────────────────
+
+/** Where the police dog is in his story: locked in his cell, at the player's side, or hurt and lying down. */
+enum class CompanionState { CAGED, FOLLOW, DOWNED }
+
+/**
+ * The police dog that fights beside the player once he has been let out of his cell. He is not an enemy and
+ * has no [HealthComponent] or collider, so nothing that hurts or targets enemies can touch him; the companion
+ * system moves him, makes him bite and lets enemies hurt him.
+ */
+data class CompanionComponent(
+    var state: CompanionState = CompanionState.CAGED,
+    var hp: Int,
+    val maxHp: Int,
+    /** Seconds until he can bite again. */
+    var biteTimer: Float = 0f,
+    /** Seconds since his last bite; drives the picture. */
+    var sinceBite: Float = 99f,
+    /** Seconds left lying down while [state] is DOWNED. */
+    var downTimer: Float = 0f,
+    /** Seconds he has been trying to move without getting anywhere. */
+    var stuckTimer: Float = 0f,
+    /** Seconds of protection after a hit, so a crowd does not finish him in one tick. */
+    var hurtTimer: Float = 0f,
+    /** Fraction of a hit point he has healed and not yet added to [hp]. */
+    var regen: Float = 0f,
+    var heading: Float = 0f,
+    var vx: Float = 0f,
+    var vy: Float = 0f
 ) : Component

@@ -7,7 +7,7 @@ import com.kotlinsurvivors.engine.ChestReward
 import com.kotlinsurvivors.engine.ecs.components.WeaponType
 
 /** A message about the way through the levels, shown for a few seconds as a notification. */
-enum class LevelNotice { EXIT_OPEN, LEVEL_TWO, STATION, ALARM, CHIEF_AWAKE, KEY_DROPPED, STATION_OPEN }
+enum class LevelNotice { EXIT_OPEN, LEVEL_TWO, STATION, ALARM, CHIEF_AWAKE, KEY_DROPPED, STATION_OPEN, CELL_KEY, DOG_FREED, DOG_LOCKED }
 
 /** Where the siege of the police station is: see [com.kotlinsurvivors.engine.StationSiege]. */
 enum class StationPhase { QUIET, SIEGE, CHIEF, KEY, OPEN }

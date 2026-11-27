@@ -260,6 +260,13 @@
     <string name="siege_chief_obj_sub">Él tiene la llave</string>
     <string name="siege_key_obj">AGARRÁ LA LLAVE</string>
     <string name="siege_key_obj_sub">Cayó donde él</string>
+    <string name="level_cell_key_title">¡LA LLAVE DE LA CELDA!</string>
+    <string name="level_cell_key_sub">Llevala a las celdas y soltá al perro</string>
+    <string name="level_dog_locked_title">UN PERRO POLICÍA ENCERRADO</string>
+    <string name="level_dog_locked_sub">Buscá la llave de la celda por la comisaría</string>
+    <string name="level_dog_title">¡K9 LIBRE!</string>
+    <string name="level_dog_sub">Desde ahora pelea a tu lado</string>
+    <string name="lab_call_dog">Llamar al K9</string>
     <string name="lab_wake_chief">Despertar al comisario</string>
     <string name="car_lockpick">GANZÚA</string>
     <string name="car_enter">SUBIR</string>

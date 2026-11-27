@@ -30,6 +30,20 @@ object Level3 {
     const val CHIEF_X = 998.4f
     const val CHIEF_Y = 710.4f
 
+    /** The police dog's cell: where he stands, where the player stands to open it, where the key lies, the part that stops being solid and the picture of the open cell. */
+    const val CELL_DOG_X = 421.0f
+    const val CELL_DOG_Y = 304.0f
+    const val CELL_DOOR_X = 421.0f
+    const val CELL_DOOR_Y = 562.0f
+    const val CELL_KEY_X = 362.0f
+    const val CELL_KEY_Y = 1470.0f
+    const val CELL_FREE_X0 = 352.0f
+    const val CELL_FREE_Y0 = 256.0f
+    const val CELL_FREE_X1 = 490.0f
+    const val CELL_FREE_Y1 = 522.0f
+    const val CELL_OPEN_DRAW_X = 346.0f
+    const val CELL_OPEN_DRAW_Y = 330.0f
+
     /** Where reinforcements come in during the siege: x, y pairs in world pixels. */
     val REINFORCEMENTS: FloatArray = floatArrayOf(
         208.0f, 976.0f,
