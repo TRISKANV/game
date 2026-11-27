@@ -25,6 +25,7 @@ import javax.imageio.ImageIO
 
 /** The way out of Level 1, the trip to Level 2, and the files and rules of Level 2 itself. */
 class LevelTwoTest {
+    private val SEAM_ROWS = 6
 
     private val dir = File("src/main/assets/sprites")
     private fun levelOne() = LevelMap(Level1.CELLS, Level1.CELL_SIZE, File(dir, "level1_solid.bin").readBytes())
@@ -49,14 +50,14 @@ class LevelTwoTest {
         assertTrue(flow.exitOpen)
     }
 
-    @Test fun walkingIntoTheOpenExitFadesOutSwapsOnceAndFadesIn() {
+    @Test fun drivingIntoTheOpenExitFadesOutSwapsOnceAndFadesIn() {
         val flow = LevelFlow()
         flow.openExit()
         var swaps = 0
         var peak = 0f
         var steps = 0
         while ((flow.level == 1 || flow.isTravelling || steps == 0) && steps < 600) {
-            if (flow.update(1f / 60f, inExitX, inExitY)) swaps++
+            if (flow.update(1f / 60f, inExitX, inExitY, driving = true)) swaps++
             peak = maxOf(peak, flow.fade)
             steps++
         }
@@ -131,8 +132,9 @@ class LevelTwoTest {
     @Test fun levelTwoBorderIsSolidAndTheStartIsFree() {
         val map = levelTwo()
         val n = Level2.CELLS
+        // the north edge is the street coming from Level 1 (see LevelSeam), so only the other three edges are walls
         for (i in 0 until n) {
-            assertTrue(map.isBlockedCell(i, 0)); assertTrue(map.isBlockedCell(i, n - 1))
+            assertTrue(map.isBlockedCell(i, n - 1))
             assertTrue(map.isBlockedCell(0, i)); assertTrue(map.isBlockedCell(n - 1, i))
         }
         val half = MovementSystem.PLAYER_HALF
@@ -166,7 +168,8 @@ class LevelTwoTest {
             }
         }
         var free = 0; var reached = 0
-        for (cy in 0 until n) for (cx in 0 until n) if (!map.isBlockedCell(cx, cy)) { free++; if (seen[cy * n + cx]) reached++ }
+        // the top three tiles are Level 1's own pavement and park (see LevelSeam); its park is fenced off from the avenue
+        for (cy in SEAM_ROWS until n) for (cx in 0 until n) if (!map.isBlockedCell(cx, cy)) { free++; if (seen[cy * n + cx]) reached++ }
         assertEquals("walled-off pockets", free, reached)
     }
 

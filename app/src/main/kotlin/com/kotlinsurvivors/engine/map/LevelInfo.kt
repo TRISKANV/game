@@ -41,5 +41,8 @@ object Levels {
         artFile = "station.png", solidFile = "station_solid.bin"
     )
 
+    /** How many levels there are. */
+    const val COUNT = 3
+
     fun of(number: Int): LevelInfo = when (number) { 2 -> TWO; 3 -> STATION; else -> ONE }
 }

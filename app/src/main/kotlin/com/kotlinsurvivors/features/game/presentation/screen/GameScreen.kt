@@ -101,15 +101,21 @@ fun GameScreen(
         // Overlay images are decoded now, while the game starts, not when the first one opens.
         LaunchedEffect(context) { UiImageCache.preloadGameOverlays(context.applicationContext) }
 
-        // The picture of the level, decoded the same way. Without it the old ground is drawn.
-        var levelArt by remember { mutableStateOf<LevelArt?>(null) }
-        // It follows the level the engine is in: when the run crosses over, the picture of the next
-        // one is decoded here while the screen is black.
+        // The pictures of the levels, decoded the same way. Without one the old ground is drawn.
+        // The picture of the level being played is decoded at once; while the run is in Level 1 the one of
+        // Level 2 is decoded too, so walking from one into the other (no fade) never waits for a file.
         val levelNumber = gameState.levelNumber
-        var artAttemptedFor by remember { mutableIntStateOf(1) }
+        val levelArts = remember { arrayOfNulls<LevelArt>(Levels.COUNT + 1) }
+        var artsAttempted by remember { mutableStateOf(emptySet<Int>()) }
         LaunchedEffect(context, levelNumber) {
-            levelArt = withContext(Dispatchers.IO) { LevelArt.load(context.applicationContext, Levels.of(levelNumber)) }
-            artAttemptedFor = levelNumber
+            suspend fun ensure(n: Int) {
+                if (n in artsAttempted) return
+                levelArts[n] = withContext(Dispatchers.IO) { LevelArt.load(context.applicationContext, Levels.of(n)) }
+                renderer.setArt(n, levelArts[n])
+                artsAttempted = artsAttempted + n
+            }
+            ensure(levelNumber)
+            if (levelNumber == 1) ensure(2)
         }
 
         // Settings that act on the game. Plain assignments, safe to repeat every frame.
@@ -119,7 +125,6 @@ fun GameScreen(
             renderer.showDamageNumbers = settings.showDamageNumbers
             renderer.showFps           = settings.showFps
             renderer.atlas             = sprites
-            renderer.levelArt          = levelArt
             renderer.exitOpen          = gameState.exitOpen
             renderer.copShout          = copShout
             renderer.chiefShout        = chiefShout
@@ -220,7 +225,7 @@ fun GameScreen(
         }
 
         // ── Black fade over a change of level (and while the next picture is still being decoded) ──
-        val blackness = if (artAttemptedFor == levelNumber) gameState.levelFade else 1f
+        val blackness = if (levelNumber in artsAttempted) gameState.levelFade else 1f
         if (blackness > 0f) {
             Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = blackness)))
         }

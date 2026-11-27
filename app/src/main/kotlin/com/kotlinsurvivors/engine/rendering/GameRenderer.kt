@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.sp
 import com.kotlinsurvivors.engine.map.Level1
 import com.kotlinsurvivors.engine.map.Level3
 import com.kotlinsurvivors.engine.map.LevelCars
+import com.kotlinsurvivors.engine.map.LevelSeam
 import com.kotlinsurvivors.features.game.domain.model.StationPhase
 import com.kotlinsurvivors.engine.ecs.EntityFactory
 import com.kotlinsurvivors.engine.ecs.components.EnemyType
@@ -81,8 +82,40 @@ class GameRenderer(
             if (field === value) return
             field = value
             neighbour.lines = value?.npcLines ?: emptyArray()
-            cameraPlaced = false        // a new level: the camera jumps to the player instead of sweeping across the map
+            if (!keepCameraOnArtChange) cameraPlaced = false   // a new level: the camera jumps to the player instead of sweeping across the map
         }
+
+    private var keepCameraOnArtChange = false
+
+    /** The pictures of the levels the screen has decoded so far, by level number; the frame picks its own. */
+    private val arts = arrayOfNulls<LevelArt>(MAX_LEVELS + 1)
+    private var seenSeamCount = -1
+
+    /** Hands over the picture of [level] (null while it is not decoded). Safe to call every frame. */
+    fun setArt(level: Int, art: LevelArt?) {
+        if (level in arts.indices) arts[level] = art
+    }
+
+    /**
+     * Shows the picture of the level the frame belongs to. When the run has just walked from Level 1 into
+     * Level 2 the street goes on, so the camera is moved by the same offset as the player and nothing jumps.
+     */
+    private fun pickArt(level: Int, seamCount: Int) {
+        val wanted = arts.getOrNull(level)
+        if (wanted != null && wanted !== levelArt) {
+            val before = levelArt
+            if (before != null && before.info.number == 1 && wanted.info.number == 2 && seamCount != seenSeamCount && cameraPlaced) {
+                keepCameraOnArtChange = true
+                levelArt = wanted
+                keepCameraOnArtChange = false
+                smoothX += LevelSeam.DX
+                smoothY += LevelSeam.DY
+            } else {
+                levelArt = wanted
+            }
+        }
+        seenSeamCount = seamCount
+    }
 
     /** Set from the game state every frame: while false, the barrier at the end of the street is drawn. */
     var exitOpen = false
@@ -200,6 +233,8 @@ class GameRenderer(
         with(drawScope) {
             screenW = size.width
             screenH = size.height
+
+            pickArt(buf.level, buf.seamCount)
 
             // Smooth camera follow
             var targetCX = buf.cameraTargetX - viewportWidth  * 0.5f
@@ -1261,6 +1296,8 @@ class GameRenderer(
     private fun lerp(a: Float, b: Float, t: Float) = a + (b - a) * t
 
     private companion object {
+        /** Highest level number there is (the station). */
+        const val MAX_LEVELS = 3
         const val NUMBER_CACHE_SIZE = 1000
         const val SHAKE_DURATION    = 0.25f
         /** A car with less health than this smokes. */

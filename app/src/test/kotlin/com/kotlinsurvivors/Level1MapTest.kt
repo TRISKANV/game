@@ -7,6 +7,7 @@ import com.kotlinsurvivors.engine.ecs.systems.MovementSystem
 import com.kotlinsurvivors.engine.ecs.systems.SpawnSystem
 import com.kotlinsurvivors.engine.input.JoystickState
 import com.kotlinsurvivors.engine.map.Level1
+import com.kotlinsurvivors.engine.map.LevelSeam
 import com.kotlinsurvivors.engine.map.LevelMap
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -44,9 +45,12 @@ class Level1MapTest {
     @Test
     fun theWholeBorderIsSolid() {
         val n = Level1.CELLS
+        // the south-east corner is the street going on into Level 2 (see LevelSeam)
+        val seamFrom = (LevelSeam.LEVEL1_FROM_Y / Level1.CELL_SIZE).toInt()
         for (i in 0 until n) {
-            assertTrue(map.isBlockedCell(i, 0)); assertTrue(map.isBlockedCell(i, n - 1))
-            assertTrue(map.isBlockedCell(0, i)); assertTrue(map.isBlockedCell(n - 1, i))
+            assertTrue(map.isBlockedCell(i, 0)); assertTrue(map.isBlockedCell(0, i))
+            if (i < seamFrom) assertTrue(map.isBlockedCell(n - 1, i))
+            if (i < (LevelSeam.LEVEL1_FROM_X / Level1.CELL_SIZE).toInt()) assertTrue(map.isBlockedCell(i, n - 1))
         }
         assertTrue("outside the grid is blocked", map.isBlockedCell(-1, 5))
         assertTrue(map.isBlockedAt(-10f, 100f))

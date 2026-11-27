@@ -22,6 +22,7 @@ import com.kotlinsurvivors.engine.map.Level2
 import com.kotlinsurvivors.engine.map.Level3
 import com.kotlinsurvivors.engine.map.LevelFlow
 import com.kotlinsurvivors.engine.map.LevelMap
+import com.kotlinsurvivors.engine.map.LevelSeam
 import com.kotlinsurvivors.engine.map.Levels
 import com.kotlinsurvivors.features.game.domain.model.LevelNotice
 import com.kotlinsurvivors.features.game.domain.model.GameState
@@ -657,10 +658,21 @@ class GameEngine(
         carSystem.spawn(world, to)
         // coming back out of the station, the player stands in front of its door
         val outFromStation = to == 2 && from == STATION_LEVEL
-        val x = if (outFromStation) (Level2.STATION_DOOR_LEFT + Level2.STATION_DOOR_RIGHT) / 2f else info.spawnX
-        val y = if (outFromStation) Level2.STATION_DOOR_Y + STATION_RETURN_BELOW else info.spawnY
+        val seamless = levelFlow.lastSwapSeamless
+        val here = world.transforms[pid]
+        val x = when {
+            seamless       -> (here?.x ?: info.spawnX) + LevelSeam.DX
+            outFromStation -> (Level2.STATION_DOOR_LEFT + Level2.STATION_DOOR_RIGHT) / 2f
+            else           -> info.spawnX
+        }
+        val y = when {
+            seamless       -> (here?.y ?: info.spawnY) + LevelSeam.DY
+            outFromStation -> Level2.STATION_DOOR_Y + STATION_RETURN_BELOW
+            else           -> info.spawnY
+        }
+        if (seamless) seamCount++
         world.transforms[pid]?.let { it.x = x; it.y = y }
-        world.velocities[pid]?.let { it.vx = 0f; it.vy = 0f }
+        if (!seamless) world.velocities[pid]?.let { it.vx = 0f; it.vy = 0f }
         directorEvents.clear()
         eventBanner = null
         eventBannerTimer = 0f
@@ -677,6 +689,9 @@ class GameEngine(
         levelNoticeTimer = if (levelNotice != null) LEVEL_NOTICE_SECONDS else 0f
         CrashLogger.log("LEVEL $to entered from $from at ${elapsedTime.toInt()}s, map=${if (map != null) "loaded" else "missing"}")
     }
+
+    /** How many times the run has walked from Level 1 into Level 2 without a break; the renderer follows it. */
+    private var seamCount = 0
 
     private fun isDriving(): Boolean = (world.players[world.getPlayerEntity()]?.drivingCar ?: -1) >= 0
 
@@ -1002,6 +1017,8 @@ class GameEngine(
 
     private fun buildRenderSnapshot(playerId: Int, playerX: Float, playerY: Float) {
         renderBuffer.reset()
+        renderBuffer.level = levelFlow.level
+        renderBuffer.seamCount = seamCount
         renderBuffer.cameraTargetX = playerX
         renderBuffer.cameraTargetY = playerY
 

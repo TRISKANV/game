@@ -6,7 +6,8 @@ package com.kotlinsurvivors.engine.map
  *
  * The way out is the south end of the street. It stays shut until the first boss is down
  * ([openExit]); once it is open, walking into [Level1.EXIT_X0]..[Level1.EXIT_X1] past
- * [Level1.EXIT_TRIGGER_Y] starts the trip. The screen fades out, the engine puts the next level in
+ * [Level1.EXIT_TRIGGER_Y] on foot continues into Level 2 with no break at all (see [LevelSeam]); the same
+ * door by car, and the trips of the laboratory, still start a trip: the screen fades out, the engine puts the next level in
  * place on the one frame [update] returns true, and the screen fades back in.
  *
  * Pure Kotlin, no Android types, so it is tested on the JVM.
@@ -26,11 +27,14 @@ class LevelFlow {
     var fade     = 0f;               private set
     var phase    = Phase.PLAYING;    private set
 
+    /** True when the last change of level was the street itself (no fade); see [LevelSeam]. */
+    var lastSwapSeamless = false;    private set
+
     /** True from the moment the trip starts until the screen is clear again. */
     val isTravelling: Boolean get() = phase != Phase.PLAYING
 
     fun reset() {
-        level = 1; previous = 0; target = 1; exitOpen = false; stationLocked = false; fade = 0f; phase = Phase.PLAYING
+        level = 1; previous = 0; target = 1; exitOpen = false; stationLocked = false; fade = 0f; phase = Phase.PLAYING; lastSwapSeamless = false
     }
 
     /** Opens the way out. True only the first time, so the engine announces it once. */
@@ -77,6 +81,11 @@ class LevelFlow {
         when (phase) {
             Phase.PLAYING -> {
                 val to = destinationAt(playerX, playerY)
+                if (to == 2 && level == 1 && !driving) {
+                    // The street goes on: Level 2 is put in place on the spot, the screen does not change.
+                    previous = 1; level = 2; target = 2; exitOpen = false; lastSwapSeamless = true
+                    return true
+                }
                 // nobody drives a car into the police station
                 if (to != 0 && !(driving && to == 3)) { target = to; phase = Phase.LEAVING }
             }
@@ -84,6 +93,7 @@ class LevelFlow {
                 fade = (fade + dt / FADE_OUT_SECONDS).coerceAtMost(1f)
                 if (fade >= 1f) {
                     previous = level
+                    lastSwapSeamless = false
                     level    = target
                     exitOpen = false
                     phase    = Phase.ARRIVING

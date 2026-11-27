@@ -45,6 +45,10 @@ class RenderBuffer {
     // Number of valid entries written this frame
     var count: Int = 0
 
+    /** The level the entities of this frame belong to, and how many times the run has crossed the seam. */
+    var level: Int = 1
+    var seamCount: Int = 0
+
     // Camera target (for smooth follow)
     var cameraTargetX: Float = 0f
     var cameraTargetY: Float = 0f

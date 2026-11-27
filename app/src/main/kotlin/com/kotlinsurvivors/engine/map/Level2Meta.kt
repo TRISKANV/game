@@ -18,8 +18,8 @@ object Level2 {
 
     /** Lamp positions as x, y pairs in world pixels. */
     val LAMPS: FloatArray = floatArrayOf(
-        1216.0f, 256.0f,
-        1600.0f, 352.0f,
+        1184.0f, 256.0f,
+        1632.0f, 352.0f,
         1620.0f, 1992.0f,
         1422.0f, 2194.0f,
         1144.0f, 2196.0f,
