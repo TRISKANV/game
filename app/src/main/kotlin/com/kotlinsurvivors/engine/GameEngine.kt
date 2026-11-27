@@ -29,7 +29,6 @@ import com.kotlinsurvivors.features.game.domain.model.StationPhase
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
 import com.kotlinsurvivors.features.game.domain.model.UpgradeType
 import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -164,7 +163,10 @@ class GameEngine(
     private var eventBannerTimer = 0f
     private val directorEvents = mutableListOf<GameEvent>()
     private val combo = ComboTracker()
-    @Volatile private var openRouletteRequested = false
+    /** How many roulettes the player asked to open at once; 0 when he has not asked. */
+    @Volatile private var openRouletteCount = 0
+    /** The player saw the result of the open roulettes and tapped to take them. */
+    @Volatile private var levelUpTaken = false
     private val frameEvents    = mutableListOf<GameEvent>()
     private var frameCount     = 0L
     private var hitCount       = 0
@@ -178,10 +180,8 @@ class GameEngine(
     private var lastEmittedPendingLevelUp = false
     private var lastEmittedChest = false
     private var lastEmittedLevelUpsWaiting = 0
-    private var cachedLevelUpOptions: List<LevelUpOption> = emptyList()
-    private var cachedLevelUpWinner = 0
-
-    private val levelUpChannel = Channel<LevelUpOption>(capacity = 4)
+    /** The roulettes now open, drawn once when they were opened and handed over as they are. */
+    private var cachedLevelUpSpins: List<LevelUpRoulette.Spin> = emptyList()
 
     private var engineJob: Job? = null
     private val engineDispatcher = newSingleThreadContext("GameEngine")
@@ -227,7 +227,7 @@ class GameEngine(
                     accumulator += dt
 
                     while (accumulator >= FIXED_DT) {
-                        drainLevelUpChoices()
+                        applyLevelUpIfTaken()
                         openRouletteIfRequested()
                         finishChestIfSeen()
                         if (!isPaused && !pendingLevelUp && pendingChest == null) {
@@ -293,66 +293,67 @@ class GameEngine(
     }
 
     /**
-     * The player tapped the level-up button: open the roulette for one of the levels waiting.
-     * Ignored when none is waiting or the roulette is already open.
+     * The player tapped the level-up button: open [count] roulettes at once (1 to [LevelUpRoulette.MAX_ROULETTES]),
+     * each for one of the levels waiting. Fewer open if fewer levels are waiting. Ignored when none is waiting
+     * or the roulettes are already open.
      */
-    fun openLevelUp() {
-        openRouletteRequested = true
+    fun openLevelUp(count: Int = 1) {
+        openRouletteCount = count.coerceIn(1, LevelUpRoulette.MAX_ROULETTES)
     }
 
-    fun applyLevelUpChoice(option: LevelUpOption) {
-        Log.d(TAG, "LevelUp choice queued: id=${option.id} type=${option.type}")
-        levelUpChannel.trySend(option)
+    /** The player took the prizes of the open roulettes. Safe to call from the UI thread; extra taps do nothing. */
+    fun takeLevelUp() {
+        levelUpTaken = true
     }
 
     // ── Private — engine thread only ────────────────────────────────────────
 
     /**
-     * Applies the player's level-up pick. Only one upgrade is granted per
-     * level-up: extra taps that arrive while no choice is pending (double tap,
-     * a tap on the overlay while it fades out) are discarded.
+     * Hands over the prizes of the open roulettes once the player took them. What the screen showed is what
+     * is applied, in order, and each roulette uses up one waiting level. A tap that arrives while nothing is
+     * open (a double tap, a tap while the overlay fades out) is discarded.
      */
-    private fun drainLevelUpChoices() {
-        var result = levelUpChannel.tryReceive()
-        while (result.isSuccess) {
-            val option = result.getOrNull() ?: break
-            if (pendingLevelUp) {
-                Log.d(TAG, "Applying level-up choice: ${option.id}")
-                val pid = world.getPlayerEntity()
-                if (pid != -1) {
-                    applyUpgrade(world, pid, option)
-                    CrashLogger.log("LEVEL-UP choice '${option.id}' (${option.type}) -> ${loadoutSummary(pid)}")
-                }
-                pendingLevelUp       = false
-                levelUpsWaiting      = (levelUpsWaiting - 1).coerceAtLeast(0)
-                cachedLevelUpOptions = emptyList()
-                cachedLevelUpWinner  = 0
-            } else {
-                Log.d(TAG, "Ignoring level-up choice '${option.id}': none pending")
-            }
-            result = levelUpChannel.tryReceive()
+    private fun applyLevelUpIfTaken() {
+        if (!levelUpTaken) return
+        levelUpTaken = false
+        if (!pendingLevelUp) {
+            Log.d(TAG, "Ignoring level-up take: none open")
+            return
         }
+        val pid = world.getPlayerEntity()
+        if (pid != -1) {
+            for (spin in cachedLevelUpSpins) {
+                applyUpgrade(world, pid, spin.winner)
+                CrashLogger.log("LEVEL-UP '${spin.winner.id}' (${spin.winner.type})")
+            }
+            CrashLogger.log("LEVEL-UP taken x${cachedLevelUpSpins.size} -> ${loadoutSummary(pid)}")
+        }
+        pendingLevelUp       = false
+        levelUpsWaiting      = (levelUpsWaiting - cachedLevelUpSpins.size).coerceAtLeast(0)
+        cachedLevelUpSpins   = emptyList()
     }
 
     /**
-     * Draws the roulette when the player asked for it. The prizes are worked out now, not
-     * when the level was gained, so they match the weapons the player has at this moment.
+     * Draws the roulettes when the player asked for them. The prizes are worked out now, not
+     * when the levels were gained, so they match the weapons the player has at this moment.
      */
     private fun openRouletteIfRequested() {
-        if (!openRouletteRequested) return
-        openRouletteRequested = false
+        val wanted = openRouletteCount
+        if (wanted == 0) return
+        openRouletteCount = 0
         if (pendingLevelUp || levelUpsWaiting <= 0) return
         val pid = world.getPlayerEntity()
         if (pid == -1 || world.healths[pid]?.isDead == true) return
-        val spin = try {
-            LevelUpRoulette.spin(levelUpPool(world, pid))
+        val count = minOf(wanted, levelUpsWaiting)
+        val spins = try {
+            LevelUpRoulette.spinMany(levelUpPool(world, pid), count, MAX_WEAPON_LEVEL)
         } catch (e: Exception) {
             CrashLogger.logCrash("level-up roulette", e); throw e
         }
-        cachedLevelUpOptions = spin.segments
-        cachedLevelUpWinner  = spin.winnerIndex
-        pendingLevelUp       = true
-        CrashLogger.log("LEVEL-UP opened ($levelUpsWaiting waiting): roulette lands on '${spin.winner.id}'")
+        cachedLevelUpSpins = spins
+        levelUpTaken       = false
+        pendingLevelUp     = true
+        CrashLogger.log("LEVEL-UP opened x$count ($levelUpsWaiting waiting): " + spins.joinToString { "'${it.winner.id}'" })
     }
 
     /** One-line description of what the player currently owns, for the log. */
@@ -372,6 +373,7 @@ class GameEngine(
         isPaused             = false
         pendingLevelUp       = false
         levelUpsWaiting      = 0
+        levelUpTaken         = false
         pendingChest         = null
         chestSeen            = false
         eventBanner          = null
@@ -392,10 +394,9 @@ class GameEngine(
         labQueue.clear()
         labInvincible = true
         combo.reset()
-        openRouletteRequested = false
+        openRouletteCount    = 0
         frameCount           = 0L
-        cachedLevelUpOptions = emptyList()
-        cachedLevelUpWinner  = 0
+        cachedLevelUpSpins   = emptyList()
         hitCount             = 0
         lastHitTime          = 0f
         playerFacing         = Facing.DOWN
@@ -403,7 +404,6 @@ class GameEngine(
         tickedSinceEmit      = false
         hasEmitted           = false
         frameEvents.clear()
-        while (levelUpChannel.tryReceive().isSuccess) { /* discard stale choices */ }
     }
 
     /** A failing database must not stop the game from starting: play without the bonuses. */
@@ -935,8 +935,7 @@ class GameEngine(
             isGameOver       = health?.isDead ?: false,
             isPendingLevelUp = pendingLevelUp,
             levelUpsWaiting  = levelUpsWaiting,
-            levelUpOptions   = cachedLevelUpOptions,  // reuse cached, never regenerate per frame
-            levelUpWinner    = cachedLevelUpWinner,
+            levelUpSpins     = cachedLevelUpSpins,  // reuse cached, never regenerate per frame
             chestReward      = pendingChest,
             eventBanner      = eventBanner,
             levelNumber      = levelFlow.level,
@@ -1281,7 +1280,7 @@ class GameEngine(
         when (option.type) {
             UpgradeType.WEAPON_UPGRADE -> {
                 val weapon = weapons.find { it.type == option.weaponType } ?: return
-                levelUpWeapon(world, pid, weapon)
+                if (weapon.level < MAX_WEAPON_LEVEL) levelUpWeapon(world, pid, weapon)
             }
             UpgradeType.NEW_WEAPON -> {
                 val wt = option.weaponType ?: return

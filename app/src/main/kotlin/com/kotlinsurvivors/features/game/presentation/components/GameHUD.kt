@@ -325,10 +325,11 @@ private fun HUDChip(label: String, color: Color, iconKey: String? = null) {
 /**
  * Tells the player that a level-up is waiting, without stopping the game. It pulses at
  * the bottom of the screen until the player taps it; the roulette opens only then.
- * [count] is how many level-ups are waiting ("x2", "x3"...).
+ * [count] is how many level-ups are waiting ("x2", "x3"...). With two or more waiting, small
+ * buttons next to it open two or three roulettes at once; [onOpen] gets how many.
  */
 @Composable
-fun LevelUpBadge(count: Int, onOpen: () -> Unit, modifier: Modifier = Modifier) {
+fun LevelUpBadge(count: Int, onOpen: (Int) -> Unit, modifier: Modifier = Modifier) {
     val gold   = Color(0xFFFFD740)
     val pulse  = rememberInfiniteTransition(label = "levelUpBadge")
     val glow   by pulse.animateFloat(
@@ -348,24 +349,44 @@ fun LevelUpBadge(count: Int, onOpen: () -> Unit, modifier: Modifier = Modifier) 
                 else stringResource(R.string.hud_level_up_ready)
 
     Row(
-        modifier = modifier
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .background(Color(0xE61A1A2E), RoundedCornerShape(3.dp))
-            .border(2.dp, gold.copy(alpha = glow), RoundedCornerShape(3.dp))
-            .clickable(role = Role.Button, onClick = { sounds.play(Sound.UI_CLICK); onOpen() })
-            .padding(horizontal = 22.dp, vertical = 12.dp),
+        modifier              = modifier,
         verticalAlignment     = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        PixelIcon("star", 22.dp)
-        Text(
-            label,
-            color         = gold,
-            fontSize      = 16.sp,
-            fontWeight    = FontWeight.ExtraBold,
-            letterSpacing = 2.sp
-        )
-        PixelIcon("star", 22.dp)
+        Row(
+            modifier = Modifier
+                .graphicsLayer { scaleX = scale; scaleY = scale }
+                .background(Color(0xE61A1A2E), RoundedCornerShape(3.dp))
+                .border(2.dp, gold.copy(alpha = glow), RoundedCornerShape(3.dp))
+                .clickable(role = Role.Button, onClick = { sounds.play(Sound.UI_CLICK); onOpen(1) })
+                .padding(horizontal = 22.dp, vertical = 12.dp),
+            verticalAlignment     = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            PixelIcon("star", 22.dp)
+            Text(
+                label,
+                color         = gold,
+                fontSize      = 16.sp,
+                fontWeight    = FontWeight.ExtraBold,
+                letterSpacing = 2.sp
+            )
+            PixelIcon("star", 22.dp)
+        }
+        for (batch in 2..minOf(count, 3)) {
+            Text(
+                stringResource(R.string.level_up_batch, batch),
+                color         = gold,
+                fontSize      = 13.sp,
+                fontWeight    = FontWeight.ExtraBold,
+                letterSpacing = 1.sp,
+                modifier      = Modifier
+                    .background(Color(0xE61A1A2E), RoundedCornerShape(3.dp))
+                    .border(2.dp, gold.copy(alpha = 0.7f), RoundedCornerShape(3.dp))
+                    .clickable(role = Role.Button, onClick = { sounds.play(Sound.UI_CLICK); onOpen(batch) })
+                    .padding(horizontal = 14.dp, vertical = 14.dp)
+            )
+        }
     }
 }
 

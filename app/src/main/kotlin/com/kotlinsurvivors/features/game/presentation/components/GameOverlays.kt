@@ -50,7 +50,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kotlinsurvivors.engine.LevelUpRoulette
 import com.kotlinsurvivors.engine.UpgradeRarity
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.TextUnit
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.random.Random
@@ -245,18 +249,37 @@ private fun PauseButton(text: String, color: Color, onClick: () -> Unit) {
 // ── Level-Up Overlay ─────────────────────────────────────────────────────────
 
 private const val LEVEL_UP_FADE_MS = 400
+private const val SPIN_MS = 5200
+
+/** Each extra roulette runs this much longer than the one before, so they stop one after another. */
+private const val STAGGER_MS = 1100
 
 /**
- * Level up like opening a case: a strip of upgrades runs past the marker in the middle,
- * slows down and stops on the prize the engine drew ([winnerIndex] of [options]). The
- * player then takes it. Tapping the strip while it runs jumps to the result.
+ * How one strip is drawn depending on how many run at once: the more there are, the lower and
+ * tighter each one is, so three still fit on a landscape phone.
+ */
+private class ReelLook(
+    val tileWidth: Dp, val height: Dp, val icon: Dp, val font: TextUnit, val lineHeight: TextUnit,
+    val tilePadding: Dp, val resultHeight: Dp, val stacked: Boolean, val gap: Dp
+)
+
+private fun reelLook(count: Int) = when (count) {
+    1    -> ReelLook(84.dp, 108.dp, 36.dp, 10.sp, 12.sp, 8.dp, 56.dp, true,  8.dp)
+    2    -> ReelLook(80.dp,  84.dp, 30.dp,  9.sp, 10.sp, 4.dp, 20.dp, false, 6.dp)
+    else -> ReelLook(76.dp,  62.dp, 20.dp,  9.sp, 10.sp, 3.dp, 16.dp, false, 4.dp)
+}
+
+/**
+ * Level up like opening a case: a strip of upgrades runs past the marker in the middle, slows down and
+ * stops on the prize the engine drew. With several level-ups waiting the player can open two or three
+ * at once: the strips run together, stop one after another, and the prizes are taken in one tap.
+ * Tapping a strip while they run jumps all of them to their result.
  */
 @Composable
 fun LevelUpOverlay(
-    options     : List<LevelUpOption>,
-    winnerIndex : Int,
+    spins       : List<LevelUpRoulette.Spin>,
     playerLevel : Int,
-    onChoice    : (LevelUpOption) -> Unit
+    onTake      : () -> Unit
 ) {
     // Read inside graphicsLayer only, so the pulse redraws the title without recomposing the overlay.
     val pulse = rememberInfiniteTransition(label = "pulse").animateFloat(
@@ -280,53 +303,19 @@ fun LevelUpOverlay(
             .background(Color(0xCC000014)),
         contentAlignment = Alignment.Center
     ) {
-        if (options.isEmpty()) {
+        if (spins.isEmpty()) {
             CircularProgressIndicator(color = Color(0xFFFFD740), modifier = Modifier.size(32.dp))
             return@Box
         }
-        val winner = options[winnerIndex.coerceIn(0, options.lastIndex)]
-
-        // How far the strip must travel to put the prize under the marker. It stops
-        // somewhere inside the prize's tile, not always dead centre, like the real thing.
-        val tilePx       = with(LocalDensity.current) { REEL_TILE_WIDTH.toPx() }
-        var viewportPx   by remember { mutableIntStateOf(0) }
-        val stopInTile   = remember(winnerIndex) { 0.5f + (Random.nextFloat() - 0.5f) * 0.7f }
-        val target       = winnerIndex * tilePx + stopInTile * tilePx - viewportPx / 2f
-        val targetNow    by rememberUpdatedState(target)
-
-        val listState = rememberLazyListState()
-        val scroll    = remember { Animatable(0f) }
-        val landed by remember { derivedStateOf { viewportPx > 0 && scroll.value >= targetNow - 0.5f } }
-        val scope = rememberCoroutineScope()
-        val sounds = LocalSoundEffects.current
-
-        // The strip is a lazy list scrolled by hand: only the tiles in view are ever composed.
-        // A tick sounds every time a new tile passes under the marker.
-        LaunchedEffect(listState) {
-            var applied = 0f
-            var lastTile = -1
-            snapshotFlow { scroll.value }.collect { value ->
-                listState.dispatchRawDelta(value - applied)
-                applied = value
-                if (tilePx > 0f && viewportPx > 0) {
-                    val tile = ((value + viewportPx / 2f) / tilePx).toInt()
-                    if (tile != lastTile) {
-                        if (lastTile != -1) sounds.play(Sound.ROULETTE_TICK)
-                        lastTile = tile
-                    }
-                }
-            }
-        }
-        LaunchedEffect(landed) { if (landed) sounds.play(Sound.ROULETTE_WIN) }
-        LaunchedEffect(viewportPx) {
-            if (viewportPx == 0) return@LaunchedEffect
-            delay(LEVEL_UP_FADE_MS.toLong())
-            scroll.animateTo(target, tween(SPIN_MS, easing = CubicBezierEasing(0.08f, 0.55f, 0.12f, 1f)))
-        }
+        val count = spins.size
+        val look  = reelLook(count)
+        var landedCount by remember(spins) { mutableIntStateOf(0) }
+        var skipTaps    by remember(spins) { mutableIntStateOf(0) }
+        val allLanded = landedCount >= count
 
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(look.gap),
             modifier            = Modifier
                 .graphicsLayer {
                     val s = 0.9f + 0.1f * appear.value
@@ -336,93 +325,47 @@ fun LevelUpOverlay(
                 .padding(horizontal = 24.dp)
                 .widthIn(max = REEL_MAX_WIDTH)
         ) {
-            if (titleImage != null) {
+            if (count == 1 && titleImage != null) {
                 PixelImage(titleImage, stringResource(R.string.level_up_title), targetWidth = 200.dp, modifier = Modifier.graphicsLayer { alpha = pulse.value })
             } else {
                 Text(
                     stringResource(R.string.level_up_title),
                     color         = Color(0xFFFFD740),
-                    fontSize      = 28.sp,
+                    fontSize      = if (count == 1) 28.sp else 20.sp,
                     fontWeight    = FontWeight.ExtraBold,
                     letterSpacing = 4.sp
                 )
             }
-
-            if (landed) {
-                val rColor = rarityColor(winner.rarity)
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text(
-                        rarityText(winner.rarity),
-                        color         = rColor,
-                        fontSize      = 10.sp,
-                        fontWeight    = FontWeight.ExtraBold,
-                        letterSpacing = 1.5.sp,
-                        modifier      = Modifier
-                            .background(rColor.copy(alpha = 0.15f), RoundedCornerShape(2.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    )
-                    Text(winner.localTitle(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
-                }
-            } else {
-                Text(stringResource(R.string.level_up_opening, playerLevel), color = Color(0xFFBBBBBB), fontSize = 13.sp)
+            if (count == 1) {
+                // Kept in place after the strip stops so nothing jumps.
+                Text(
+                    stringResource(R.string.level_up_opening, playerLevel),
+                    color    = Color(0xFFBBBBBB),
+                    fontSize = 13.sp,
+                    modifier = Modifier.alpha(if (allLanded) 0f else 1f)
+                )
             }
 
-            // The strip, with the marker in the middle.
+            spins.forEachIndexed { index, spin ->
+                Reel(
+                    spin     = spin,
+                    index    = index,
+                    look     = look,
+                    // the longest strip keeps ticking until the last one stops
+                    ticks    = index == count - 1,
+                    skipTaps = skipTaps,
+                    onSkip   = { skipTaps++ },
+                    onLanded = { landedCount++ }
+                )
+            }
+
+            // Kept at the same height while the strips run so nothing jumps when they stop.
             Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(REEL_HEIGHT)
-                    .clip(RoundedCornerShape(3.dp))
-                    .background(Color(0xFF0B0814))
-                    .onSizeChanged { viewportPx = it.width }
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication        = null,
-                        enabled           = !landed,
-                        onClick           = { scope.launch { scroll.snapTo(target) } }
-                    )
+                contentAlignment = Alignment.Center,
+                modifier         = Modifier.fillMaxWidth().heightIn(min = TAKE_AREA_HEIGHT)
             ) {
-                LazyRow(
-                    state             = listState,
-                    userScrollEnabled = false,
-                    modifier          = Modifier.fillMaxSize()
-                ) {
-                    items(options.size) { index -> ReelTile(options[index]) }
-                }
-                Box(
-                    Modifier.align(Alignment.CenterStart).fillMaxHeight().width(40.dp)
-                        .background(Brush.horizontalGradient(listOf(Color(0xFF0B0814), Color.Transparent)))
-                )
-                Box(
-                    Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(40.dp)
-                        .background(Brush.horizontalGradient(listOf(Color.Transparent, Color(0xFF0B0814))))
-                )
-                Canvas(modifier = Modifier.fillMaxSize()) {
-                    val gold = Color(0xFFFFD740)
-                    val dark = Color(0xFF0E0A1A)
-                    val arrow = 8.dp.toPx()
-                    drawLine(gold, Offset(center.x, 0f), Offset(center.x, size.height), strokeWidth = 3.dp.toPx())
-                    val top = Path().apply {
-                        moveTo(center.x - arrow, 0f); lineTo(center.x + arrow, 0f); lineTo(center.x, arrow * 1.4f); close()
-                    }
-                    val bottom = Path().apply {
-                        moveTo(center.x - arrow, size.height); lineTo(center.x + arrow, size.height)
-                        lineTo(center.x, size.height - arrow * 1.4f); close()
-                    }
-                    drawPath(top, gold); drawPath(top, dark, style = Stroke(width = 2.dp.toPx()))
-                    drawPath(bottom, gold); drawPath(bottom, dark, style = Stroke(width = 2.dp.toPx()))
-                }
-            }
-
-            // Kept at the same height while the strip runs so nothing jumps when it stops.
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-                modifier            = Modifier.fillMaxWidth().heightIn(min = RESULT_MIN_HEIGHT)
-            ) {
-                if (landed) {
-                    Text(winner.localDescription(), color = Color(0xFFBBBBBB), fontSize = 13.sp, textAlign = TextAlign.Center)
-                    TakeButton(onClick = { onChoice(winner) })
+                if (allLanded) {
+                    TakeButton(label = stringResource(if (count == 1) R.string.level_up_take else R.string.level_up_take_all), onClick = onTake)
                 } else {
                     Text(stringResource(R.string.level_up_skip), color = Color(0xFF777777), fontSize = 11.sp)
                 }
@@ -431,19 +374,160 @@ fun LevelUpOverlay(
     }
 }
 
-private const val SPIN_MS = 5200
-private val REEL_TILE_WIDTH   = 84.dp
-private val REEL_HEIGHT       = 108.dp
+/** One strip with its marker, and under it the prize once it has stopped. */
+@Composable
+private fun Reel(
+    spin     : LevelUpRoulette.Spin,
+    index    : Int,
+    look     : ReelLook,
+    ticks    : Boolean,
+    skipTaps : Int,
+    onSkip   : () -> Unit,
+    onLanded : () -> Unit
+) {
+    val options = spin.segments
+    val winner  = spin.winner
+
+    // How far the strip must travel to put the prize under the marker. It stops
+    // somewhere inside the prize's tile, not always dead centre, like the real thing.
+    val tilePx       = with(LocalDensity.current) { look.tileWidth.toPx() }
+    var viewportPx   by remember { mutableIntStateOf(0) }
+    val stopInTile   = remember(spin) { 0.5f + (Random.nextFloat() - 0.5f) * 0.7f }
+    val target       = spin.winnerIndex * tilePx + stopInTile * tilePx - viewportPx / 2f
+    val targetNow    by rememberUpdatedState(target)
+
+    val listState = rememberLazyListState()
+    val scroll    = remember { Animatable(0f) }
+    val landed by remember { derivedStateOf { viewportPx > 0 && scroll.value >= targetNow - 0.5f } }
+    val sounds = LocalSoundEffects.current
+
+    // The strip is a lazy list scrolled by hand: only the tiles in view are ever composed.
+    // A tick sounds every time a new tile passes under the marker.
+    LaunchedEffect(listState) {
+        var applied = 0f
+        var lastTile = -1
+        snapshotFlow { scroll.value }.collect { value ->
+            listState.dispatchRawDelta(value - applied)
+            applied = value
+            if (ticks && tilePx > 0f && viewportPx > 0) {
+                val tile = ((value + viewportPx / 2f) / tilePx).toInt()
+                if (tile != lastTile) {
+                    if (lastTile != -1) sounds.play(Sound.ROULETTE_TICK)
+                    lastTile = tile
+                }
+            }
+        }
+    }
+    LaunchedEffect(landed) {
+        if (landed) { sounds.play(Sound.ROULETTE_WIN); onLanded() }
+    }
+    LaunchedEffect(viewportPx) {
+        if (viewportPx == 0) return@LaunchedEffect
+        delay(LEVEL_UP_FADE_MS.toLong())
+        scroll.animateTo(target, tween(SPIN_MS + index * STAGGER_MS, easing = CubicBezierEasing(0.08f, 0.55f, 0.12f, 1f)))
+    }
+    LaunchedEffect(skipTaps) {
+        if (skipTaps > 0 && viewportPx > 0) scroll.snapTo(target)
+    }
+
+    Column(verticalArrangement = Arrangement.spacedBy(3.dp), modifier = Modifier.fillMaxWidth()) {
+        // The strip, with the marker in the middle.
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(look.height)
+                .clip(RoundedCornerShape(3.dp))
+                .background(Color(0xFF0B0814))
+                .onSizeChanged { viewportPx = it.width }
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication        = null,
+                    enabled           = !landed,
+                    onClick           = onSkip
+                )
+        ) {
+            LazyRow(
+                state             = listState,
+                userScrollEnabled = false,
+                modifier          = Modifier.fillMaxSize()
+            ) {
+                items(options.size) { tile -> ReelTile(options[tile], look) }
+            }
+            Box(
+                Modifier.align(Alignment.CenterStart).fillMaxHeight().width(40.dp)
+                    .background(Brush.horizontalGradient(listOf(Color(0xFF0B0814), Color.Transparent)))
+            )
+            Box(
+                Modifier.align(Alignment.CenterEnd).fillMaxHeight().width(40.dp)
+                    .background(Brush.horizontalGradient(listOf(Color.Transparent, Color(0xFF0B0814))))
+            )
+            Canvas(modifier = Modifier.fillMaxSize()) {
+                val gold = Color(0xFFFFD740)
+                val dark = Color(0xFF0E0A1A)
+                val arrow = if (look.height < 70.dp) 5.dp.toPx() else 8.dp.toPx()
+                drawLine(gold, Offset(center.x, 0f), Offset(center.x, size.height), strokeWidth = 3.dp.toPx())
+                val top = Path().apply {
+                    moveTo(center.x - arrow, 0f); lineTo(center.x + arrow, 0f); lineTo(center.x, arrow * 1.4f); close()
+                }
+                val bottom = Path().apply {
+                    moveTo(center.x - arrow, size.height); lineTo(center.x + arrow, size.height)
+                    lineTo(center.x, size.height - arrow * 1.4f); close()
+                }
+                drawPath(top, gold); drawPath(top, dark, style = Stroke(width = 2.dp.toPx()))
+                drawPath(bottom, gold); drawPath(bottom, dark, style = Stroke(width = 2.dp.toPx()))
+            }
+        }
+
+        // The prize, in the space kept for it under the strip.
+        Box(Modifier.fillMaxWidth().height(look.resultHeight), contentAlignment = Alignment.Center) {
+            if (landed) ReelResult(winner, look)
+        }
+    }
+}
+
+/** What a stopped strip landed on: its rarity, its name and what it does. */
+@Composable
+private fun ReelResult(winner: LevelUpOption, look: ReelLook) {
+    val rColor = rarityColor(winner.rarity)
+    val badge = @Composable {
+        Text(
+            rarityText(winner.rarity),
+            color         = rColor,
+            fontSize      = if (look.stacked) 10.sp else 8.sp,
+            fontWeight    = FontWeight.ExtraBold,
+            letterSpacing = 1.5.sp,
+            modifier      = Modifier
+                .background(rColor.copy(alpha = 0.15f), RoundedCornerShape(2.dp))
+                .padding(horizontal = 6.dp, vertical = 2.dp)
+        )
+    }
+    if (look.stacked) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                badge()
+                Text(winner.localTitle(), color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold)
+            }
+            Text(winner.localDescription(), color = Color(0xFFBBBBBB), fontSize = 13.sp, textAlign = TextAlign.Center)
+        }
+    } else {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            badge()
+            Text(winner.localTitle(), color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold, maxLines = 1)
+            Text(winner.localDescription(), color = Color(0xFFBBBBBB), fontSize = 10.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
 private val REEL_MAX_WIDTH    = 560.dp
-private val RESULT_MIN_HEIGHT = 64.dp
+private val TAKE_AREA_HEIGHT  = 44.dp
 
 /** One upgrade on the strip: its icon and name inside a frame in the colour of its rarity. */
 @Composable
-private fun ReelTile(option: LevelUpOption) {
+private fun ReelTile(option: LevelUpOption, look: ReelLook) {
     val rColor = rarityColor(option.rarity)
     Box(
         modifier = Modifier
-            .width(REEL_TILE_WIDTH)
+            .width(look.tileWidth)
             .fillMaxHeight()
             .padding(3.dp)
             .pixelFrame(
@@ -454,18 +538,18 @@ private fun ReelTile(option: LevelUpOption) {
             )
     ) {
         Column(
-            modifier            = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = 8.dp),
+            modifier            = Modifier.fillMaxSize().padding(horizontal = 4.dp, vertical = look.tilePadding),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.SpaceBetween
         ) {
-            PixelIcon(option.icon, 36.dp)
+            PixelIcon(option.icon, look.icon)
             Text(
                 option.localTitle(),
                 color      = Color.White,
-                fontSize   = 10.sp,
+                fontSize   = look.font,
                 fontWeight = FontWeight.Bold,
                 textAlign  = TextAlign.Center,
-                lineHeight = 12.sp,
+                lineHeight = look.lineHeight,
                 maxLines   = 2
             )
         }
@@ -473,7 +557,7 @@ private fun ReelTile(option: LevelUpOption) {
 }
 
 @Composable
-private fun TakeButton(onClick: () -> Unit) {
+private fun TakeButton(label: String, onClick: () -> Unit) {
     val sounds = LocalSoundEffects.current
     Box(
         contentAlignment = Alignment.Center,
@@ -492,7 +576,7 @@ private fun TakeButton(onClick: () -> Unit) {
             )
             .padding(horizontal = 32.dp, vertical = 10.dp)
     ) {
-        Text(stringResource(R.string.level_up_take), color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+        Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
     }
 }
 

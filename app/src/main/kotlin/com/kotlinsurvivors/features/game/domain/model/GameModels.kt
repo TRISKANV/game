@@ -32,9 +32,8 @@ data class GameState(
     val isPendingLevelUp : Boolean        = false,
     /** Level-ups gained and not opened yet; the game keeps running while they wait. */
     val levelUpsWaiting  : Int            = 0,
-    val levelUpOptions   : List<LevelUpOption> = emptyList(),
-    /** Which of [levelUpOptions] the level-up roulette lands on. */
-    val levelUpWinner    : Int            = 0,
+    /** The roulettes now open, one to three; each carries its strip and the prize it stops on. */
+    val levelUpSpins     : List<com.kotlinsurvivors.engine.LevelUpRoulette.Spin> = emptyList(),
     /** What the boss chest the player just opened holds; the game is frozen and the chest screen shown while this is set. */
     val chestReward      : ChestReward?   = null,
     /** The special wave or mini-boss that was just announced, shown as a banner for a few seconds; null otherwise. */
@@ -101,8 +100,7 @@ data class GameState(
             isGameOver == other.isGameOver &&
             isPendingLevelUp == other.isPendingLevelUp &&
             levelUpsWaiting == other.levelUpsWaiting &&
-            levelUpOptions == other.levelUpOptions &&
-            levelUpWinner == other.levelUpWinner &&
+            levelUpSpins == other.levelUpSpins &&
             chestReward == other.chestReward &&
             eventBanner == other.eventBanner &&
             comboCount == other.comboCount &&

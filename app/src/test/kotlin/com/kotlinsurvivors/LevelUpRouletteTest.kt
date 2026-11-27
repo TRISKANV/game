@@ -2,6 +2,7 @@ package com.kotlinsurvivors
 
 import com.kotlinsurvivors.engine.LevelUpRoulette
 import com.kotlinsurvivors.engine.UpgradeRarity
+import com.kotlinsurvivors.engine.ecs.components.WeaponType
 import com.kotlinsurvivors.features.game.domain.model.LevelUpOption
 import com.kotlinsurvivors.features.game.domain.model.UpgradeType
 import org.junit.Assert.assertEquals
@@ -80,5 +81,78 @@ class LevelUpRouletteTest {
         }
         assertEquals(70.0, 100.0 * common / total, 2.0)
         assertTrue("legendary should be rare on the strip", 100.0 * legendary / total < 3.0)
+    }
+
+    // ── Several roulettes at once ────────────────────────────────────────────
+
+    private fun upgrade(type: WeaponType, level: Int, rarity: UpgradeRarity = UpgradeRarity.COMMON) =
+        LevelUpOption("upgrade_${type.name}", "up", "up", UpgradeType.WEAPON_UPGRADE, weaponType = type, rarity = rarity, level = level)
+
+    private fun newWeapon(type: WeaponType) =
+        LevelUpOption("new_${type.name}", "new", "new", UpgradeType.NEW_WEAPON, weaponType = type, rarity = UpgradeRarity.RARE)
+
+    @Test
+    fun spinManyGivesOneSpinPerRoulette() {
+        for (count in 1..LevelUpRoulette.MAX_ROULETTES) {
+            val spins = LevelUpRoulette.spinMany(pool, count, 8, Random(count))
+            assertEquals(count, spins.size)
+            spins.forEach {
+                assertEquals(LevelUpRoulette.STRIP_LENGTH, it.segments.size)
+                assertTrue(it.winnerIndex in LevelUpRoulette.WINNER_RANGE)
+            }
+        }
+    }
+
+    @Test
+    fun aNewWeaponOrLegendaryNeverWinsTwiceInTheSameBatch() {
+        val offers = listOf(
+            newWeapon(WeaponType.KNIFE), newWeapon(WeaponType.AXE), newWeapon(WeaponType.CROSS),
+            option("legend_a", UpgradeRarity.LEGENDARY), option("legend_b", UpgradeRarity.LEGENDARY),
+            option("stat_a", UpgradeRarity.COMMON)
+        )
+        repeat(400) { seed ->
+            val ids = LevelUpRoulette.spinMany(offers, 3, 8, Random(seed)).map { it.winner.id }
+            val unique = ids.filter { it.startsWith("new_") || it.startsWith("legend_") }
+            assertEquals("seed $seed: $ids", unique.toSet().size, unique.size)
+        }
+    }
+
+    @Test
+    fun aWeaponIsNeverUpgradedPastTheLimitByTheSameBatch() {
+        // One level short of the cap: only one of the three roulettes may upgrade it.
+        val offers = listOf(upgrade(WeaponType.KNIFE, 8), option("stat", UpgradeRarity.COMMON))
+        repeat(300) { seed ->
+            val wins = LevelUpRoulette.spinMany(offers, 3, 8, Random(seed)).count { it.winner.type == UpgradeType.WEAPON_UPGRADE }
+            assertTrue("seed $seed: $wins upgrades", wins <= 1)
+        }
+        // Two levels short: up to two.
+        val offers2 = listOf(upgrade(WeaponType.KNIFE, 7), option("stat", UpgradeRarity.COMMON))
+        repeat(300) { seed ->
+            val wins = LevelUpRoulette.spinMany(offers2, 3, 8, Random(seed)).count { it.winner.type == UpgradeType.WEAPON_UPGRADE }
+            assertTrue("seed $seed: $wins upgrades", wins <= 2)
+        }
+    }
+
+    @Test
+    fun arsenalCountsAsALevelForEveryWeapon() {
+        val arsenal = LevelUpOption("legend_arsenal", "a", "a", UpgradeType.STAT, rarity = UpgradeRarity.LEGENDARY)
+        val offers = listOf(arsenal, upgrade(WeaponType.KNIFE, 8), option("stat", UpgradeRarity.COMMON))
+        repeat(500) { seed ->
+            val winners = LevelUpRoulette.spinMany(offers, 3, 8, Random(seed)).map { it.winner }
+            val levelsGained = winners.count { it.id == "legend_arsenal" } + winners.count { it.type == UpgradeType.WEAPON_UPGRADE }
+            assertTrue("seed $seed: $winners", levelsGained <= 1)
+        }
+    }
+
+    @Test
+    fun statBoostsMayRepeatAndTheBatchAlwaysResolves() {
+        val onlyStats = listOf(option("stat", UpgradeRarity.COMMON))
+        val spins = LevelUpRoulette.spinMany(onlyStats, 3, 8, Random(1))
+        assertEquals(listOf("stat", "stat", "stat"), spins.map { it.winner.id })
+    }
+
+    @Test(expected = IllegalArgumentException::class)
+    fun fourRoulettesAreRefused() {
+        LevelUpRoulette.spinMany(pool, 4, 8)
     }
 }

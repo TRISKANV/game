@@ -246,7 +246,7 @@ fun GameScreen(
         if (canShowBadge && gameState.levelUpsWaiting > 0) {
             LevelUpBadge(
                 count    = gameState.levelUpsWaiting,
-                onOpen   = { viewModel.openLevelUp() },
+                onOpen   = { batch -> viewModel.openLevelUp(batch) },
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp)
             )
         }
@@ -286,10 +286,9 @@ fun GameScreen(
         // ── Level-Up ──────────────────────────────────────────────────────
         if (gameState.isPendingLevelUp) {
             LevelUpOverlay(
-                options     = gameState.levelUpOptions,
-                winnerIndex = gameState.levelUpWinner,
+                spins       = gameState.levelUpSpins,
                 playerLevel = gameState.playerLevel,
-                onChoice    = { option -> viewModel.applyLevelUpChoice(option) }
+                onTake      = { viewModel.takeLevelUp() }
             )
         }
 

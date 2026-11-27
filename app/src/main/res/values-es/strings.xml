@@ -25,6 +25,8 @@
     <string name="level_up_opening">Nivel %1$d — Abriendo...</string>
     <string name="level_up_skip">Tocá para saltar</string>
     <string name="level_up_take">TOMAR</string>
+    <string name="level_up_take_all">TOMAR TODO</string>
+    <string name="level_up_batch">Abrir %1$d</string>
     <string name="rarity_common">COMÚN</string>
     <string name="rarity_rare">RARA</string>
     <string name="rarity_epic">ÉPICA</string>

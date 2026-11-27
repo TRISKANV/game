@@ -111,14 +111,14 @@ class GameViewModel @Inject constructor(
         engine?.setCarButton(down)
     }
 
-    fun openLevelUp() {
-        Log.d(TAG, "openLevelUp()")
-        engine?.openLevelUp()
+    fun openLevelUp(count: Int = 1) {
+        Log.d(TAG, "openLevelUp($count)")
+        engine?.openLevelUp(count)
     }
 
-    fun applyLevelUpChoice(option: LevelUpOption) {
-        Log.d(TAG, "applyLevelUpChoice: ${option.id}")
-        engine?.applyLevelUpChoice(option)
+    fun takeLevelUp() {
+        Log.d(TAG, "takeLevelUp()")
+        engine?.takeLevelUp()
     }
 
     fun saveRunResult(state: GameState) {
