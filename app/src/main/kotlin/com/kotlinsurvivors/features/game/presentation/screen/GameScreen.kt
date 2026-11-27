@@ -246,7 +246,7 @@ fun GameScreen(
         if (canShowBadge && gameState.levelUpsWaiting > 0) {
             LevelUpBadge(
                 count    = gameState.levelUpsWaiting,
-                onOpen   = { batch -> viewModel.openLevelUp(batch) },
+                onOpen   = { viewModel.openLevelUp() },
                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 28.dp)
             )
         }
@@ -288,7 +288,9 @@ fun GameScreen(
             LevelUpOverlay(
                 spins       = gameState.levelUpSpins,
                 playerLevel = gameState.playerLevel,
-                onTake      = { viewModel.takeLevelUp() }
+                // levels still waiting once the ones on screen are taken
+                remaining   = gameState.levelUpsWaiting - gameState.levelUpSpins.size,
+                onTake      = { thenOpen -> viewModel.takeLevelUp(thenOpen) }
             )
         }
 

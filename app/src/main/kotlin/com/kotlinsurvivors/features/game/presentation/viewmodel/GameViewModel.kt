@@ -116,9 +116,10 @@ class GameViewModel @Inject constructor(
         engine?.openLevelUp(count)
     }
 
-    fun takeLevelUp() {
-        Log.d(TAG, "takeLevelUp()")
-        engine?.takeLevelUp()
+    /** Takes the prizes on screen and, if [thenOpen] is above zero, opens that many roulettes straight away. */
+    fun takeLevelUp(thenOpen: Int = 0) {
+        Log.d(TAG, "takeLevelUp($thenOpen)")
+        engine?.takeLevelUp(thenOpen)
     }
 
     fun saveRunResult(state: GameState) {

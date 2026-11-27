@@ -274,12 +274,16 @@ private fun reelLook(count: Int) = when (count) {
  * stops on the prize the engine drew. With several level-ups waiting the player can open two or three
  * at once: the strips run together, stop one after another, and the prizes are taken in one tap.
  * Tapping a strip while they run jumps all of them to their result.
+ *
+ * Once the strips have stopped, with more level-ups still waiting ([remaining]), the player may also
+ * take the prizes and open two or three more roulettes straight away.
  */
 @Composable
 fun LevelUpOverlay(
     spins       : List<LevelUpRoulette.Spin>,
     playerLevel : Int,
-    onTake      : () -> Unit
+    remaining   : Int,
+    onTake      : (thenOpen: Int) -> Unit
 ) {
     // Read inside graphicsLayer only, so the pulse redraws the title without recomposing the overlay.
     val pulse = rememberInfiniteTransition(label = "pulse").animateFloat(
@@ -313,7 +317,8 @@ fun LevelUpOverlay(
         var skipTaps    by remember(spins) { mutableIntStateOf(0) }
         val allLanded = landedCount >= count
 
-        Column(
+        // Taking and opening more swaps the spins while the overlay stays; each batch starts from scratch.
+        key(spins) { Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(look.gap),
             modifier            = Modifier
@@ -365,12 +370,25 @@ fun LevelUpOverlay(
                 modifier         = Modifier.fillMaxWidth().heightIn(min = TAKE_AREA_HEIGHT)
             ) {
                 if (allLanded) {
-                    TakeButton(label = stringResource(if (count == 1) R.string.level_up_take else R.string.level_up_take_all), onClick = onTake)
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        TakeButton(
+                            label   = stringResource(if (count == 1) R.string.level_up_take else R.string.level_up_take_all),
+                            onClick = { onTake(0) }
+                        )
+                        // only as many as there are levels left to spend
+                        for (batch in 2..minOf(remaining, LevelUpRoulette.MAX_ROULETTES)) {
+                            TakeButton(
+                                label    = stringResource(R.string.level_up_take_open, batch),
+                                onClick  = { onTake(batch) },
+                                emphasis = false
+                            )
+                        }
+                    }
                 } else {
                     Text(stringResource(R.string.level_up_skip), color = Color(0xFF777777), fontSize = 11.sp)
                 }
             }
-        }
+        } }
     }
 }
 
@@ -557,16 +575,16 @@ private fun ReelTile(option: LevelUpOption, look: ReelLook) {
 }
 
 @Composable
-private fun TakeButton(label: String, onClick: () -> Unit) {
+private fun TakeButton(label: String, onClick: () -> Unit, emphasis: Boolean = true) {
     val sounds = LocalSoundEffects.current
     Box(
         contentAlignment = Alignment.Center,
         modifier = Modifier
             .pixelFrame(
                 unit  = pixelUnitOf(2.dp),
-                frame = Color(0xFF7C4DFF),
-                body  = Color(0xFF3A2278),
-                light = Color(0xFFB39DFF)
+                frame = if (emphasis) Color(0xFF7C4DFF) else Color(0xFFFFD740),
+                body  = if (emphasis) Color(0xFF3A2278) else Color(0xFF4A3A10),
+                light = if (emphasis) Color(0xFFB39DFF) else Color(0xFFFFE9A0)
             )
             .clickable(
                 interactionSource = remember { MutableInteractionSource() },
@@ -574,9 +592,9 @@ private fun TakeButton(label: String, onClick: () -> Unit) {
                 role              = Role.Button,
                 onClick           = { sounds.play(Sound.LEVEL_CHOOSE); onClick() }
             )
-            .padding(horizontal = 32.dp, vertical = 10.dp)
+            .padding(horizontal = if (emphasis) 28.dp else 16.dp, vertical = 10.dp)
     ) {
-        Text(label, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
+        Text(label, color = Color.White, fontSize = if (emphasis) 14.sp else 12.sp, fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp)
     }
 }
 

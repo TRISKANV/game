@@ -301,8 +301,12 @@ class GameEngine(
         openRouletteCount = count.coerceIn(1, LevelUpRoulette.MAX_ROULETTES)
     }
 
-    /** The player took the prizes of the open roulettes. Safe to call from the UI thread; extra taps do nothing. */
-    fun takeLevelUp() {
+    /**
+     * The player took the prizes of the open roulettes. Safe to call from the UI thread; extra taps do nothing.
+     * With [thenOpen] above zero, that many roulettes open right after, for the levels still waiting.
+     */
+    fun takeLevelUp(thenOpen: Int = 0) {
+        if (thenOpen > 0) openRouletteCount = thenOpen.coerceIn(1, LevelUpRoulette.MAX_ROULETTES)
         levelUpTaken = true
     }
 
@@ -524,6 +528,8 @@ class GameEngine(
         }
 
         if (laboratory && labInvincible) LabActions.healFull(world)
+        // Deaths from the whip, auras and the like only get their event here; count them with the rest.
+        experienceSystem.reapUnreportedKills(world, frameEvents)
         playEventSounds(frameEvents)
         combo.update(dt)
         world.players[world.getPlayerEntity()]?.let(combo::applyTo)

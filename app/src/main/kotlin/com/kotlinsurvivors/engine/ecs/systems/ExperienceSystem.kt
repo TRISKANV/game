@@ -91,8 +91,12 @@ class ExperienceSystem {
      * Any enemy that is dead, not already scheduled for destruction and not
      * already reported this frame gets its EnemyKilled event here, so
      * handleEnemyKilled() treats every death the same way.
+     *
+     * The engine calls this before it counts the frame's kills for the combo and the death sounds, so
+     * a whip or aura kill counts like any other; [processEvents] calls it again, which adds nothing
+     * because those deaths are already reported by then.
      */
-    private fun reapUnreportedKills(world: World, events: MutableList<GameEvent>) {
+    fun reapUnreportedKills(world: World, events: MutableList<GameEvent>) {
         reportedKills.clear()
         for (event in events) {
             if (event is GameEvent.EnemyKilled) reportedKills.add(event.entityId)

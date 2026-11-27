@@ -26,7 +26,7 @@
     <string name="level_up_skip">Tap to skip</string>
     <string name="level_up_take">TAKE IT</string>
     <string name="level_up_take_all">TAKE ALL</string>
-    <string name="level_up_batch">Open %1$d</string>
+    <string name="level_up_take_open">TAKE + OPEN %1$d</string>
     <string name="rarity_common">COMMON</string>
     <string name="rarity_rare">RARE</string>
     <string name="rarity_epic">EPIC</string>
