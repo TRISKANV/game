@@ -568,6 +568,7 @@ class GameEngine(
         companionSystem.update(world, dt, movementSystem.levelMap, frameEvents)
         if (companionSystem.consumeBites() > 0) sounds.play(Sound.DOG_BARK)
         if (laboratory && labInvincible) LabActions.healFull(world)
+        keepSleepingChiefUntouched()
         // Deaths from the whip, auras and the like only get their event here; count them with the rest.
         experienceSystem.reapUnreportedKills(world, frameEvents)
         playEventSounds(frameEvents)
@@ -800,6 +801,19 @@ class GameEngine(
         CrashLogger.log("CHIEF wakes at ${elapsedTime.toInt()}s")
     }
 
+    /**
+     * The chief sleeps through everything until the officers are down: whatever hits him in his sleep (shots,
+     * the whip, auras, bombs, a car) does nothing, and he cannot be killed before the fight.
+     */
+    private fun keepSleepingChiefUntouched() {
+        val chief = world.enemies[chiefId] ?: return
+        if (!chief.asleep) return
+        val hp = world.healths[chiefId] ?: return
+        hp.current = hp.max
+        hp.isDead = false
+        frameEvents.removeAll { it is GameEvent.EnemyKilled && it.entityId == chiefId }
+    }
+
     /** The chief wakes before the quota: somebody hit him, or the laboratory asked for it. */
     private fun wakeChiefEarly() {
         if (!world.enemies.containsKey(chiefId)) return
@@ -832,7 +846,6 @@ class GameEngine(
         if (chief != null) {
             world.transforms[chiefId]?.let { chiefX = it.x; chiefY = it.y }
             val hp = world.healths[chiefId]
-            if (chief.asleep && hp != null && hp.current < hp.max) wakeChiefEarly()
         }
         if (siege.alarmOn) {
             sirenTimer -= dt
@@ -1132,6 +1145,7 @@ class GameEngine(
             carProgress      = if (levelFlow.level == STATION_LEVEL) keySearch.progress else carSystem.progress,
             searchEmpty      = searchEmpty,
             carHealth        = carSystem.drivenHealth(world),
+            carLook          = carSystem.promptLook,
             comboCount       = if (combo.isVisible) combo.count else 0,
             comboTier        = combo.tier,
             comboFraction    = if (combo.isVisible) (combo.fraction * 20f).toInt() / 20f else 0f,

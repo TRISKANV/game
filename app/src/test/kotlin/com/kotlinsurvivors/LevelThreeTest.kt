@@ -18,6 +18,7 @@ import kotlinx.coroutines.SupervisorJob
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -200,6 +201,23 @@ class LevelThreeTest {
         Thread.sleep(1500)
         assertEquals("he does not move in his sleep", Level3.CHIEF_X, e.world.transforms[id]!!.x, 1f)
         assertEquals(StationPhase.QUIET, e.gameState.value.stationPhase)
+    }
+
+    @Test fun hittingTheSleepingChiefDoesNotWakeHimNorHurtHim() {
+        val e = startInStation()
+        val (id, c) = chief(e)!!
+        val hp = e.world.healths[id]!!
+        val full = hp.max
+        hp.current = 1                                   // whatever hit him
+        Thread.sleep(500)
+        assertTrue("he sleeps on", c.asleep)
+        assertEquals(full, hp.current)
+        hp.current = 0; hp.isDead = true                 // even a blow that would have killed him
+        Thread.sleep(500)
+        assertTrue(chief(e) != null && chief(e)!!.value.asleep)
+        assertEquals(full, hp.current)
+        assertFalse(hp.isDead)
+        assertNotEquals(StationPhase.CHIEF, e.gameState.value.stationPhase)
     }
 
     @Test fun theAlarmShutsTheStreetDoorAndBringsReinforcements() {

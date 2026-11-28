@@ -29,6 +29,8 @@ class CarSystem(private val sounds: SoundEffects = SoundEffects.None) {
     /** What the car button offers the player this frame, and how far the lock is picked (0..1). */
     var prompt: CarPrompt = CarPrompt.NONE; private set
     var progress: Float = 0f;               private set
+    /** The look (cell of cars.png) of the car the button is about: the one in reach or the one being driven; -1 if none. */
+    var promptLook: Int = -1;               private set
 
     private var mapChanged = false
     private var pickingId = -1
@@ -46,7 +48,7 @@ class CarSystem(private val sounds: SoundEffects = SoundEffects.None) {
 
     /** A new run: no car remembers anything. */
     fun reset() {
-        stash.clear(); mapChanged = false; pickingId = -1; pickArmed = false; prompt = CarPrompt.NONE; progress = 0f; engineLoop = -1
+        stash.clear(); mapChanged = false; pickingId = -1; pickArmed = false; prompt = CarPrompt.NONE; progress = 0f; promptLook = -1; engineLoop = -1
     }
 
     /** The cars of [level] are put away as they stand, to be found there again if the player comes back. */
@@ -104,12 +106,14 @@ class CarSystem(private val sounds: SoundEffects = SoundEffects.None) {
 
         for (car in world.cars.values) if (car.hurtTimer > 0f) car.hurtTimer = (car.hurtTimer - dt).coerceAtLeast(0f)
 
+        promptLook = -1
         val drivenId = player.drivingCar
         if (drivenId >= 0) {
             val car = world.cars[drivenId]
             val ct  = world.transforms[drivenId]
             if (car == null || ct == null) { restoreDriver(world, pid); return }
             drive(world, pid, drivenId, car, ct, joystick, dt)
+            promptLook = car.look
             if (car.state == CarState.DRIVEN) {
                 prompt = CarPrompt.EXIT; progress = 0f
                 if (pressed) getOut(world, pid, drivenId, car, ct)
@@ -130,6 +134,7 @@ class CarSystem(private val sounds: SoundEffects = SoundEffects.None) {
         if (best == -1) { prompt = CarPrompt.NONE; progress = 0f; pickingId = -1; pickArmed = false; return }
 
         val car = world.cars[best] ?: return
+        promptLook = car.look
         if (best != pickingId) { pickingId = best; progress = 0f; pickArmed = false }
         if (car.state == CarState.OPEN) {
             prompt = CarPrompt.ENTER; progress = 0f

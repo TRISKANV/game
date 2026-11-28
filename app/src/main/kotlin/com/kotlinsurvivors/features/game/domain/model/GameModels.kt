@@ -61,6 +61,8 @@ data class GameState(
     val carPrompt        : CarPrompt      = CarPrompt.NONE,
     val carProgress      : Float          = 0f,
     val carHealth        : Float          = -1f,
+    /** Look (cell of cars.png) of the car the car button is about, or -1. */
+    val carLook          : Int            = -1,
 
     // Time
     val elapsedTime      : Float          = 0f,

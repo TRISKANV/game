@@ -53,6 +53,18 @@ class CarTest {
         assertEquals(CarPrompt.EXIT, system.prompt)
     }
 
+    @Test fun theButtonKnowsWhichCarItIsAbout() {
+        val (world, system, ids) = scene()
+        val (_, cid) = ids
+        system.update(world, 0.016f, idle, false, false)
+        assertEquals(world.cars[cid]!!.look, system.promptLook)
+        system.update(world, 0.016f, idle, true, true)
+        repeat(200) { system.update(world, 0.016f, idle, false, true) }
+        assertEquals("at the wheel it is the car being driven", world.cars[cid]!!.look, system.promptLook)
+        system.reset()
+        assertEquals(-1, system.promptLook)
+    }
+
     @Test fun aButtonAlreadyDownWhenTheCarComesIntoReachPicksNothing() {
         val (world, system, _) = scene()
         // the finger is down (or the engine was left thinking so) but no press happened next to this car

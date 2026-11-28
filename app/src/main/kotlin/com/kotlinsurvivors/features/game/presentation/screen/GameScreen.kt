@@ -242,6 +242,7 @@ fun GameScreen(
                 prompt    = gameState.carPrompt,
                 progress  = gameState.carProgress,
                 carHealth = gameState.carHealth,
+                carLook   = gameState.carLook,
                 onButton  = viewModel::onCarButton,
                 modifier  = Modifier.align(Alignment.BottomEnd).padding(end = 36.dp, bottom = 36.dp)
             )
