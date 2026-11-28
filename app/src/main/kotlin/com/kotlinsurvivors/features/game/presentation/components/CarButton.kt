@@ -24,6 +24,8 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -90,13 +92,75 @@ fun CarButton(
                         )
                     }
                 }
-                Text(
-                    text = label,
-                    color = Color(0xFFF4F0E6),
-                    fontSize = 13.sp,
-                    fontWeight = FontWeight.Bold,
-                    fontFamily = FontFamily.Monospace
-                )
+                when (prompt) {
+                    CarPrompt.SEARCH   -> PixelIcon(MAGNIFIER, contentDescription = label)
+                    CarPrompt.LOCKPICK -> PixelIcon(LOCKPICK, contentDescription = label)
+                    else -> Text(
+                        text = label,
+                        color = Color(0xFFF4F0E6),
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        fontFamily = FontFamily.Monospace
+                    )
+                }
+            }
+        }
+    }
+}
+
+// Pixel-art icons, one character per pixel: '.' empty, 'o' dark outline, 'g' glass, 'w' white glint,
+// 'h' handle, 's' steel, 'b' brass.
+private val MAGNIFIER = listOf(
+    "...oooo.....",
+    "..oggggo....",
+    ".ogwwgggo...",
+    ".ogwggggo...",
+    ".oggggggo...",
+    ".oggggggo...",
+    "..oggggo....",
+    "...oooooo...",
+    "......ohho..",
+    ".......ohho.",
+    "........ohho",
+    ".........oo."
+)
+private val LOCKPICK = listOf(
+    "............",
+    "........oo..",
+    ".......osso.",
+    "......osso..",
+    ".....osso...",
+    "....osso.oo.",
+    "...osso.obbo",
+    "..ohhoooobbo",
+    ".ohho..obbo.",
+    ".ohho..oo...",
+    "..oo........",
+    "............"
+)
+
+private fun pixelColor(c: Char): Color? = when (c) {
+    'o' -> Color(0xFF0A0910)
+    'g' -> Color(0xFF7FD6E8)
+    'w' -> Color(0xFFF4F0E6)
+    'h' -> Color(0xFF8A5A2B)
+    's' -> Color(0xFFB8C0CC)
+    'b' -> Color(0xFFE0A93A)
+    else -> null
+}
+
+@Composable
+private fun PixelIcon(rows: List<String>, contentDescription: String) {
+    Canvas(
+        modifier = Modifier
+            .size(54.dp)
+            .semantics { this.contentDescription = contentDescription }
+    ) {
+        val cell = size.width / rows.size
+        rows.forEachIndexed { y, row ->
+            row.forEachIndexed { x, ch ->
+                val color = pixelColor(ch) ?: return@forEachIndexed
+                drawRect(color, Offset(x * cell, y * cell), Size(cell + 0.5f, cell + 0.5f))
             }
         }
     }
