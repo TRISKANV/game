@@ -6,7 +6,6 @@ import com.kotlinsurvivors.engine.ecs.World
 import com.kotlinsurvivors.engine.ecs.components.CompanionState
 import com.kotlinsurvivors.engine.ecs.components.EnemyType
 import com.kotlinsurvivors.engine.ecs.components.PatrolState
-import com.kotlinsurvivors.engine.ecs.components.PickupType
 import com.kotlinsurvivors.engine.ecs.systems.CompanionSystem
 import com.kotlinsurvivors.engine.ecs.systems.GameEvent
 import com.kotlinsurvivors.engine.lab.LabCommand
@@ -86,6 +85,27 @@ class CompanionTest {
         assertEquals(1, events.count { it is GameEvent.EnemyKilled && it.entityId == enemy })
     }
 
+    @Test fun aBossCannotBeWalkedThroughByTheDog() {
+        val (w, pid, dog) = worldWith(1000f to 1000f)
+        val boss = EntityFactory.createEnemy(w, EnemyType.TANK, 1004f, 1004f)
+        w.healths[boss]!!.let { it.current = 1000000; it.max = 1000000 }
+        w.enemies[boss]!!.asleep = true
+        run(w, 0.5f)
+        val b = w.transforms[boss]!!; val d = w.transforms[dog]!!
+        val min = CompanionSystem.BODY_RADIUS + w.colliders[boss]!!.radius * CompanionSystem.BODY_OVERLAP
+        assertTrue("distance ${hypot(b.x - d.x, b.y - d.y)} < $min", hypot(b.x - d.x, b.y - d.y) >= min - 1f)
+    }
+
+    @Test fun theDogIsPutOutOfAWallThatAppearsOnTopOfHim() {
+        val map = levelOne()
+        val (w, pid, dog) = worldWith(Level1.SPAWN_X to Level1.SPAWN_Y)
+        w.transforms[pid]!!.let { it.x = Level1.SPAWN_X; it.y = Level1.SPAWN_Y }
+        val t = w.transforms[dog]!!
+        map.setRect(t.x - 40f, t.y - 10f, t.x + 40f, t.y + 60f, true)     // a parked car lands where he stands
+        run(w, 0.2f, map)
+        assertTrue(map.isBoxFree(t.x, t.y + CompanionSystem.FEET, CompanionSystem.HALF, CompanionSystem.HALF))
+    }
+
     @Test fun theDogLeavesSleepersAndUnawarePatrolsAlone() {
         val (w, pid, dog) = worldWith(1040f to 1000f)
         val sleeper = EntityFactory.createEnemy(w, EnemyType.BASIC, 1080f, 1000f)
@@ -152,6 +172,7 @@ class CompanionTest {
         assertTrue("the dog stands inside the cell, behind solid cells", map.isBlockedAt(Level3.CELL_DOG_X, Level3.CELL_DOG_Y))
         assertFalse(reachable(map, Level3.CELL_DOOR_X, Level3.CELL_DOOR_Y, Level3.CELL_DOG_X, Level3.CELL_DOG_Y))
         map.setRect(Level3.CELL_FREE_X0, Level3.CELL_FREE_Y0, Level3.CELL_FREE_X1, Level3.CELL_FREE_Y1, false)
+        map.setRect(Level3.CELL_GATE_FREE_X0, Level3.CELL_GATE_FREE_Y0, Level3.CELL_GATE_FREE_X1, Level3.CELL_GATE_FREE_Y1, false)
         assertFalse(map.isBlockedAt(Level3.CELL_DOG_X, Level3.CELL_DOG_Y))
         assertTrue(reachable(map, Level3.CELL_DOG_X, Level3.CELL_DOG_Y, Level3.CELL_DOOR_X, Level3.CELL_DOOR_Y))
     }
@@ -167,11 +188,15 @@ class CompanionTest {
         assertTrue(width > 100f)
     }
 
-    @Test fun theCellKeyLiesOnFreeFloorTheSpawnCanReach() {
+    @Test fun theGateOpensIntoTheWalkwayAndTheNeighbouringCellsStayShut() {
         val map = station()
-        assertFalse(map.isBlockedAt(Level3.CELL_KEY_X, Level3.CELL_KEY_Y))
-        assertTrue(reachable(map, Level3.SPAWN_X, Level3.SPAWN_Y, Level3.CELL_KEY_X, Level3.CELL_KEY_Y))
-        assertTrue(reachable(map, Level3.SPAWN_X, Level3.SPAWN_Y, Level3.CELL_DOOR_X, Level3.CELL_DOOR_Y))
+        map.setRect(Level3.CELL_FREE_X0, Level3.CELL_FREE_Y0, Level3.CELL_FREE_X1, Level3.CELL_FREE_Y1, false)
+        map.setRect(Level3.CELL_GATE_FREE_X0, Level3.CELL_GATE_FREE_Y0, Level3.CELL_GATE_FREE_X1, Level3.CELL_GATE_FREE_Y1, false)
+        assertTrue(reachable(map, Level3.CELL_DOG_X, Level3.CELL_DOG_Y, Level3.CELL_DOOR_X, Level3.CELL_DOOR_Y))
+        // the bars either side of the gate are still bars
+        val barY = (Level3.CELL_GATE_FREE_Y0 + Level3.CELL_GATE_FREE_Y1) / 2f
+        assertTrue(map.isBlockedAt(Level3.CELL_GATE_FREE_X0 - 40f, barY))
+        assertTrue(map.isBlockedAt(Level3.CELL_GATE_FREE_X1 + 40f, barY))
         assertTrue(File(dir, "station_cell_open.png").exists())
     }
 
@@ -201,23 +226,35 @@ class CompanionTest {
         return e
     }
 
-    @Test fun theStationHasACagedDogAndTheCellKeyOnTheFloor() {
-        val e = startInStation()
-        waitFor("the dog") { e.world.companions.values.any { it.state == CompanionState.CAGED } }
-        assertEquals(1, e.world.pickups.values.count { it.type == PickupType.CELL_KEY })
+    private fun searchEverySpot(e: GameEngine) {
+        val pid = e.world.getPlayerEntity()
+        for (i in Level3.SPOT_X.indices) {
+            e.world.transforms[pid]!!.let { it.x = Level3.SPOT_X[i]; it.y = Level3.SPOT_Y[i] }
+            Thread.sleep(60)
+            e.setCarButton(true)
+            Thread.sleep(1700)
+            e.setCarButton(false)
+            Thread.sleep(60)
+        }
     }
 
-    @Test fun takingTheKeyAndStandingAtTheBarsLetsTheDogOutAndHeFollowsToLevelTwo() {
+    @Test fun theStationHasACagedDogAndNoKeysOnTheFloor() {
+        val e = startInStation()
+        waitFor("the dog") { e.world.companions.values.any { it.state == CompanionState.CAGED } }
+        assertEquals(0, e.world.pickups.size)
+    }
+
+    @Test fun searchingFindsTheCellKeyAndTheDogIsLetOutAfterTheGateHasOpened() {
         val e = startInStation()
         val pid = e.world.getPlayerEntity()
         e.sendLabCommand(LabCommand.ClearEnemies)           // the officers of the cell block would see him and shut the street door
         waitFor("the station is empty") { e.world.enemies.isEmpty() }
-        waitFor("the key") { e.world.pickups.values.any { it.type == PickupType.CELL_KEY } }
-        // the player walks over the key
-        e.world.transforms[pid]!!.let { it.x = Level3.CELL_KEY_X; it.y = Level3.CELL_KEY_Y - 26f }
-        waitFor("the key is taken") { e.world.pickups.values.none { it.type == PickupType.CELL_KEY } }
-        // and goes to the cell
+        searchEverySpot(e)
+        assertTrue("some places were empty", e.gameState.value.searchEmpty != null)
+        // and he goes to the cell
         e.world.transforms[pid]!!.let { it.x = Level3.CELL_DOOR_X; it.y = Level3.CELL_DOOR_Y }
+        Thread.sleep(300)
+        assertEquals("the dog stays in until the gate is open", CompanionState.CAGED, e.world.companions.values.first().state)
         waitFor("the dog is free") { e.world.companions.values.any { it.state == CompanionState.FOLLOW } }
         waitFor("the dog walks out of the cell") {
             val d = e.world.companions.keys.first()
@@ -225,7 +262,7 @@ class CompanionTest {
             hypot(t.x - Level3.CELL_DOOR_X, t.y - Level3.CELL_DOOR_Y) < 160f
         }
         // out in the plaza he is still there, next to the player
-        e.world.transforms[pid]!!.let { it.x = (Level3.EXIT_X0 + Level3.EXIT_X1) / 2f; it.y = Level3.EXIT_Y + 10f }
+        e.world.transforms[pid]!!.let { it.x = (Level3.EXIT_X0 + Level3.EXIT_X1) / 2f; it.y = Level3.EXIT_Y + 20f }
         waitFor("the street") { e.gameState.value.levelNumber == 2 && e.gameState.value.levelFade == 0f }
         waitFor("the dog is with the player") {
             val d = e.world.companions.keys.firstOrNull() ?: return@waitFor false

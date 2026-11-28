@@ -32,6 +32,8 @@ class CarSystem(private val sounds: SoundEffects = SoundEffects.None) {
 
     private var mapChanged = false
     private var pickingId = -1
+    /** True once a finger went down on the button while a locked car was in reach; see [update]. */
+    private var pickArmed = false
     private var tickTimer = 0f
     private var driverRadius = 0f
     private var engineLoop = -1
@@ -44,7 +46,7 @@ class CarSystem(private val sounds: SoundEffects = SoundEffects.None) {
 
     /** A new run: no car remembers anything. */
     fun reset() {
-        stash.clear(); mapChanged = false; pickingId = -1; prompt = CarPrompt.NONE; progress = 0f; engineLoop = -1
+        stash.clear(); mapChanged = false; pickingId = -1; pickArmed = false; prompt = CarPrompt.NONE; progress = 0f; engineLoop = -1
     }
 
     /** The cars of [level] are put away as they stand, to be found there again if the player comes back. */
@@ -125,10 +127,10 @@ class CarSystem(private val sounds: SoundEffects = SoundEffects.None) {
             val d2 = dx * dx + dy * dy
             if (d2 < bestD2) { bestD2 = d2; best = id }
         }
-        if (best == -1) { prompt = CarPrompt.NONE; progress = 0f; pickingId = -1; return }
+        if (best == -1) { prompt = CarPrompt.NONE; progress = 0f; pickingId = -1; pickArmed = false; return }
 
         val car = world.cars[best] ?: return
-        if (best != pickingId) { pickingId = best; progress = 0f }
+        if (best != pickingId) { pickingId = best; progress = 0f; pickArmed = false }
         if (car.state == CarState.OPEN) {
             prompt = CarPrompt.ENTER; progress = 0f
             if (pressed) getIn(world, pid, best, car)
@@ -137,8 +139,13 @@ class CarSystem(private val sounds: SoundEffects = SoundEffects.None) {
         prompt = CarPrompt.LOCKPICK
         // a blow interrupts the work: the lock goes back to the start
         if (health.invincibleTimer > 0f) { progress = 0f; return }
-        progress = CarRules.pickProgress(progress, dt, held)
-        if (held && progress < 1f) {
+        // The lock is only picked by a finger that went down on the button next to this car: a button that
+        // was already down when the player walked up (or got stuck down) does nothing.
+        if (pressed) pickArmed = true
+        if (!held) pickArmed = false
+        val picking = held && pickArmed
+        progress = CarRules.pickProgress(progress, dt, picking)
+        if (picking && progress < 1f) {
             tickTimer -= dt
             if (tickTimer <= 0f) { sounds.play(Sound.CAR_PICK); tickTimer = TICK_SECONDS }
         }

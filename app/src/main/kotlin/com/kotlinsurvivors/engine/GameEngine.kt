@@ -18,6 +18,7 @@ import com.kotlinsurvivors.engine.ecs.components.CarState
 import com.kotlinsurvivors.engine.ecs.components.CompanionState
 import com.kotlinsurvivors.engine.map.LevelCars
 import com.kotlinsurvivors.features.game.domain.model.CarPrompt
+import com.kotlinsurvivors.features.game.domain.model.SearchEmpty
 import com.kotlinsurvivors.engine.map.Level1
 import com.kotlinsurvivors.engine.map.Level2
 import com.kotlinsurvivors.engine.map.Level3
@@ -69,7 +70,9 @@ class GameEngine(
     private val laboratory: Boolean = false,
     /** Collision grid of Level 2, read at the start of the run so crossing over never waits on a file. */
     private val loadNextLevelMap: suspend () -> LevelMap? = { null },
-    private val loadStationMap: suspend () -> LevelMap? = { null }
+    private val loadStationMap: suspend () -> LevelMap? = { null },
+    /** Decides where the keys of the station are hidden; fixed in tests. */
+    private val keyRandom: Random = Random.Default
 ) {
     companion object {
         const val TARGET_FPS     = 60
@@ -82,6 +85,9 @@ class GameEngine(
         const val MAX_WEAPON_LEVEL = 8
         private const val EVENT_BANNER_SECONDS = 2.5f
         private const val LEVEL_NOTICE_SECONDS = 3.2f
+        private const val CELL_OPEN_SECONDS   = 1.1f      // the gate takes this long to swing open
+        private const val KEY_DOOR_REACH       = 150f      // how close to the shutter the key opens it
+        private const val SEARCH_TICK_SECONDS  = 0.3f
         private const val CELL_HINT_REACH      = 190f      // close enough to see the dog behind the bars
         private const val CELL_DOOR_REACH      = 70f       // how close to the bars the player must stand with the key
         private const val STATION_LEVEL = 3
@@ -131,6 +137,15 @@ class GameEngine(
     private var cellKeyHeld = false
     private var dogFreed = false
     private var dogHintShown = false
+    /** The gate of the cell is swinging open: seconds since the key turned. The dog is let out when it is done. */
+    private var cellOpening = false
+    private var cellOpenTime = 0f
+
+    /** The keys of the station and the places they are hidden in (see [KeySearch]). */
+    private val keySearch = KeySearch(Level3.SPOT_NAMES.map { SpotKind.valueOf(it) }, Level3.SPOT_X, Level3.SPOT_Y)
+    private var exitKeyHeld = false
+    private var searchEmpty: SearchEmpty? = null
+    private var searchTickTimer = 0f
     private var chiefX = 0f
     private var chiefY = 0f
     private var sirenTimer = 0f
@@ -404,6 +419,11 @@ class GameEngine(
         cellKeyHeld          = false
         dogFreed             = false
         dogHintShown         = false
+        cellOpening          = false
+        cellOpenTime         = 0f
+        exitKeyHeld          = false
+        searchEmpty          = null
+        keySearch.reset(keyRandom)
         shutDogCell(true)
         sirenTimer           = 0f
         lockStationDoor(false)
@@ -519,6 +539,7 @@ class GameEngine(
             val input = if (levelFlow.phase == LevelFlow.Phase.LEAVING) tripInput() else joystick.getState()
             val pressed = carPressQueued; carPressQueued = false
             carSystem.update(world, dt, input, pressed, carHeld)
+            if (levelFlow.level == STATION_LEVEL) searchTheStation(dt, pressed)
             // at the wheel the car goes where the stick says; the character himself stands still
             movementSystem.update(world, dt, if (isDriving()) JoystickState() else input)
             carSystem.keepDriverInCar(world)
@@ -788,6 +809,14 @@ class GameEngine(
 
     /** What happens in the station from one frame to the next while the siege goes on. */
     private fun updateStation(dt: Float) {
+        if (cellOpening) {
+            cellOpenTime += dt
+            if (cellOpenTime >= CELL_OPEN_SECONDS) finishFreeingDog()
+        }
+        if (exitKeyHeld && siege.doorShut && levelFlow.phase == LevelFlow.Phase.PLAYING) {
+            val pt = world.transforms[world.getPlayerEntity()]
+            if (pt != null && pt.x in Level3.EXIT_X0..Level3.EXIT_X1 && pt.y > Level3.SHUTTER_Y0 - KEY_DOOR_REACH) openStreetDoor()
+        }
         if (!dogFreed && levelFlow.phase == LevelFlow.Phase.PLAYING) {
             val pt = world.transforms[world.getPlayerEntity()]
             val near = if (pt == null) Float.MAX_VALUE else hypot(pt.x - Level3.CELL_DOOR_X, pt.y - Level3.CELL_DOOR_Y)
@@ -839,63 +868,109 @@ class GameEngine(
             is GameEvent.EnemyKilled -> when (event.type) {
                 EnemyType.COP -> if (siege.copKilled()) wakeChiefNow()
                 EnemyType.CHIEF -> if (siege.chiefKilled()) {
-                    EntityFactory.createPickup(world, PickupType.KEY, chiefX, chiefY)
                     levelNotice      = LevelNotice.KEY_DROPPED
                     levelNoticeTimer = LEVEL_NOTICE_SECONDS
-                    CrashLogger.log("CHIEF down at ${elapsedTime.toInt()}s, the key is on the floor")
+                    CrashLogger.log("CHIEF down at ${elapsedTime.toInt()}s, the street door key is still hidden")
                 }
                 else -> Unit
             }
-            is GameEvent.PickupCollected -> if (event.type == PickupType.CELL_KEY) {
-                cellKeyHeld = true
-                levelNotice      = LevelNotice.CELL_KEY
-                levelNoticeTimer = LEVEL_NOTICE_SECONDS
-                sounds.play(Sound.KEY_GET)
-                CrashLogger.log("CELL KEY taken at ${elapsedTime.toInt()}s")
-            } else if (event.type == PickupType.KEY && siege.keyTaken()) {
-                lockStationDoor(false)
-                levelNotice      = LevelNotice.STATION_OPEN
-                levelNoticeTimer = LEVEL_NOTICE_SECONDS
-                sounds.play(Sound.KEY_GET)
-                eventDirector.restartSchedule(elapsedTime)   // the plaza stops being peaceful once the station is cleared
-                CrashLogger.log("KEY taken at ${elapsedTime.toInt()}s: the street door is open")
-            }
+            // a key dropped by the laboratory counts as the key of the street door
+            is GameEvent.PickupCollected -> if (event.type == PickupType.KEY) foundExitKey()
             else -> Unit
         }
     }
 
-    /** The dog of the station, in his cell, and the key that opens it lying in the locker room, until the player has them. */
+    /** The police dog, locked in his cell until the player has the key of the cell and stands at the gate. */
     private fun spawnCellDog() {
         if (dogFreed) return
+        cellOpening = false; cellOpenTime = 0f
         shutDogCell(true)
         companionId = EntityFactory.createCompanion(world, Level3.CELL_DOG_X, Level3.CELL_DOG_Y, caged = true)
         world.transforms[companionId]?.let { it.x = Level3.CELL_DOG_X; it.y = Level3.CELL_DOG_Y }
         world.companions[companionId]?.heading = (PI / 2).toFloat()          // looking out of the bars
-        if (!cellKeyHeld) {
-            val key = EntityFactory.createPickup(world, PickupType.CELL_KEY, Level3.CELL_KEY_X, Level3.CELL_KEY_Y)
-            world.transforms[key]?.let { it.x = Level3.CELL_KEY_X; it.y = Level3.CELL_KEY_Y }   // not scattered: it is in a fixed place
-        }
     }
 
-    /** Closes or opens the inside of the dog's cell in the collision map. */
+    /** Closes or opens the inside of the dog's cell, and the gap of its gate, in the collision map. */
     private fun shutDogCell(shut: Boolean) {
         val map = stationMap ?: return
         map.setRect(Level3.CELL_FREE_X0, Level3.CELL_FREE_Y0, Level3.CELL_FREE_X1, Level3.CELL_FREE_Y1, shut)
+        map.setRect(Level3.CELL_GATE_FREE_X0, Level3.CELL_GATE_FREE_Y0, Level3.CELL_GATE_FREE_X1, Level3.CELL_GATE_FREE_Y1, shut)
+        // the walls and the bars round the cell stay as they were
         if (levelFlow.level == STATION_LEVEL) movementSystem.levelMap = map
     }
 
-    /** The key turns: the cell opens and the dog is the player's from now on, in every level of the run. */
+    /** The key turns and the gate starts to swing; [finishFreeingDog] lets the dog out when it has opened. */
     private fun freeDog() {
+        if (cellOpening || !world.companions.containsKey(companionId)) return
+        cellOpening = true
+        cellOpenTime = 0f
+        sounds.play(Sound.KEY_GET)
+        sounds.play(Sound.SHUTTER)
+    }
+
+    private fun finishFreeingDog() {
         val comp = world.companions[companionId] ?: return
+        cellOpening = false
         dogFreed = true
         shutDogCell(false)
         comp.state = CompanionState.FOLLOW
         comp.hurtTimer = 1f
         levelNotice      = LevelNotice.DOG_FREED
         levelNoticeTimer = LEVEL_NOTICE_SECONDS
-        sounds.play(Sound.KEY_GET)
         sounds.play(Sound.DOG_BARK)
         CrashLogger.log("K9 freed at ${elapsedTime.toInt()}s")
+    }
+
+    // ── The keys of the station ────────────────────────────────────────────
+
+    /** Searches the place the player stands at, while the button is held; see [KeySearch]. */
+    private fun searchTheStation(dt: Float, pressed: Boolean) {
+        val pid = world.getPlayerEntity()
+        val pt = world.transforms[pid] ?: return
+        val canSearch = levelFlow.phase == LevelFlow.Phase.PLAYING && !isDriving()
+        val before = keySearch.progress
+        val result = keySearch.update(dt, pt.x, pt.y, pressed, carHeld, canSearch)
+        if (keySearch.target >= 0 && keySearch.progress > before) {
+            searchTickTimer -= dt
+            if (searchTickTimer <= 0f) { sounds.play(Sound.CAR_PICK); searchTickTimer = SEARCH_TICK_SECONDS }
+        }
+        when (result) {
+            is SearchResult.CellKey -> {
+                cellKeyHeld = true
+                levelNotice      = LevelNotice.CELL_KEY
+                levelNoticeTimer = LEVEL_NOTICE_SECONDS
+                sounds.play(Sound.KEY_GET)
+                CrashLogger.log("CELL KEY found at ${elapsedTime.toInt()}s in ${Level3.SPOT_NAMES[result.spot]}")
+            }
+            is SearchResult.ExitKey -> {
+                foundExitKey()
+                CrashLogger.log("STREET KEY found at ${elapsedTime.toInt()}s in ${Level3.SPOT_NAMES[result.spot]}")
+            }
+            is SearchResult.Nothing -> {
+                searchEmpty = SearchEmpty(result.kind.ordinal, (searchEmpty?.serial ?: 0) + 1)
+                sounds.play(Sound.UI_CLICK)
+            }
+            null -> Unit
+        }
+    }
+
+    /** The key of the street door is in the player's hands; it opens the shutter as soon as he is at it. */
+    private fun foundExitKey() {
+        if (exitKeyHeld) return
+        exitKeyHeld = true
+        levelNotice      = LevelNotice.EXIT_KEY
+        levelNoticeTimer = LEVEL_NOTICE_SECONDS
+        sounds.play(Sound.KEY_GET)
+    }
+
+    private fun openStreetDoor() {
+        if (!siege.openWithKey()) return
+        lockStationDoor(false)
+        levelNotice      = LevelNotice.STATION_OPEN
+        levelNoticeTimer = LEVEL_NOTICE_SECONDS
+        sounds.play(Sound.SHUTTER)
+        eventDirector.restartSchedule(elapsedTime)   // the plaza stops being peaceful once the station is cleared
+        CrashLogger.log("street door opened with the key at ${elapsedTime.toInt()}s")
     }
 
     /** Laboratory: a dog at the player's side, whatever level this is. */
@@ -1000,7 +1075,6 @@ class GameEngine(
                     PickupType.BOMB   -> sounds.play(Sound.ENEMY_BLAST)
                     PickupType.CHEST  -> Unit   // sounds when it finishes opening
                     PickupType.KEY    -> Unit   // the siege makes its own sound
-                    PickupType.CELL_KEY -> Unit // the engine plays it when the key is taken
                 }
                 is GameEvent.PlayerHit -> sounds.play(Sound.PLAYER_HURT)
                 else -> Unit
@@ -1054,8 +1128,9 @@ class GameEngine(
             levelNotice      = levelNotice,
             stationPhase     = siege.phase,
             copsDefeated     = siege.kills.coerceAtMost(StationSiege.GOAL),
-            carPrompt        = carSystem.prompt,
-            carProgress      = carSystem.progress,
+            carPrompt        = if (levelFlow.level == STATION_LEVEL) { if (keySearch.target >= 0) CarPrompt.SEARCH else CarPrompt.NONE } else carSystem.prompt,
+            carProgress      = if (levelFlow.level == STATION_LEVEL) keySearch.progress else carSystem.progress,
+            searchEmpty      = searchEmpty,
             carHealth        = carSystem.drivenHealth(world),
             comboCount       = if (combo.isVisible) combo.count else 0,
             comboTier        = combo.tier,
@@ -1212,7 +1287,7 @@ class GameEngine(
             )
         }
 
-        renderBuffer.cellOpen = dogFreed
+        renderBuffer.cellOpenFrac = if (dogFreed) 1f else if (cellOpening) (cellOpenTime / CELL_OPEN_SECONDS).coerceIn(0.01f, 1f) else 0f
         val scale = Levels.of(levelFlow.level).imageScale
         for ((cid, car) in world.cars) {
             val t = world.transforms[cid] ?: continue

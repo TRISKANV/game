@@ -17,7 +17,7 @@ object Level3 {
     const val EXIT_Y  = 1868.8f
 
     /** Where the player stands to read the wanted poster. */
-    const val POSTER_X = 785.0f
+    const val POSTER_X = 744.0f
     const val POSTER_Y = 1241.6f
 
     /** The street door shuts while the alarm is on: this rectangle is blocked and its picture is drawn over it. */
@@ -30,19 +30,27 @@ object Level3 {
     const val CHIEF_X = 998.4f
     const val CHIEF_Y = 710.4f
 
-    /** The police dog's cell: where he stands, where the player stands to open it, where the key lies, the part that stops being solid and the picture of the open cell. */
+    /** The police dog's cell: where he stands, where the player stands to open it, what stops being solid when it opens (the inside, then the gap of the gate) and where the frames of the opening gate are drawn. */
     const val CELL_DOG_X = 421.0f
-    const val CELL_DOG_Y = 304.0f
+    const val CELL_DOG_Y = 336.0f
     const val CELL_DOOR_X = 421.0f
     const val CELL_DOOR_Y = 562.0f
-    const val CELL_KEY_X = 362.0f
-    const val CELL_KEY_Y = 1470.0f
     const val CELL_FREE_X0 = 352.0f
     const val CELL_FREE_Y0 = 256.0f
     const val CELL_FREE_X1 = 490.0f
-    const val CELL_FREE_Y1 = 522.0f
-    const val CELL_OPEN_DRAW_X = 346.0f
-    const val CELL_OPEN_DRAW_Y = 330.0f
+    const val CELL_FREE_Y1 = 442.0f
+    const val CELL_GATE_FREE_X0 = 390.0f
+    const val CELL_GATE_FREE_Y0 = 442.0f
+    const val CELL_GATE_FREE_X1 = 452.0f
+    const val CELL_GATE_FREE_Y1 = 522.0f
+    const val CELL_OPEN_DRAW_X = 380.0f
+    const val CELL_OPEN_DRAW_Y = 442.0f
+    const val CELL_OPEN_FRAMES = 6
+
+    /** Where a key can be hidden: the names of the places and where the player stands to search them. */
+    val SPOT_NAMES = arrayOf("JAILER_DESK", "LOCKERS_WEST", "LOCKERS_EAST", "LOCKER_BENCH", "CHIEF_DESK", "BOOKSHELF_WEST", "BOOKSHELF_EAST", "SOFA", "INTERRO_TABLE", "FILING_CABINET", "EVIDENCE_CRATES", "COUNTER", "FRIDGE", "VENDING")
+    val SPOT_X = floatArrayOf(480.0f, 200.0f, 480.0f, 360.0f, 1000.0f, 808.0f, 1224.0f, 1000.0f, 1644.0f, 1484.0f, 1830.0f, 1024.0f, 1810.0f, 1660.0f)
+    val SPOT_Y = floatArrayOf(744.0f, 1310.0f, 1310.0f, 1476.0f, 456.0f, 430.0f, 430.0f, 632.0f, 524.0f, 656.0f, 684.0f, 1512.0f, 1370.0f, 1720.0f)
 
     /** Where reinforcements come in during the siege: x, y pairs in world pixels. */
     val REINFORCEMENTS: FloatArray = floatArrayOf(

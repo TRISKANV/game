@@ -6,8 +6,9 @@ import com.kotlinsurvivors.features.game.domain.model.StationPhase
  * The rules of the siege of the police station, apart from the engine so they can be tested on their own.
  *
  * Once the officers recognise the player the street door is shut and reinforcements keep coming
- * until [GOAL] officers have been put down; then the police chief wakes up. When he falls he drops
- * the key, and taking it opens the street door.
+ * until [GOAL] officers have been put down; then the police chief wakes up. The key to the street door is
+ * hidden somewhere in the station (see [KeySearch]); whoever has it opens the door, whether the chief has
+ * fallen or not.
  *
  * Pure Kotlin, no Android types.
  */
@@ -47,16 +48,16 @@ class StationSiege {
         return true
     }
 
-    /** The chief is dead and the key lies on the floor. */
+    /** The chief is dead; the door is still shut until somebody opens it with the key. */
     fun chiefKilled(): Boolean {
         if (phase != StationPhase.CHIEF) return false
         phase = StationPhase.KEY
         return true
     }
 
-    /** The player has the key: the street door opens for good. */
-    fun keyTaken(): Boolean {
-        if (phase != StationPhase.KEY) return false
+    /** The player stands at the shut door with the key: it opens for good. True if it was shut. */
+    fun openWithKey(): Boolean {
+        if (!doorShut) return false
         phase = StationPhase.OPEN
         return true
     }

@@ -7,13 +7,17 @@ import com.kotlinsurvivors.engine.ChestReward
 import com.kotlinsurvivors.engine.ecs.components.WeaponType
 
 /** A message about the way through the levels, shown for a few seconds as a notification. */
-enum class LevelNotice { EXIT_OPEN, LEVEL_TWO, STATION, ALARM, CHIEF_AWAKE, KEY_DROPPED, STATION_OPEN, CELL_KEY, DOG_FREED, DOG_LOCKED }
+enum class LevelNotice { EXIT_OPEN, LEVEL_TWO, STATION, ALARM, CHIEF_AWAKE, KEY_DROPPED, STATION_OPEN, CELL_KEY, DOG_FREED, DOG_LOCKED, EXIT_KEY }
+
+/** A search that found nothing: which kind of place (index into the station's list) and how many searches so far. */
+data class SearchEmpty(val kind: Int, val serial: Int)
 
 /** Where the siege of the police station is: see [com.kotlinsurvivors.engine.StationSiege]. */
 enum class StationPhase { QUIET, SIEGE, CHIEF, KEY, OPEN }
 
 /** What the car button offers right now: nothing, picking a lock (hold), getting into an open car, or getting out. */
-enum class CarPrompt { NONE, LOCKPICK, ENTER, EXIT }
+/** What the button at the bottom right does: pick a lock, get in or out of a car, or search a place in the station. */
+enum class CarPrompt { NONE, LOCKPICK, ENTER, EXIT, SEARCH }
 
 /**
  * Immutable snapshot of the game state emitted by GameEngine each frame.
@@ -48,6 +52,8 @@ data class GameState(
     val exitOpen         : Boolean        = false,
     val levelFade        : Float          = 0f,
     val levelNotice      : LevelNotice?   = null,
+    /** A place in the station was searched and held nothing; [serial] makes two in a row different. */
+    val searchEmpty      : SearchEmpty?   = null,
     /** The siege of the police station and how many officers have been put down in it. */
     val stationPhase     : StationPhase   = StationPhase.QUIET,
     val copsDefeated     : Int            = 0,

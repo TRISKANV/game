@@ -62,6 +62,7 @@ fun CarButton(
             val label = when (prompt) {
                 CarPrompt.LOCKPICK -> stringResource(R.string.car_lockpick)
                 CarPrompt.ENTER    -> stringResource(R.string.car_enter)
+                CarPrompt.SEARCH   -> stringResource(R.string.search_button)
                 else               -> stringResource(R.string.car_exit)
             }
             Box(
@@ -72,13 +73,15 @@ fun CarButton(
                     .pointerInput(prompt) {
                         detectTapGestures(onPress = {
                             onButton(true)
-                            tryAwaitRelease()
-                            onButton(false)
+                            // The finger can be lifted, or this button can disappear under it (the car goes out of
+                            // reach), and either way the engine must hear that it is up; otherwise it would keep
+                            // "holding" and pick the next lock all by itself.
+                            try { tryAwaitRelease() } finally { onButton(false) }
                         })
                     },
                 contentAlignment = Alignment.Center
             ) {
-                if (prompt == CarPrompt.LOCKPICK && progress > 0f) {
+                if ((prompt == CarPrompt.LOCKPICK || prompt == CarPrompt.SEARCH) && progress > 0f) {
                     Canvas(modifier = Modifier.size(78.dp)) {
                         drawArc(
                             color = Teal, startAngle = -90f, sweepAngle = 360f * progress.coerceIn(0f, 1f),

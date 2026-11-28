@@ -284,8 +284,6 @@ enum class PickupType {
     COIN, COIN_BAG, HEALTH_SMALL, HEALTH_LARGE, MAGNET, BOMB,
     /** The key the police chief drops; it opens the street door of the station. */
     KEY,
-    /** The key to the cell of the police dog; it is hidden in the station and does nothing else. */
-    CELL_KEY,
     /** Dropped by bosses; opens by itself when the player touches it. Keep last: pickups.png has one cell per type before it. */
     CHEST
 }
@@ -295,7 +293,7 @@ enum class PickupType {
  * the chest and the energy cans wait where they fell until the player walks over them.
  */
 val PickupType.staysPut: Boolean
-    get() = this == PickupType.CHEST || this == PickupType.KEY || this == PickupType.CELL_KEY || this == PickupType.HEALTH_SMALL || this == PickupType.HEALTH_LARGE
+    get() = this == PickupType.CHEST || this == PickupType.KEY || this == PickupType.HEALTH_SMALL || this == PickupType.HEALTH_LARGE
 
 /**
  * Data for collectible items on the ground.

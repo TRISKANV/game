@@ -300,7 +300,7 @@ object EntityFactory {
             // 8s for all pickups — prevents XP orb accumulation over time. A boss chest waits much longer.
             lifetime = when {
                 type == PickupType.CHEST -> CHEST_WAIT_SECONDS
-                type == PickupType.KEY || type == PickupType.CELL_KEY -> KEY_WAIT_SECONDS
+                type == PickupType.KEY   -> KEY_WAIT_SECONDS
                 type.staysPut            -> CAN_WAIT_SECONDS
                 else                     -> 8f
             }
@@ -331,7 +331,7 @@ object EntityFactory {
         PickupType.EXPERIENCE_LARGE  -> 14f
         PickupType.COIN, PickupType.COIN_BAG -> 9f
         PickupType.CHEST -> 22f
-        PickupType.KEY, PickupType.CELL_KEY -> 22f
+        PickupType.KEY   -> 22f
         PickupType.HEALTH_SMALL, PickupType.HEALTH_LARGE -> 18f     // a can is big: it should not be missed by a hair
         else -> 12f
     }
@@ -349,7 +349,6 @@ object EntityFactory {
             PickupType.BOMB              -> Triple(0xFF212121L, 0xFF616161L, 20f)
             PickupType.CHEST             -> Triple(0xFF26C6DAL, 0xFF006064L, 46f)
             PickupType.KEY               -> Triple(0xFFFFD740L, 0xFFF57F17L, 40f)
-            PickupType.CELL_KEY          -> Triple(0xFF4FC3F7L, 0xFF0277BDL, 40f)
         }
         return RenderComponent(
             shape = RenderShape.CIRCLE,

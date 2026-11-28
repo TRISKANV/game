@@ -32,20 +32,31 @@ class StationSiegeTest {
         assertFalse("later kills change nothing", s.copKilled())
     }
 
-    @Test fun theKeyComesOnlyAfterTheChiefAndOpensTheDoor() {
+    @Test fun theDoorStaysShutAfterTheChiefFallsUntilTheKeyOpensIt() {
         val s = StationSiege()
-        assertFalse(s.chiefKilled()); assertFalse(s.keyTaken())
+        assertFalse(s.chiefKilled()); assertFalse(s.openWithKey())
         s.alarm()
         assertFalse("the chief is not up yet", s.chiefKilled())
         repeat(StationSiege.GOAL) { s.copKilled() }
         assertTrue(s.chiefKilled())
         assertEquals(StationPhase.KEY, s.phase)
-        assertTrue("the door stays shut until the key is taken", s.doorShut)
+        assertTrue("the door stays shut until the key opens it", s.doorShut)
         assertFalse("but the alarm is over", s.alarmOn)
-        assertTrue(s.keyTaken())
+        assertTrue(s.openWithKey())
         assertEquals(StationPhase.OPEN, s.phase)
         assertFalse(s.doorShut)
-        assertFalse(s.keyTaken())
+        assertFalse(s.openWithKey())
+    }
+
+    @Test fun theKeyOpensTheDoorDuringTheSiegeToo() {
+        val s = StationSiege()
+        assertFalse("nothing to open while the door is not shut", s.openWithKey())
+        assertEquals(StationPhase.QUIET, s.phase)
+        s.alarm()
+        assertTrue(s.openWithKey())
+        assertEquals(StationPhase.OPEN, s.phase)
+        assertFalse(s.alarmOn)
+        assertFalse("and the siege does not start again", s.alarm())
     }
 
     @Test fun aChiefWokenInHisSleepSkipsTheQuota() {

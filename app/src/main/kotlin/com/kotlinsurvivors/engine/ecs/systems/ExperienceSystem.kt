@@ -231,7 +231,6 @@ class ExperienceSystem {
                 }
             }
             PickupType.KEY -> Unit                  // the engine takes it from here: it opens the street door of the station
-            PickupType.CELL_KEY -> Unit             // the engine takes it from here: it lets the police dog out
             PickupType.BOMB -> {
                 if (pt != null) {
                     var count = 0

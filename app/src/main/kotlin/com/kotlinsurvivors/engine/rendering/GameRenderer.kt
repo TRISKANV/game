@@ -235,7 +235,7 @@ class GameRenderer(
             screenH = size.height
 
             pickArt(buf.level, buf.seamCount)
-            cellOpenNow = buf.cellOpen
+            cellOpenNow = buf.cellOpenFrac
 
             // Smooth camera follow
             var targetCX = buf.cameraTargetX - viewportWidth  * 0.5f
@@ -422,15 +422,20 @@ class GameRenderer(
         }
         // The police dog's cell, once the key has turned: the open gate is drawn over the bars.
         val open = art.cellOpen
-        if (open != null && art.info.number == 3 && cellOpenNow) {
+        if (open != null && art.info.number == 3 && cellOpenNow > 0f) {
+            // the gate is a strip of frames, one picture of it swung a little further each
+            val frames = Level3.CELL_OPEN_FRAMES
+            val frame  = (cellOpenNow * frames).toInt().coerceIn(0, frames - 1)
+            val fw     = open.width / frames
             val ox = Level3.CELL_OPEN_DRAW_X - camX
             val oy = Level3.CELL_OPEN_DRAW_Y - camY
-            dstRect.set(ox, oy, ox + open.width * scale, oy + open.height * scale)
-            canvas.drawBitmap(open, null, dstRect, spritePaint)
+            srcRect.set(frame * fw, 0, (frame + 1) * fw, open.height)
+            dstRect.set(ox, oy, ox + fw * scale, oy + open.height * scale)
+            canvas.drawBitmap(open, srcRect, dstRect, spritePaint)
         }
     }
 
-    private var cellOpenNow = false
+    private var cellOpenNow = 0f
 
     private fun stationShut(): Boolean =
         stationPhase == StationPhase.SIEGE || stationPhase == StationPhase.CHIEF || stationPhase == StationPhase.KEY
@@ -676,11 +681,9 @@ class GameRenderer(
             renderEnergyCan(sprites.energyCan, sx, sy, if (id == PickupType.HEALTH_LARGE.ordinal) CAN_LARGE_SCALE else CAN_SMALL_SCALE)
             return
         }
-        // the cell key is the same little key as the one of the street door; its cyan glow tells them apart
-        val cell = if (id == PickupType.CELL_KEY.ordinal) PickupType.KEY.ordinal else id
-        if (sprites != null && cell >= 0 && cell * SpriteAtlas.ITEM_CELL < sprites.pickups.width) {
+        if (sprites != null && id >= 0 && id * SpriteAtlas.ITEM_CELL < sprites.pickups.width) {
             val size = sz * PICKUP_SPRITE_SCALE
-            drawCell(sprites.pickups, cell, 0, SpriteAtlas.ITEM_CELL, sprites.pickups.height, sx, sy, size, size, spritePaint)
+            drawCell(sprites.pickups, id, 0, SpriteAtlas.ITEM_CELL, sprites.pickups.height, sx, sy, size, size, spritePaint)
             return
         }
         drawCircle(Color(buf.getColor(i)), sz * 0.5f, Offset(sx, sy))

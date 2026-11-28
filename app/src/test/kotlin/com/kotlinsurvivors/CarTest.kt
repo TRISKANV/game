@@ -53,8 +53,29 @@ class CarTest {
         assertEquals(CarPrompt.EXIT, system.prompt)
     }
 
+    @Test fun aButtonAlreadyDownWhenTheCarComesIntoReachPicksNothing() {
+        val (world, system, _) = scene()
+        // the finger is down (or the engine was left thinking so) but no press happened next to this car
+        repeat(300) { system.update(world, 0.016f, idle, false, true) }
+        assertEquals(0f, system.progress, 0.0001f)
+        assertEquals(CarState.LOCKED, world.cars.values.first().state)
+    }
+
+    @Test fun aNewPressAfterLettingGoStartsAgain() {
+        val (world, system, _) = scene()
+        system.update(world, 0.016f, idle, true, true)
+        repeat(30) { system.update(world, 0.016f, idle, false, true) }
+        system.update(world, 0.016f, idle, false, false)
+        repeat(30) { system.update(world, 0.016f, idle, false, true) }          // held again without a new press
+        assertEquals(0f, system.progress, 0.0001f)
+        system.update(world, 0.016f, idle, true, true)
+        repeat(10) { system.update(world, 0.016f, idle, false, true) }
+        assertTrue(system.progress > 0f)
+    }
+
     @Test fun lettingGoOfTheButtonLosesTheWork() {
         val (world, system, _) = scene()
+        system.update(world, 0.016f, idle, true, true)
         repeat(60) { system.update(world, 0.016f, idle, false, true) }
         assertTrue(system.progress > 0f)
         repeat(120) { system.update(world, 0.016f, idle, false, false) }
@@ -63,6 +84,7 @@ class CarTest {
 
     @Test fun aBlowToTheDriverInterruptsTheLock() {
         val (world, system, ids) = scene()
+        system.update(world, 0.016f, idle, true, true)
         repeat(60) { system.update(world, 0.016f, idle, false, true) }
         world.healths[ids.first]!!.invincibleTimer = 0.5f
         system.update(world, 0.016f, idle, false, true)

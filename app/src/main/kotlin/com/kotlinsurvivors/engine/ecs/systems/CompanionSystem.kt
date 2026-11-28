@@ -112,9 +112,47 @@ class CompanionSystem {
         // trying to go somewhere and not getting there (a doorway, a corner)
         if (speed > 0f && moved < speed * dt * 0.25f) c.stuckTimer += dt else c.stuckTimer = 0f
 
+        keepOutOfThings(world, id, t, map)
         if (c.state == CompanionState.FOLLOW) {
             regenerate(c, dt)
             takeHits(world, id, c, t.x, t.y)
+        }
+    }
+
+    /**
+     * The dog is a solid body: enemies (a boss most of all) push him out of the space they take, and a wall, a
+     * parked car or anything else the level marks as solid never ends up under him, even if it was put down on top of
+     * him (a car parked where he stood).
+     */
+    private fun keepOutOfThings(world: World, id: Int, t: com.kotlinsurvivors.engine.ecs.components.TransformComponent, map: LevelMap?) {
+        for ((eid, e) in world.enemies) {
+            if (e.type.isFlying || !world.isAlive(eid)) continue
+            val et = world.transforms[eid] ?: continue
+            val dx = t.x - et.x; val dy = t.y - et.y
+            val min = BODY_RADIUS + (world.colliders[eid]?.radius ?: 12f) * BODY_OVERLAP
+            val d2 = dx * dx + dy * dy
+            if (d2 >= min * min) continue
+            val d = kotlin.math.sqrt(d2)
+            val nx: Float; val ny: Float
+            if (d < 0.01f) { nx = 1f; ny = 0f } else { nx = dx / d; ny = dy / d }
+            val push = min - d
+            val px = t.x + nx * push; val py = t.y + ny * push
+            // do not shove him into a wall: slide along it instead
+            if (map == null || map.isBoxFree(px, py + FEET, HALF, HALF)) { t.x = px; t.y = py }
+            else if (map.isBoxFree(px, t.y + FEET, HALF, HALF)) t.x = px
+            else if (map.isBoxFree(t.x, py + FEET, HALF, HALF)) t.y = py
+        }
+        if (map != null && !map.isBoxFree(t.x, t.y + FEET, HALF, HALF)) {
+            // growing rings round him until there is room; the same search the other bodies use
+            var radius = 6f
+            search@ while (radius <= EJECT_RADIUS) {
+                for (k in 0 until 16) {
+                    val a = k * (2f * PI.toFloat() / 16f)
+                    val nx = t.x + cos(a) * radius; val ny = t.y + sin(a) * radius
+                    if (map.isBoxFree(nx, ny + FEET, HALF, HALF)) { t.x = nx; t.y = ny; break@search }
+                }
+                radius += 6f
+            }
         }
     }
 
@@ -186,8 +224,13 @@ class CompanionSystem {
     }
 
     companion object {
-        const val HALF = 9f
-        const val FEET = 10f
+        const val HALF = 10f
+        /** From the dog's centre to his paws, which is where he touches the ground. */
+        const val FEET = 22f
+        /** Radius of his body against other bodies, and how much of an enemy's own radius counts. */
+        const val BODY_RADIUS = 10f
+        const val BODY_OVERLAP = 0.9f
+        const val EJECT_RADIUS = 160f
         const val SIGHT = 300f
         const val LEASH_FROM_PLAYER = 440f
         const val TELEPORT_DISTANCE = 760f

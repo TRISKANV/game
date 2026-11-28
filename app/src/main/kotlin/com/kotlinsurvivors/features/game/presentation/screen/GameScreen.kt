@@ -170,6 +170,7 @@ fun GameScreen(
             }
         }
         LaunchedEffect(gameState.levelNotice) { gameState.levelNotice?.let { notices.post(levelNotice(context, it)) } }
+        LaunchedEffect(gameState.searchEmpty) { gameState.searchEmpty?.let { notices.post(searchEmptyNotice(context, it)) } }
         LaunchedEffect(gameState.eventBanner) { gameState.eventBanner?.let { notices.post(eventNotice(context, it)) } }
 
         // ── Game Canvas ───────────────────────────────────────────────────

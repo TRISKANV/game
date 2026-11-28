@@ -15,7 +15,9 @@ import com.kotlinsurvivors.R
 import com.kotlinsurvivors.core.presentation.language.localName
 import com.kotlinsurvivors.engine.ecs.systems.EventKind
 import com.kotlinsurvivors.features.game.domain.model.Achievement
+import com.kotlinsurvivors.engine.SpotKind
 import com.kotlinsurvivors.features.game.domain.model.LevelNotice
+import com.kotlinsurvivors.features.game.domain.model.SearchEmpty
 import com.kotlinsurvivors.features.game.domain.model.StationPhase
 import kotlinx.coroutines.delay
 
@@ -104,6 +106,28 @@ private val Green  = Color(0xFF7CE04A)
 private val Orange = Color(0xFFFF7043)
 private val Blue   = Color(0xFF4FC3F7)
 
+/** A place in the station was searched and held nothing: each kind of place says so in its own way. */
+fun searchEmptyNotice(context: Context, empty: SearchEmpty): Notice {
+    val kind = SpotKind.entries.getOrNull(empty.kind) ?: SpotKind.JAILER_DESK
+    val line = when (kind) {
+        SpotKind.JAILER_DESK     -> R.string.search_empty_jailer_desk
+        SpotKind.LOCKERS_WEST,
+        SpotKind.LOCKERS_EAST    -> R.string.search_empty_lockers
+        SpotKind.LOCKER_BENCH    -> R.string.search_empty_locker_bench
+        SpotKind.CHIEF_DESK      -> R.string.search_empty_chief_desk
+        SpotKind.BOOKSHELF_WEST,
+        SpotKind.BOOKSHELF_EAST  -> R.string.search_empty_bookshelf
+        SpotKind.SOFA            -> R.string.search_empty_sofa
+        SpotKind.INTERRO_TABLE   -> R.string.search_empty_interro_table
+        SpotKind.FILING_CABINET  -> R.string.search_empty_filing_cabinet
+        SpotKind.EVIDENCE_CRATES -> R.string.search_empty_evidence_crates
+        SpotKind.COUNTER         -> R.string.search_empty_counter
+        SpotKind.FRIDGE          -> R.string.search_empty_fridge
+        SpotKind.VENDING         -> R.string.search_empty_vending
+    }
+    return make("search_empty_${empty.serial}", "alert", R.string.search_empty_title, line, Orange, context)
+}
+
 fun levelNotice(context: Context, notice: LevelNotice): Notice = when (notice) {
     LevelNotice.EXIT_OPEN    -> make("level_exit_open", "mission", R.string.level_exit_open, R.string.level_exit_open_sub, Green, context)
     LevelNotice.LEVEL_TWO    -> make("level_two", "alert", R.string.level_two_title, R.string.level_two_sub, Gold, context)
@@ -111,6 +135,7 @@ fun levelNotice(context: Context, notice: LevelNotice): Notice = when (notice) {
     LevelNotice.ALARM        -> make("level_alarm", "alert", R.string.level_alarm_title, R.string.level_alarm_sub, Red, context, urgent = true)
     LevelNotice.CHIEF_AWAKE  -> make("level_chief", "skull", R.string.level_chief_title, R.string.level_chief_sub, Red, context, urgent = true)
     LevelNotice.KEY_DROPPED  -> make("level_key", "mission", R.string.level_key_title, R.string.level_key_sub, Gold, context)
+    LevelNotice.EXIT_KEY     -> make("level_exit_key", "mission", R.string.level_exit_key_title, R.string.level_exit_key_sub, Gold, context)
     LevelNotice.CELL_KEY     -> make("level_cell_key", "mission", R.string.level_cell_key_title, R.string.level_cell_key_sub, Blue, context)
     LevelNotice.DOG_LOCKED   -> make("level_dog_locked", "alert", R.string.level_dog_locked_title, R.string.level_dog_locked_sub, Gold, context)
     LevelNotice.DOG_FREED    -> make("level_dog", "check", R.string.level_dog_title, R.string.level_dog_sub, Green, context)

@@ -51,8 +51,8 @@ class SpriteAssetsTest {
     @Test
     fun pickupSheetCoversEveryPickupType() {
         val sheet = image("pickups.png")
-        // the chest has its own sheet (chest.png) and the cell key is drawn with the picture of the street key
-        assertEquals(SpriteAtlas.ITEM_CELL * PickupType.values().count { it != PickupType.CHEST && it != PickupType.CELL_KEY }, sheet.width)
+        // the chest has its own sheet (chest.png)
+        assertEquals(SpriteAtlas.ITEM_CELL * PickupType.values().count { it != PickupType.CHEST }, sheet.width)
     }
 
     @Test
